@@ -953,7 +953,7 @@ const SOURCE_JOBS = [
 // promotion floor and deterministic recipe sequence. A little deadline slack
 // leaves room to recover; the three-star challenge is sustained throughput.
 const SHIFTS = [
-  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,interval:21,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
+  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,firstArrival:18,interval:19,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
   {name:'Production Manager',subtitle:'Program the work. Keep it moving.',brief:'Spend 4 seconds programming each order at the office, then ship 4 orders.',duration:180,interval:23,deadline:105,recipes:[0,1,0,1,6,0,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,6,7]},
   {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 6 orders to clear. Ten shipments earns the exceptional three-star Owner shift.',duration:180,interval:15,deadline:105,recipes:[0,1,0,6,1,1,6,0,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:6,stars:[6,8,10]},
 ];
@@ -995,7 +995,9 @@ class ShopGame {
     this.rushesWon = 0;
     this.nextId = 101;
     this.spawnIndex = 0;
-    this.nextArrival = 12;
+    // Operator gets room to learn its first part; the later cadence leaves
+    // enough time for the final order to pass the shared safe-arrival check.
+    this.nextArrival = this.config.firstArrival ?? 12;
     this.sourcing = null;
     this.sourceOffered = false;
     this.sourced = 0;

@@ -23,6 +23,17 @@ test('Operator mastery permits deliberate, serial play without dash', () => {
   assert.equal(result.dashes,0);
 });
 
+test('Operator keeps its final order available across normal no-dash play styles', () => {
+  for (const strategy of ['serial','flow']) for (let tenth=0;tenth<=30;tenth++) {
+    const driver=new Driver(0,strategy,'decline',{reaction:tenth/10});
+    const result=driver.run(),label=`${strategy}, ${tenth/10}s handoff`;
+    assert.equal(driver.game.spawnIndex,7,label+' keeps the existing seven-order opportunity');
+    assert.equal(result.missed,0,label+' keeps generous order deadlines');
+    assert.equal(result.stars,3,label+' can still earn Operator mastery without dash');
+    if(result.unfinished===0)assert.ok(SHIFTS[0].duration-result.lastShipmentAt<20,label+' avoids the long empty ending');
+  }
+});
+
 test('Production Manager rewards overlapping work instead of serial processing', () => {
   const serial=simulateShift(1,{strategy:'serial',reaction:.5});
   const flow=simulateShift(1,{strategy:'flow',reaction:.5});

@@ -18,6 +18,8 @@ Three roles, one little shop:
 
 Clearing a role unlocks the next. Operator is welcoming, Production Manager rewards practiced scheduling, and Owner separates clearing the shift from an exceptional three-star run. The intended experience is Operator mastery after a little practice, Manager mastery after several focused attempts, and rare Owner mastery. Those are goals to validate with players, not claims about measured success rates. Briefings show all three shipment targets before the clock starts; the live counter tracks the next star. Retries use the same job sequence.
 
+Operator opens with one order, then waits 18 seconds before the second and spaces later arrivals 19 seconds apart. This gives the first part more breathing room while keeping the existing seventh order eligible before the late-order safety cutoff. The job values, deadlines, score formula, and star targets stay the same.
+
 Owner orders arrive every 15 seconds after the opening order and first 12-second gap, subject to the four-order cap and enough time left to finish. Its 105-second ordinary deadlines leave recovery room, while ten shipments in three minutes requires very precise routing, machine overlap, and well-timed dashes. Rush bonuses remain optional even for three stars.
 
 Personal bests and unlocks use the `chip-rush-roles-v5` save in this browser. Upgrading from v4 keeps unlocked roles and stars but resets personal scores for the new scoring rules; older v3/v2 saves retain unlocks only. Previous saves remain intact. Some browsers isolate or disable storage for local files; the game still works for that session.

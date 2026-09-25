@@ -222,3 +222,10 @@ The browser registered `get_shop_state` and `start_walk_to_station` with the exp
 - Removed the sound button and binding. The clock-in and resume gestures initialize audio.
 - Browser audio verification decoded the MP3 as two channels and 36.92308333 seconds, matching the intended loop within one output sample, and observed a running source beyond its first loop boundary. Pause/resume and phone ducking were checked. This is playback/transport verification, not a claim of subjective listening quality.
 - 145 automated tests pass, including six audio lifecycle checks and the existing scoring, sourcing, leaderboard, and difficulty tests. The earlier gameplay balance results remain applicable: no rules, timing or scoring changed.
+
+## Operator arrival pacing · 2026-09-25
+
+- Moved Operator's second order from 12 to 18 seconds and its subsequent interval from 21 to 19 seconds. This gentler opening leaves enough late-shift headroom for the existing seventh order to pass the shared safe-arrival check. It does not add an eighth order, change recipes or alter shipment scoring/star targets. Manager and Owner settings are unchanged.
+- Baseline ordinary serial no-dash play (0.5s handoffs) received six jobs and ended with 28.11 empty seconds. The adjusted run receives and ships seven, leaving 8.56 seconds. Ordinary concurrent play ships seven with 15.96 seconds left. Very efficient players can still finish early; this does not promise zero idle time.
+- Across 62 serial/concurrent no-dash profiles with 0–3s handoff delays, every adjusted run receives seven orders, ships at least five and misses no deadlines. The longest genuinely empty ending is 18.61s, compared with 31.02s before. These are deterministic simulations using production walking routes, not human completion-rate estimates.
+- 146 automated tests pass. Movement-aware all-role balance assertions and both legal ten-shipment, three-call Owner mastery routes pass unchanged.
