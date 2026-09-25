@@ -22,14 +22,6 @@ Owner orders arrive every 15 seconds after the opening order and first 12-second
 
 Personal bests and unlocks use the `chip-rush-roles-v5` save in this browser. Upgrading from v4 keeps unlocked roles and stars but resets personal scores for the new scoring rules; older v3/v2 saves retain unlocks only. Previous saves remain intact. Some browsers isolate or disable storage for local files; the game still works for that session.
 
-## Watch an Owner playthrough
-
-Open `http://127.0.0.1:4174/?watch=owner` and choose **Watch Owner run**. This is an automated expert demonstration in the actual 3D game, using ordinary selection, station travel, dashes, programming, and customer-call inputs. It uses the normal 180-second clock and ten-shipment three-star target. The controller anticipates visible machine countdowns and overlaps work. It does not inject shipments, move the character directly, or alter the rules, and it never writes your best scores or unlocks. Pause and replay controls are available.
-
-For a live review of every role and popup, open `http://127.0.0.1:4174/?watch=sequence`. Watch Operator, review its result, then choose **Next role** for Production Manager and Owner. This sequence also selects each Covari offer, walks to the office for approval, and shows partner delivery and customer replies. Each role uses its ordinary clock, travel and operations; the sequence never saves scores or posts to the leaderboard. Individual `?watch=operator` and `?watch=manager` demonstrations are also available.
-
-The demonstration uses a 60ms decision interval to show a precise route; it is not a claim about human execution or completion rates. It runs live at normal speed rather than playing a prerecorded video.
-
 ## Review handoff
 
 Start with `ARNOLDAS-START-HERE.md` for local play, the review checklist, and a Codex continuation prompt. Rebuild the complete source ZIP with `python3 scripts/package-handoff.py`; it also puts a downloadable copy in `dist/downloads/`. The ZIP includes a generic hosting manifest with no existing Site identity.
@@ -66,7 +58,7 @@ Every role receives one optional outside-capability job at 35 seconds. Offers ro
 
 After a real shift, **Challenge a friend** opens the native share sheet or copies an invitation containing that run's role, score and shipments. A recipient can try the challenged role even before unlocking it; the link never imports scores or permanent unlocks. Share links contain no display name. Local previews copy a clearly labeled link for this computer; they never redirect to an older public release. File-based copies retain their local file path. A shared hosted address is required for friends on other computers. Challenge targets are self-reported.
 
-**Post score / leaderboard** optionally publishes a display name and completed result to one shared top-30 board across all roles. There is no role filter or role label on entries. The HUD, results, personal bests, friend challenges and board all use the same earned score. There are no fixed role ceilings or role multipliers. Each shipment earns its recipe complexity value (120 for a pocket spacer, 140 for a mounting plate, 230 for a bearing housing), plus 60 for CAM work when required, plus `round(seconds left on the order × 4)` for early shipping. The ordinary shipping streak multiplies that subtotal by 1.00 / 1.15 / 1.30 / 1.45 / 1.60. A completed rush adds 100. Completed customer conversations add 25 each; the Covari bonus adds 60. CAM points are only credited when the part ships. Timing uses fractional seconds rather than rounding deadlines to whole seconds. More demanding roles provide more work and extra scoring opportunities, so an efficient lower-role run can still beat a poorly managed harder run. The closing screen explains the components. Shipment targets, deadlines, role unlocks and star requirements are unchanged. The board uses `roles-v5-performance`, keeping old entries intact but outside the current score season; the server stores the validated completed score directly and ignores client-supplied ranking points. Demo runs cannot post. Scores are player-reported: the server checks run ownership, elapsed time, bounds, role and duplicate submissions, but is not an authoritative anti-cheat system. Do not use it for prizes or verified competitions without server-side replay validation and moderation. A board outage does not block the game. Local personal records remain separate from public posting.
+**Post score / leaderboard** optionally publishes a display name and completed result to one shared top-30 board across all roles. There is no role filter or role label on entries. The HUD, results, personal bests, friend challenges and board all use the same earned score. There are no fixed role ceilings or role multipliers. Each shipment earns its recipe complexity value (120 for a pocket spacer, 140 for a mounting plate, 230 for a bearing housing), plus 60 for CAM work when required, plus `round(seconds left on the order × 4)` for early shipping. The ordinary shipping streak multiplies that subtotal by 1.00 / 1.15 / 1.30 / 1.45 / 1.60. A completed rush adds 100. Completed customer conversations add 25 each; the Covari bonus adds 60. CAM points are only credited when the part ships. Timing uses fractional seconds rather than rounding deadlines to whole seconds. More demanding roles provide more work and extra scoring opportunities, so an efficient lower-role run can still beat a poorly managed harder run. The closing screen explains the components. Shipment targets, deadlines, role unlocks and star requirements are unchanged. The board uses `roles-v5-performance`, keeping old entries intact but outside the current score season; the server stores the validated completed score directly and ignores client-supplied ranking points.  Scores are player-reported: the server checks run ownership, elapsed time, bounds, role and duplicate submissions, but is not an authoritative anti-cheat system. Do not use it for prizes or verified competitions without server-side replay validation and moderation. A board outage does not block the game. Local personal records remain separate from public posting.
 
 Cards now show **SELECTED** or **CLICK TO SELECT**, and the first machine operation prompts players to select a second card. Switching cards never changes a carried part.
 
@@ -100,7 +92,6 @@ The self-contained `dist/CHIP-RUSH.html` still opens offline with all 3D assets.
 - `qa/core.test.mjs`: regression checks for the full simulation and recovery paths.
 - `qa/balance.mjs`: reproducible movement-aware balance simulation with serial, concurrent, and expert dash strategies.
 - `qa/difficulty.test.mjs`: checks accessible clears, separated mastery targets, and repeatable legal ten-shipment Owner routes.
-- `dist/demo.js`, `qa/demo.test.mjs`: visible expert demonstration and checks using the real movement, collision, station, and game code at multiple frame rates.
 - `qa/PLAYTEST.md`: observed browser playtest results and validation boundaries.
 
 To regenerate the standalone file after editing:
@@ -118,3 +109,9 @@ The optional WebMCP enhancement exposes a read-only shop snapshot and a start-wa
 The supplied workshop reference informed the teal/cream palette, miniature cutaway perspective, and layout details. It is not bundled or used as a flat background. All game art, interface, logic, and synthesized sound were made for this project. Three.js is used under its MIT license; see `dist/vendor/THREE-LICENSE.txt`. Renderer API reference: https://threejs.org/docs/.
 
 Development currently stays local and in GitHub for collaboration. Do not publish or deploy unless explicitly requested.
+
+## Release and local review boundary
+
+The GitHub source, hosted game and standalone download contain the playable game only. Automated watch controllers and sample-score previews are kept in a separate local review folder and are not part of these releases. Historical watch-mode notes in the playtest log describe local verification, not a shipped feature.
+
+The start page shows the top 10 submitted scores. The centered full leaderboard opens from the start page or a completed shift; posting is optional and shows the exact finished result. Empty boards invite the first real score. Sample players are never seeded into the public database.

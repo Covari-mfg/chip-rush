@@ -15,7 +15,7 @@ export function challengeURL(result,base) {
 }
 export function createSocial({onChallenge}) {
   const $=id=>document.getElementById(id),challenge=parseChallenge(location.search);
-  const online=location.protocol!=='file:',demo=['operator','manager','owner','sequence'].includes(new URLSearchParams(location.search).get('watch'));
+  const online=location.protocol!=='file:';
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
@@ -27,16 +27,28 @@ export function createSocial({onChallenge}) {
     if(!response.ok)throw new Error(value.error||'The board is unavailable. Try again.');return value;
   };
   const summary=value=>`${value.stars} ★ · ${value.shipped} shipped · ${value.score.toLocaleString()} points`;
-  if(challenge&&!demo){$('friend-challenge').hidden=false;$('friend-target').textContent=summary(challenge);$('accept-challenge').onclick=()=>onChallenge(challenge.role);}
-  async function loadBoard(){
-    const token=++boardGeneration;$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';
+  if(challenge){$('friend-challenge').hidden=false;$('friend-target').textContent=summary(challenge);$('accept-challenge').onclick=()=>onChallenge(challenge.role);}
+  function renderScores(id,entries){
+    const list=$(id);list.replaceChildren();
+    for(const [index,row] of entries.entries()){
+      const li=document.createElement('li'),rank=document.createElement('span'),identity=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small'),score=document.createElement('b');
+      rank.className='score-rank';rank.textContent=String(index+1).padStart(2,'0');
+      name.textContent=row.name;detail.textContent=`${row.shipped} shipped · ${row.stars} ★`;identity.append(name,detail);
+      score.className='score-points';score.textContent=row.score.toLocaleString();li.append(rank,identity,score);list.append(li);
+    }
+  }
+  async function loadBoard(showFull=true){
+    const token=++boardGeneration;
+    if(showFull){$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';}
     try{const data=await api('leaderboard');if(token!==boardGeneration)return;
-      $('board-status').textContent=data.entries.length?'Top 30 · current rules':'No scores yet. Set the first one.';
-      for(const row of data.entries){const li=document.createElement('li'),name=document.createElement('strong'),stats=document.createElement('span');name.textContent=row.name;stats.textContent=`${row.score.toLocaleString()} pts · ${row.shipped} shipped · ${row.stars} ★`;li.append(name,stats);$('board-list').append(li);}
-    }catch(error){if(token===boardGeneration)$('board-status').textContent=error.message;}
+      $('board-status').textContent=data.entries.length?'Top 30 · all shifts · points':'No scores yet. Set the first one.';
+      $('home-board-status').textContent=data.entries.length?'All shifts. One leaderboard.':'No scores yet. Your shift could be first.';
+      renderScores('board-list',data.entries);renderScores('home-board-list',data.entries.slice(0,10));
+    }catch(error){if(token!==boardGeneration)return;$('board-status').textContent=error.message;$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
   }
   function openBoard(withResult=false){
-    $('post-form').hidden=!withResult||!result||demo;
+    $('post-form').hidden=!withResult||!result;
+    $('post-result-summary').textContent=result?`Your shift · ${summary(result)}`:'';
     $('post-score').disabled=!run||posted;
     $('post-status').textContent=posted?'Posted. Nice shift.':!run?'This shift was not connected. Play a new shift online to post.':'';
     $('leaderboard-dialog').showModal();loadBoard();
@@ -60,10 +72,11 @@ export function createSocial({onChallenge}) {
   };
   return {
     challenge,
-    start(role){const token=++generation;result=null;run=null;posted=false;if(demo)return;api('runs',{role,ruleset:RULESET}).then(value=>{if(token===generation)run=value.id;}).catch(()=>{});},
+    refreshBoard:()=>loadBoard(false),
+    start(role){const token=++generation;result=null;run=null;posted=false;api('runs',{role,ruleset:RULESET}).then(value=>{if(token===generation)run=value.id;}).catch(()=>{});},
     finish(value){
       result=Object.freeze({...value,stars:SHIFTS[value.role].stars.filter(n=>value.shipped>=n).length});
-      $('social-results').hidden=demo;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;
+      $('social-results').hidden=false;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;
       $('friend-result').hidden=!challenge;
       if(challenge){$('friend-result').textContent=value.score>challenge.score?'Challenge won. Your friend has a new score to chase.':value.score===challenge.score?'A tie! One more shift to take the lead?':`${(challenge.score-value.score).toLocaleString()} points to catch your friend. One more shift?`;}
     },

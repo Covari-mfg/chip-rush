@@ -133,11 +133,6 @@
 #shipment-progress small{white-space:nowrap;font-size:10px;letter-spacing:.7px}
 @media(max-width:759px){#shipment-progress small{font-size:9px;letter-spacing:0}.star-targets{gap:5px}.star-targets span{font-size:16px;letter-spacing:1px}}
 
-/* Demonstrations keep normal controls visible, but reserve play input for the replay. */
-.watch-mode.playing #orders,.watch-mode.playing #station-labels,.watch-mode.playing .office-actions{pointer-events:none}
-.watch-mode .keyboard-guide{display:block;text-align:left;color:#f3ce72}
-.watch-mode .keyboard-guide strong{font-size:12px;letter-spacing:1px}
-.watch-mode .keyboard-guide small{display:block;margin-top:7px;font-size:12px;line-height:1.5}
 /* Order affordances and the optional outside-capability job. */
 .order-list-heading{font-size:13.5px;color:var(--gold);display:flex;justify-content:space-between;pointer-events:none;padding-inline:3px;flex-shrink:0}
 .ticket-select{display:block;font-size:13.5px;font-weight:900;letter-spacing:.6px;color:#466b62;margin:-3px 0 9px}.selected .ticket-select{color:#196b56}.order-ticket:hover{border-color:#45a88d}.order-ticket:focus-visible{outline-offset:-5px}
@@ -177,3 +172,14 @@
 .station-label>.technology-icon{width:19px;height:19px}
 
 .source-card .technology-badge{width:auto;gap:4px;padding:3px 6px}.technology-code{font-size:11.5px;font-weight:700;letter-spacing:.15px;line-height:1}
+
+/* A compact start-page board and a centered full leaderboard after a shift. */
+.home-board{position:absolute;right:34px;top:120px;width:292px;max-height:calc(100dvh - 154px);overflow:auto;pointer-events:auto;padding:20px;background:#102d36f2;border:1px solid #6da09570;border-radius:12px;box-shadow:0 16px 48px #05182055}
+.home-board-heading{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #52766e55;padding-bottom:12px}.home-board-heading small{font-size:12px;letter-spacing:1.4px;color:var(--teal);font-weight:800}.home-board-heading h2{font-size:27px;letter-spacing:-.7px;margin:5px 0 0}.home-board-heading>span{font-size:28px;color:var(--gold)}
+#home-board-status{font-size:13px;line-height:1.5;color:#acc7be;margin:12px 0}.home-board .text-button{font-size:14px;text-align:left;color:var(--teal);padding-top:16px}
+.board-dialog{width:min(720px,calc(100vw - 28px));padding:30px;max-height:calc(100dvh - 48px)}.board-heading h2{font-size:34px}.board-note{font-size:15px}.board-scoring{font-size:14px}
+.score-list,.board-dialog #board-list{list-style:none;padding:0;margin:0}.score-list li,.board-dialog .score-list li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #52766e55;font-size:16px}.score-list .score-rank{color:#88aaa5;font:700 13px ui-monospace,monospace}.score-list li:first-child .score-rank,.score-list li:first-child .score-points{color:var(--gold)}.score-list li:nth-child(-n+3) .score-rank{color:var(--gold)}.score-list strong{display:block;font-size:16px;overflow-wrap:anywhere}.score-list small{display:block;font-size:13px;color:#99b8b1;margin-top:4px}.score-list .score-points{font:700 20px ui-monospace,monospace;white-space:nowrap;color:var(--paper)}.board-dialog .score-list .score-rank{font-size:14px;margin:0}.home-board .score-list li{grid-template-columns:22px minmax(0,1fr) auto;gap:9px;padding:10px 0}.home-board .score-list strong{font-size:14px}.home-board .score-list small{display:none}.home-board .score-list .score-points{font-size:16px}
+@media(max-width:1000px){.home-board{right:24px;width:270px;top:100px;max-height:calc(100dvh - 128px)}}
+@media(max-width:680px){.home-board{position:static;width:100%;max-height:none;margin-top:22px;padding:16px}.board-dialog{padding:20px;max-height:calc(100dvh - 28px)}.board-heading h2{font-size:29px}.score-list li,.board-dialog .score-list li{grid-template-columns:24px minmax(0,1fr) auto;gap:10px}.score-list .score-points{font-size:18px}}
+
+.post-result-summary{font-size:16px;font-weight:700;color:var(--gold);margin:0 0 14px}

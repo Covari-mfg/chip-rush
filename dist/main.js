@@ -2,14 +2,12 @@ import * as THREE from './vendor/three.module.js';
 import { createWorkshop, createMachine, createCharacter, createPart } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS } from './core.js';
 import { ShopAudio } from './audio.js';
-import { createShopDemo, parseWatchMode, nextWatchRole } from './demo.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 
 const $=id=>document.getElementById(id);
 const game=new ShopGame(),audio=new ShopAudio();
-const watch=parseWatchMode(location.search),watchMode=watch.enabled,watchSequence=watch.sequence;
-let demoController=null,selectedByPlayer=false,pendingSource=false,challengeRun=false,sourceReveal=false;
+let selectedByPlayer=false,pendingSource=false,challengeRun=false,sourceReveal=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -59,7 +57,7 @@ obstacles.push({minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,maxX:-5.
 // Perimeter packing and plants are physical props, outside the working aisle.
 obstacles.push({minX:6.05,maxX:7.85,minZ:-5.58,maxZ:-4.30},{minX:6.98,maxX:7.98,minZ:-4.46,maxZ:-3.46},{minX:-8.82,maxX:-7.80,minZ:2.37,maxZ:3.39});
 
-function save(){if(watchMode)return;try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}catch{}}
+function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}catch{}}
 function toast(message,duration=2.6){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+duration*1000;}
 function safeSpot(x,z){return x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ&&!obstacles.some(o=>x>o.minX&&x<o.maxX&&z>o.minZ&&z<o.maxZ);}
 function movePosition(position,dx,dz){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.12));for(let i=0;i<steps;i++){if(safeSpot(position.x+dx/steps,position.z))position.x+=dx/steps;if(safeSpot(position.x,position.z+dz/steps))position.z+=dz/steps;}}
@@ -121,7 +119,7 @@ function boot(){
   new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);officeArt.covariScreenMaterial=new THREE.MeshStandardMaterial({color:0xffffff,map:texture,emissive:0xffffff,emissiveMap:texture,emissiveIntensity:.4,roughness:.65});});
   for(const def of STATION_LAYOUT){
     const model=def.id==='office'?world.userData.office:createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
-    const label=document.createElement('button');label.className='station-label';label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{if(!watchMode)goToStation(def.id);};$('station-labels').appendChild(label);
+    const label=document.createElement('button');label.className='station-label';label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{goToStation(def.id);};$('station-labels').appendChild(label);
     const access=def.access||{x:def.x,z:def.z+def.d/2+.63};stations[def.id]={def,model,label,access};
     if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
   }
@@ -133,9 +131,8 @@ function boot(){
   for(const id of ['live-hud','orders','game-footer','shop-sidebar'])layoutObserver.observe($(id));
   resize();buildShiftPicker();bindControls();updateCamera(0,true);renderer.render(scene,camera);$('loading').hidden=true;
   requestAnimationFrame(frame);
-  window.__chipRush={snapshot:()=>({...game.snapshot(),demonstration:watchMode,player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),version:'2.5.0'};
-  registerTools();
-  if(watchMode){document.body.classList.add('watch-mode');showWatchIntro();}
+  window.__chipRush={snapshot:()=>({...game.snapshot(),player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),version:'2.5.0'};
+  registerTools();social.refreshBoard();
 }
 function measureShopFrame(){
   // Fit the whole miniature shop, excluding the enormous backdrop. Keep
@@ -186,7 +183,7 @@ function updateParticles(dt){for(let i=particles.length-1;i>=0;i--){const p=part
 function processEvents(){for(const ev of game.drain()){
   audio.event(ev.type);
   if(ev.type==='hint')toast(ev.message);
-  if(ev.type==='sourceOffer'&&(!watchMode||watchSequence)){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
+  if(ev.type==='sourceOffer'){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
   if(ev.type==='sourcePlaced'){pendingSource=false;toast('Outsourced with Covari. Your partner is on it.',3);}
   if(ev.type==='sourceDelivered'){const bonus=ev.points;floatText(`+${bonus} · COVARI`,'office',true);toast(`Outsourced with Covari · delivered! +${bonus} bonus points.`,3);}
   if(ev.type==='programmed'){floatText('PROGRAM READY ✓','office',true);toast(`Order #${ev.orderId} is programmed. Ready for its first cut.`,2);}
@@ -305,7 +302,7 @@ function revealSelectedTicket(){
 function updateTickets(force){
   const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${o.id===game.selectedId&&!pendingSource}:${game.stations[o.location]?.ready}:${o.programmed}:${game.office.orderId===o.id}:${game.office.present}:${game.call?.orderId===o.id?game.call.state:""}`).join('|');
   if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. The next Order is on its way.</div>';}
-    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId&&!pendingSource?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId&&!pendingSource?'true':'false');const program=game.config.programming?`<span class="route-step ${o.programmed?'done':'active'}" title="Program at the office">${o.programmed?'✓ ':''}CAM</span><span class="route-arrow">›</span>`:'';const route=program+o.route.map((step,i)=>`<span class="route-step${i<o.index?' done':i===o.index&&o.programmed?' active':''}" title="${OPS[step].name}">${i<o.index?'✓ ':''}${OPS[step].short}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><span class="ticket-select">${o.id===game.selectedId&&!pendingSource?'✓ SELECTED':'CLICK TO SELECT →'}</span><div class="route">${route}</div><div class="ticket-status">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{if(watchMode)return;selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
+    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId&&!pendingSource?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId&&!pendingSource?'true':'false');const program=game.config.programming?`<span class="route-step ${o.programmed?'done':'active'}" title="Program at the office">${o.programmed?'✓ ':''}CAM</span><span class="route-arrow">›</span>`:'';const route=program+o.route.map((step,i)=>`<span class="route-step${i<o.index?' done':i===o.index&&o.programmed?' active':''}" title="${OPS[step].name}">${i<o.index?'✓ ':''}${OPS[step].short}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><span class="ticket-select">${o.id===game.selectedId&&!pendingSource?'✓ SELECTED':'CLICK TO SELECT →'}</span><div class="route">${route}</div><div class="ticket-status">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
     $('orders').appendChild(sourceCard);if(focused)$(focused)?.focus({preventScroll:true});
     $('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
     if(renderedSelection!==game.selectedId){renderedSelection=game.selectedId;revealSelectedTicket();}
@@ -327,13 +324,12 @@ function updateUI(force=false){
   if(carrySig!==heldSignature||force){heldSignature=carrySig;$('carry-label').textContent=o?`CARRYING · Order #${o.id}`:selected?`SELECTED · Order #${selected.id}`:'YOUR HANDS';$('carry-name').textContent=o?o.name:selected?.name||'All caught up';$('carry-next').textContent=o?`Next → ${o.programmed?OPS[o.route[o.index]].name:'Program at office'}`:selected?(selected.location==='material'?selected.programmed?'Collect its billet at Material':'Program this job at the Office':ticketState(selected)):'Watch for the next order.';$('carry-icon').textContent=o?'▣':'◇';$('carry-icon').style.color=o?'#'+o.color.toString(16).padStart(6,'0'):'var(--teal)';}
   updateOfficeUI();updateSourceUI();
   if(pendingSource&&!game.hand){$('carry-label').textContent='SELECTED · BONUS ORDER';$('carry-name').textContent=game.sourcing.name;$('carry-next').textContent='Next → click the Office computer';}
-  if(watchMode&&$('watch-caption'))$('watch-caption').textContent=demoController?.status().caption||'';
   $('interaction-hint').innerHTML=`<kbd>E</kbd><span>${nearby?stationAction(nearby.def.id):'Walk up to a station'}</span>`;
-  const showCoach=game.mode==='playing'&&(!watchMode||watchSequence)&&(game.shipped<1||!selectedByPlayer)&&game.shiftIndex===0;$('coach').hidden=!showCoach;
+  const showCoach=game.mode==='playing'&&(game.shipped<1||!selectedByPlayer)&&game.shiftIndex===0;$('coach').hidden=!showCoach;
   if(showCoach){const first=game.order(101)||game.selected;let text='Click another order card to start its job.';if(first){if(first.location==='material')text=`Order #${first.id} is selected. Click Material to collect its billet.`;else if(first.location==='hands')text=`Carry #${first.id} to ${OPS[first.route[first.index]].name}.`;else if(game.stations[first.location]?.ready)text=`${OPS[first.location].name} is ready. Collect your part!`;else if(first.location==='buffer')text='Collect your part from the Hold bench.';else text=`${OPS[first.location].name} is working. Click another order card to start its job.`;}$('coach-text').textContent=pendingSource?'Covari job selected. Click the Office computer.':text;}
 }
 function updateSourceUI(){
-  const job=game.sourcing;if(job?.state!=='offer')pendingSource=false;const visible=job&&!['declined'].includes(job.state)&&(!watchMode||watchSequence);sourceCard.hidden=!visible;if(!visible)return;
+  const job=game.sourcing;if(job?.state!=='offer')pendingSource=false;const visible=job&&!['declined'].includes(job.state);sourceCard.hidden=!visible;if(!visible)return;
   const approving=job.state==='approving',offered=job.state==='offer',bonus=job.points;
   $('source-title').textContent=job.name;
   const technology=$('source-technology');
@@ -370,7 +366,6 @@ function positionLabels(){const target=nextTarget();for(const [id,s] of Object.e
 }}
 function frame(now){
   const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;clockTime+=dt;
-  if(watchMode&&game.mode==='playing')demoController?.tick(dt);
   updateMovement(dt);if(game.mode==='playing'){game.setOfficePresence(atOffice());game.tick(dt);processEvents();syncParts();}
   animateShop(game.mode==='paused'||game.mode==='help'?0:dt);updateCamera(dt);positionLabels();audio.update(game.mode==='playing');
   uiElapsed+=dt;if(uiElapsed>.09){uiElapsed=0;if(!menuMode)updateUI();}
@@ -380,13 +375,13 @@ function frame(now){
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous role to unlock':''}`);b.innerHTML=`<span class="num">0${i+1}</span><span><b>${s.name}</b><small>${i>unlocked?'Clear the previous role to unlock':s.subtitle}</small></span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});$('start-duration').textContent=`${SHIFTS[selectedShift].duration/60} MINUTE SHIFT`;$('start-target').textContent=`SHIP ${SHIFTS[selectedShift].passTarget} TO CLEAR`;$('migration-note').hidden=!migrationNotice;}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
 function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: program #101 at the office.',2.5);$('scene').focus();if(watchMode)startWatchController();}
-function pause(){if(game.mode!=='playing')return;game.mode='paused';if(!watchMode)clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: program #101 at the office.',2.5);$('scene').focus();}
+function pause(){if(game.mode!=='playing')return;game.mode='paused';clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused')return;game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
   helpReturn={mode:game.mode,panel:['welcome','pause-panel','results-panel','briefing-panel'].find(id=>!$(id).hidden),centered:$('overlay').classList.contains('centered')};
-  if(game.mode==='playing'){game.mode='help';if(!watchMode)clearMovement();}
+  if(game.mode==='playing'){game.mode='help';clearMovement();}
   hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('help-panel').hidden=false;$('help-close').focus();
 }
 function closeHelp(){
@@ -394,7 +389,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');last=performance.now();
 }
-function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);if(watchMode){game.mode='menu';clearMovement();showWatchIntro();return;}game.mode='menu';menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;$('coach').hidden=true;$('floor-caption').hidden=false;document.body.classList.remove('playing','paused','has-office');$('shift-number').textContent='WELCOME TO THE SHOP';$('shift-name').textContent='Precision under pressure.';buildShiftPicker();}
+function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;$('coach').hidden=true;$('floor-caption').hidden=false;document.body.classList.remove('playing','paused','has-office');$('shift-number').textContent='WELCOME TO THE SHOP';$('shift-name').textContent='Precision under pressure.';buildShiftPicker();social.refreshBoard();}
 function showBriefing(index){
   selectedShift=index;migrationNotice=false;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes to clear this role. Complex work and earlier shipping earn more points.`;
@@ -412,8 +407,8 @@ function showBriefing(index){
   $('briefing-flavor').textContent=lessons[0];$('briefing-text').textContent=lessons[1];$('briefing-tip').textContent=lessons[2];$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
 function showResults(){
-  if(resultShown)return;resultShown=true;clearMovement();const passed=game.passed();if(passed&&!watchMode&&!challengeRun)unlocked=Math.max(unlocked,Math.min(2,game.shiftIndex+1));
-  const previous=bests[game.shiftIndex]||0;if(!watchMode){bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();}hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('coach').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
+  if(resultShown)return;resultShown=true;clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(2,game.shiftIndex+1));
+  const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('coach').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   const stars=game.stars(),ownerMastery=game.shiftIndex===2&&stars===3;
   $('results-panel').classList.toggle('owner-mastery',ownerMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${ownerMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
@@ -427,44 +422,6 @@ function showResults(){
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} SHIPPED`;
   $('next-button').innerHTML=passed&&!challengeRun&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered});
-  if(watchMode){
-    $('result-kicker').textContent=`AUTOMATED ${game.config.name.toUpperCase()} ${watchSequence?'REVIEW':'DEMONSTRATION'}`;
-    $('result-message').textContent=`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.unfinished} unfinished at closing. ${game.sourced?'Covari job delivered. ':''}${game.shiftIndex===2?`${game.callsAnswered} customer calls answered. `:''}${watchSequence&&game.shiftIndex<2?'Review this result, then continue to the next role.':'Normal operations, normal deadlines.'}`;
-    $('result-best').textContent='NORMAL RULES · DEMONSTRATION NOT SAVED TO YOUR SCORES';
-    $('next-button').innerHTML=watchSequence&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':watchSequence?'WATCH SEQUENCE AGAIN <span>↻</span>':'WATCH AGAIN <span>↻</span>';
-    $('replay-button').textContent='Replay this role';$('results-menu').textContent=watchSequence?'Back to first role':'Back to demonstration';
-  }
-}
-function showWatchIntro(index=watch.role){
-  showBriefing(index);const cfg=SHIFTS[index];
-  $('briefing-flavor').textContent=watchSequence?`ROLE ${index+1} OF 3 · LIVE REVIEW`:'WATCH THE SHOP IN MOTION';
-  if(!watchSequence){
-    $('briefing-role').textContent=`The ${cfg.name} playthrough`;
-    $('briefing-challenge').textContent=`A ${cfg.duration/60}-minute automated demonstration using the same controls, machines, and deadlines as your game.`;
-    $('briefing-text').textContent=index===2?'Watch the route: overlap cutting and programming, clear inspection, and dash along open aisles. The player answers three customer calls and takes a rush when there is room.':index===1?'Watch programming and machining work together. Prepare the next job while the machines cut, then inspect and ship every finished part.':'Watch billets become finished parts. Load the lathe and mill, collect their output, inspect, and ship.';
-  }
-  $('briefing-tip').textContent+=(watchSequence?' This review also selects a Covari job and places it at the office. Each results screen waits for you before the next role.':'')+' Normal game speed. Scores and unlocks are not saved. Pause and replay anytime.';
-  $('briefing-start').innerHTML=`WATCH ${cfg.name.toUpperCase()} RUN <span>▶</span>`;
-  $('briefing-back').textContent='Play it yourself';
-  $('briefing-back').onclick=()=>{location.href=location.pathname;};
-}
-function startWatchController(){
-  demoController=createShopDemo({
-    game,goToStation,dash,
-    selectOrder(id){selectedByPlayer=true;pendingSource=false;game.select(id);processEvents();updateUI(true);},
-    selectSource:selectSourceJob,
-    respondCall(accept){game.setOfficePresence(atOffice());const id=game.call?.orderId;const accepted=game.respondCall(accept);if(accepted&&accept)game.select(id);processEvents();updateUI(true);return accepted;},
-    navigation:()=>({x:player.x,z:player.z,path,pathStation,dashCooldown}),
-    distanceTo(id){const access=stations[id].access;let previous=player,total=0;for(const p of findPath(access.x,access.z)){total+=Math.hypot(p.x-previous.x,p.z-previous.z);previous=p;}return total;},
-  },{sourcing:watchSequence});
-  $('shift-number').textContent=watchSequence?`LIVE REVIEW · ROLE ${game.shiftIndex+1} OF 3`:'DEMONSTRATION · NORMAL RULES';
-  $('shift-name').textContent=`${game.config.name} · automated playthrough`;
-  $('touch-controls').hidden=true;
-  $('restart-button').textContent='Restart the demonstration';
-  $('menu-button').textContent='Back to demonstration';
-  const guide=document.querySelector('.keyboard-guide');
-  guide.innerHTML=`<strong>WATCHING ${game.config.name.toUpperCase()}</strong><small>Automated clicks + timed dashes<br>Normal game speed · Scores not saved</small><small id="watch-caption"></small>`;
-  toast(`Watching the ${game.config.name} ${watchSequence?'review':'demonstration'}. Pause anytime.`,3);
 }
 function selectSourceJob(){
   if(game.mode!=='playing'||['ringing','answering','offer'].includes(game.call?.state))return false;
@@ -475,11 +432,11 @@ function selectSourceJob(){
 }
 function bindControls(){
   addEventListener('resize',resize);$('scene').tabIndex=-1;
-  $('source-accept').onclick=()=>{if(!watchMode)selectSourceJob();};$('source-decline').onclick=()=>{if(watchMode)return;pendingSource=false;game.declineSource();updateUI(true);};
+  $('source-accept').onclick=()=>{selectSourceJob();};$('source-decline').onclick=()=>{pendingSource=false;game.declineSource();updateUI(true);};
   $('briefing-start').onclick=()=>startShift(selectedShift);$('briefing-back').onclick=showMenu;
-  $('office-go').onclick=()=>{if(watchMode)return;if(game.office.orderId&&game.call?.state!=='ringing')game.select(game.office.orderId);goToStation('office');};
-  for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{if(watchMode)return;game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);if(replied&&pendingSource&&game.sourcing?.state==='offer'){if(game.requestSource())pendingSource=false;}processEvents();updateUI(true);$('scene').focus();};
-  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>watchMode?showWatchIntro(nextWatchRole(watch,game.shiftIndex)):showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('office-go').onclick=()=>{if(game.office.orderId&&game.call?.state!=='ringing')game.select(game.office.orderId);goToStation('office');};
+  for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);if(replied&&pendingSource&&game.sourcing?.state==='offer'){if(game.requestSource())pendingSource=false;}processEvents();updateUI(true);$('scene').focus();};
+  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('sound-button').onclick=()=>{audio.init();const on=audio.toggle();$('sound-button').classList.toggle('muted',!on);$('sound-button').textContent=on?'♪':'♫̸';$('sound-button').setAttribute('aria-label',on?'Turn sound off':'Turn sound on');};
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
@@ -487,13 +444,13 @@ function bindControls(){
     const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab','KeyE','ShiftLeft','ShiftRight'];
     if(game.mode==='playing'&&!onPhone()&&controls.includes(e.code))e.preventDefault();if(e.repeat)return;
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
-    if(game.mode!=='playing'||onPhone()||watchMode)return;keys.add(e.code);
+    if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
     if(e.code==='KeyE'||e.code==='Space')interact();if(e.code==='Tab'){selectedByPlayer=true;pendingSource=false;game.cycle();processEvents();updateUI(true);}
     if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();if(/^Digit[1-4]$/.test(e.code)){const o=game.orders[Number(e.code.slice(-1))-1];if(o){selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);}}
   });
   addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  renderer.domElement.addEventListener('pointerdown',e=>{if(game.mode!=='playing'||e.button>0||watchMode)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}});
+  renderer.domElement.addEventListener('pointerdown',e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}});
   const joystick=$('joystick');let joystickPointer=null;
   const joyMove=e=>{if(e.pointerId!==joystickPointer)return;const rect=joystick.getBoundingClientRect(),dx=e.clientX-rect.left-rect.width/2,dy=e.clientY-rect.top-rect.height/2;const len=Math.hypot(dx,dy),f=len>30?30/len:1;touchVector={x:dx*f/30,y:dy*f/30};$('joystick-knob').style.transform=`translate(${dx*f}px,${dy*f}px)`;};
   joystick.onpointerdown=e=>{e.preventDefault();joystickPointer=e.pointerId;joystick.setPointerCapture(e.pointerId);joyMove(e);};joystick.onpointermove=joyMove;joystick.onpointerup=joystick.onpointercancel=()=>{joystickPointer=null;touchVector={x:0,y:0};$('joystick-knob').style.transform='';};$('touch-interact').onpointerdown=e=>{e.preventDefault();interact();};$('touch-dash').onpointerdown=e=>{e.preventDefault();dash();};
@@ -504,6 +461,6 @@ function registerTools(){
   const lifecycle=new AbortController();addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
   const register=tool=>{try{Promise.resolve(mc.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}};
   register({name:'get_shop_state',title:'Read shop state',description:'Read the current Chip Rush shift, tickets, carried part, machines and player position.',annotations:{readOnlyHint:true,untrustedContentHint:false},inputSchema:{type:'object',properties:{},additionalProperties:false},execute:async()=>window.__chipRush.snapshot()});
-  register({name:'start_walk_to_station',title:'Walk to a station',description:'Start walking the machinist to a station. Automatically interacts on arrival using normal movement and collision rules. Read shop state to check arrival.',annotations:{readOnlyHint:false,untrustedContentHint:false},inputSchema:{type:'object',properties:{station:{type:'string',enum:STATION_LAYOUT.map(s=>s.id)}},required:['station'],additionalProperties:false},execute:async(input)=>{if(!input||typeof input.station!=='string'||!stations[input.station])throw new Error('Choose a valid workshop station.');if(watchMode)throw new Error('The demonstration controls its own inputs.');if(game.mode!=='playing')throw new Error('Clock in or resume the shift first.');goToStation(input.station);return {walkingTo:input.station};}});
+  register({name:'start_walk_to_station',title:'Walk to a station',description:'Start walking the machinist to a station. Automatically interacts on arrival using normal movement and collision rules. Read shop state to check arrival.',annotations:{readOnlyHint:false,untrustedContentHint:false},inputSchema:{type:'object',properties:{station:{type:'string',enum:STATION_LAYOUT.map(s=>s.id)}},required:['station'],additionalProperties:false},execute:async(input)=>{if(!input||typeof input.station!=='string'||!stations[input.station])throw new Error('Choose a valid workshop station.');if(game.mode!=='playing')throw new Error('Clock in or resume the shift first.');goToStation(input.station);return {walkingTo:input.station};}});
 }
 try{boot();}catch(error){console.error(error);$('loading').hidden=true;$('fatal').hidden=false;$('fatal-message').textContent='This game needs WebGL 2 in a current browser. Enable hardware acceleration, then reload. '+(error?.message||'');}

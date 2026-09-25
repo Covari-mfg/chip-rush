@@ -36,7 +36,7 @@ function setup() {
     game,OPS,$,sourceCard:$('source-card'),
     document:{activeElement:null,createElement:element},
     renderedTickets:'',renderedSelection:null,pendingSource:false,selectedByPlayer:false,
-    watchMode:false,watchSequence:false,sourceReveal:false,reduced:false,
+    sourceReveal:false,reduced:false,
     revealSelectedTicket(){},ticketState(){return 'Ordinary order status';},processEvents(){},updateUI(){},
     technologyBadges(keys){
       const selected=Array.from(keys),markup=`<technology-test>${selected.join(',')}</technology-test>`;

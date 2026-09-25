@@ -109,9 +109,11 @@ test('one unfiltered board shows server scores in rank order without role labels
   f.$('board-open').onclick();await settle();
   assert.deepEqual(f.requests.map(request=>request.path),['/api/leaderboard']);
   const rows=f.$('board-list').children;
-  assert.equal(rows.length,2);assert.equal(rows[0].children[0].textContent,'First Player');
-  assert.equal(rows[0].children[1].textContent,'5,100 pts · 10 shipped · 3 ★');
-  assert.equal(rows[1].children[1].textContent,'3,500 pts · 7 shipped · 3 ★');
+  assert.equal(rows.length,2);assert.equal(rows[0].children[0].textContent,'01');
+  assert.equal(rows[0].children[1].children[0].textContent,'First Player');
+  assert.equal(rows[0].children[1].children[1].textContent,'10 shipped · 3 ★');
+  assert.equal(rows[0].children[2].textContent,'5,100');
+  assert.equal(rows[1].children[2].textContent,'3,500');
 });
 
 test('friend challenges compare actual total points across roles without hiding the result',()=>{
@@ -124,13 +126,13 @@ test('friend challenges compare actual total points across roles without hiding 
   f.finish({role:2,score:2501});assert.match(f.$('friend-result').textContent,/Challenge won/);
 });
 
-for(const mode of ['operator','manager','owner','sequence'])test(mode+' demonstration never registers a run or posts its result',async()=>{
+for(const mode of ['operator','manager','owner','sequence'])test('old '+mode+' watch URLs behave as ordinary playable games',async()=>{
   const f=setup({url:'https://chip-rush.example/?watch='+mode});
-  f.social.start(2);await settle();f.finish();await f.submit();
-  f.$('result-board').onclick();await settle();
-  assert.equal(f.requests.some(request=>request.path==='/api/runs'||request.path==='/api/scores'),false);
-  assert.equal(f.$('social-results').hidden,true);assert.equal(f.$('post-form').hidden,true);
-  assert.equal(f.$('post-score').disabled,true);
+  f.social.start(2);await settle();f.finish();
+  f.$('result-board').onclick();await settle();await f.submit();
+  assert.equal(f.requests.some(request=>request.path==='/api/runs'),true);
+  assert.equal(f.requests.some(request=>request.path==='/api/scores'),true);
+  assert.equal(f.$('social-results').hidden,false);assert.equal(f.$('post-form').hidden,false);
 });
 
 test('offline play keeps sharing available and explains that the community board needs hosting',async()=>{
@@ -179,4 +181,23 @@ test('denied clipboard permission leaves the challenge text selected for manual 
   assert.equal(f.$('share-link').hidden,false);assert.equal(f.$('copy-challenge').hidden,false);
   assert.equal(f.$('share-link').selected,true);assert.match(f.$('share-status').textContent,/Copy this challenge link/);
   await f.$('copy-challenge').onclick();assert.match(f.$('share-status').textContent,/Select and copy/);
+});
+
+
+test('start page shows the first ten real server scores while the full board retains all ranks',async()=>{
+  const entries=Array.from({length:18},(_,i)=>({name:i===0?'<img src=x onerror=alert(1)>':'Player '+i,score:6800-i*211,shipped:10,stars:3}));
+  const f=setup({fetcher:request=>request.path==='/api/leaderboard'?response({entries}):undefined});
+  await f.social.refreshBoard();
+  const small=f.$('home-board-list').children,full=f.$('board-list').children;
+  assert.equal(small.length,10);assert.equal(full.length,18);
+  assert.equal(small[0].children[1].children[0].textContent,entries[0].name);
+  assert.equal(small[0].children[1].children[0].innerHTML,undefined,'Names are assigned as text, never HTML');
+  assert.equal(small[9].children[2].textContent,entries[9].score.toLocaleString());
+  assert.equal(f.$('leaderboard-dialog').open,false,'Loading the start-page board does not open a modal');
+});
+
+test('an empty community board has no fabricated scores on either surface',async()=>{
+  const f=setup();await f.social.refreshBoard();
+  assert.equal(f.$('home-board-list').children.length,0);assert.equal(f.$('board-list').children.length,0);
+  assert.match(f.$('home-board-status').textContent,/No scores yet/);
 });

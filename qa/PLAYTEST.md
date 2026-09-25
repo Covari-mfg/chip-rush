@@ -203,3 +203,13 @@ The browser registered `get_shop_state` and `start_walk_to_station` with the exp
 - Added matching turning and milling icons to order cards and the Lathe/Mill station labels. Orders with both operations display both badges; Covari cards identify wire EDM, injection molding and sheet metal assembly with distinct icons and EDM / IM / SM labels. Full technology names remain available through assistive text and tooltips.
 - Browser review confirmed the turning/milling card-to-machine pairing and the Injection molding card with its IM badge. At 1000 × 700, the document and cards had no horizontal overflow, and the Lathe/Mill label rectangles did not overlap. Restored the normal viewport after this check.
 - All **148 automated tests pass**, including technology mapping and source-badge update caching. The three full normal-speed browser playthroughs recorded above remain the gameplay evidence; the subsequent icon previews were partial shifts, not additional completion runs. Icon artwork changes do not change operations, timing or scoring.
+
+## Game-only release and leaderboard layout · 2026-09-25
+
+- Preserved the automated review in a separate local-only checkout, then removed the controller, watch UI and demo bundling from the GitHub/runtime source and handoff documentation. Old watch query parameters now open the ordinary playable game. Earlier demonstration records above remain historical local playtest evidence.
+- Added a start-page top 10 and enlarged the centered end-of-shift leaderboard. Both render actual server scores as text, and empty boards remain empty. A finished result appears with the optional posting form.
+- Created clearly labeled local-only icon and sample-score previews outside the release repository. The user approved both EDM and sheet metal icons. Neither sample scores nor preview pages are shipped or added to the public database.
+- 139 automated tests pass, including normal scoring on old watch URLs, top-10 slicing, complete-board retention and empty-state behavior.
+- The headless balance check still reaches three stars in all roles; expert Owner ships ten orders with zero misses and answers all three calls. These are QA simulations, not a shipped watch mode.
+- Checked game-only modular, standalone, hosted and portable ZIP outputs for removed controller code and local preview/sample assets. The 44-file handoff ZIP passed integrity checks.
+- Browser verification of an old `?watch=owner` link showed normal role selection and player-driven material collection. Both sample leaderboard views were reviewed locally; sample API replies exist only in that separate preview copy.

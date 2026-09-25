@@ -140,11 +140,6 @@
 #shipment-progress small{white-space:nowrap;font-size:10px;letter-spacing:.7px}
 @media(max-width:759px){#shipment-progress small{font-size:9px;letter-spacing:0}.star-targets{gap:5px}.star-targets span{font-size:16px;letter-spacing:1px}}
 
-/* Demonstrations keep normal controls visible, but reserve play input for the replay. */
-.watch-mode.playing #orders,.watch-mode.playing #station-labels,.watch-mode.playing .office-actions{pointer-events:none}
-.watch-mode .keyboard-guide{display:block;text-align:left;color:#f3ce72}
-.watch-mode .keyboard-guide strong{font-size:12px;letter-spacing:1px}
-.watch-mode .keyboard-guide small{display:block;margin-top:7px;font-size:12px;line-height:1.5}
 /* Order affordances and the optional outside-capability job. */
 .order-list-heading{font-size:13.5px;color:var(--gold);display:flex;justify-content:space-between;pointer-events:none;padding-inline:3px;flex-shrink:0}
 .ticket-select{display:block;font-size:13.5px;font-weight:900;letter-spacing:.6px;color:#466b62;margin:-3px 0 9px}.selected .ticket-select{color:#196b56}.order-ticket:hover{border-color:#45a88d}.order-ticket:focus-visible{outline-offset:-5px}
@@ -184,6 +179,17 @@
 .station-label>.technology-icon{width:19px;height:19px}
 
 .source-card .technology-badge{width:auto;gap:4px;padding:3px 6px}.technology-code{font-size:11.5px;font-weight:700;letter-spacing:.15px;line-height:1}
+
+/* A compact start-page board and a centered full leaderboard after a shift. */
+.home-board{position:absolute;right:34px;top:120px;width:292px;max-height:calc(100dvh - 154px);overflow:auto;pointer-events:auto;padding:20px;background:#102d36f2;border:1px solid #6da09570;border-radius:12px;box-shadow:0 16px 48px #05182055}
+.home-board-heading{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #52766e55;padding-bottom:12px}.home-board-heading small{font-size:12px;letter-spacing:1.4px;color:var(--teal);font-weight:800}.home-board-heading h2{font-size:27px;letter-spacing:-.7px;margin:5px 0 0}.home-board-heading>span{font-size:28px;color:var(--gold)}
+#home-board-status{font-size:13px;line-height:1.5;color:#acc7be;margin:12px 0}.home-board .text-button{font-size:14px;text-align:left;color:var(--teal);padding-top:16px}
+.board-dialog{width:min(720px,calc(100vw - 28px));padding:30px;max-height:calc(100dvh - 48px)}.board-heading h2{font-size:34px}.board-note{font-size:15px}.board-scoring{font-size:14px}
+.score-list,.board-dialog #board-list{list-style:none;padding:0;margin:0}.score-list li,.board-dialog .score-list li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #52766e55;font-size:16px}.score-list .score-rank{color:#88aaa5;font:700 13px ui-monospace,monospace}.score-list li:first-child .score-rank,.score-list li:first-child .score-points{color:var(--gold)}.score-list li:nth-child(-n+3) .score-rank{color:var(--gold)}.score-list strong{display:block;font-size:16px;overflow-wrap:anywhere}.score-list small{display:block;font-size:13px;color:#99b8b1;margin-top:4px}.score-list .score-points{font:700 20px ui-monospace,monospace;white-space:nowrap;color:var(--paper)}.board-dialog .score-list .score-rank{font-size:14px;margin:0}.home-board .score-list li{grid-template-columns:22px minmax(0,1fr) auto;gap:9px;padding:10px 0}.home-board .score-list strong{font-size:14px}.home-board .score-list small{display:none}.home-board .score-list .score-points{font-size:16px}
+@media(max-width:1000px){.home-board{right:24px;width:270px;top:100px;max-height:calc(100dvh - 128px)}}
+@media(max-width:680px){.home-board{position:static;width:100%;max-height:none;margin-top:22px;padding:16px}.board-dialog{padding:20px;max-height:calc(100dvh - 28px)}.board-heading h2{font-size:29px}.score-list li,.board-dialog .score-list li{grid-template-columns:24px minmax(0,1fr) auto;gap:10px}.score-list .score-points{font-size:18px}}
+
+.post-result-summary{font-size:16px;font-weight:700;color:var(--gold);margin:0 0 14px}
 </style>
 </head>
 <body>
@@ -215,14 +221,15 @@
         <button class="primary-button" id="start-button">CHOOSE THIS ROLE <span>↗</span></button>
         <div class="start-details"><span id="start-duration">2½ MINUTE SHIFT</span><span id="start-target">SHIP 3 TO CLEAR</span></div>
         <div class="quick-controls"><span><kbd>WASD</kbd> Move</span><span><kbd>E</kbd> Interact</span><span><kbd>⇧</kbd> Dash</span></div>
-        <button class="text-button" id="board-open">Community high scores ↗</button><small class="click-tip">Mouse or touch? Tap a machine to walk over and use it.</small>
+        <small class="click-tip">Mouse or touch? Tap a machine to walk over and use it.</small>
+        <section class="home-board" aria-label="Community top 10"><div class="home-board-heading"><div><small>SHOP LEADERS</small><h2>Top 10</h2></div><span>★</span></div><p id="home-board-status" role="status">Loading scores…</p><ol id="home-board-list" class="score-list"></ol><button class="text-button" id="board-open">View full leaderboard ↗</button></section>
       </section>
       <section id="briefing-panel" class="modal-panel" hidden aria-label="Role briefing"><div class="eyebrow" id="briefing-flavor"></div><h2 id="briefing-role"></h2><p id="briefing-goal" class="briefing-goal"></p><div id="briefing-targets" class="star-targets" aria-label="Star targets by orders shipped"></div><p id="briefing-challenge" class="briefing-challenge"></p><p id="briefing-text"></p><p id="briefing-tip" class="help-note"></p><p class="briefing-fair">The clock starts when you clock in. Pause anytime. Each retry has the same job sequence.</p><button class="primary-button" id="briefing-start">CLOCK IN <span>↗</span></button><button class="text-button" id="briefing-back">Choose another role</button></section>
       <section id="pause-panel" class="modal-panel" hidden aria-label="Game paused"><div class="eyebrow">TAKE A BREATHER</div><h2>Machines on hold.</h2><p>Your shift clock and every order are paused.</p><button class="primary-button" id="resume-button">BACK TO THE FLOOR <span>↗</span></button><button class="text-button" id="restart-button">Restart this shift</button><button class="text-button" id="menu-button">Return to role selection</button></section>
       <section id="help-panel" class="modal-panel" hidden aria-label="How to play"><div class="eyebrow">THE QUICK START</div><h2>Keep the shop flowing.</h2><ol class="how-to"><li><b>Pick a ticket. Grab its billet.</b><span>Click an order card to select it, then use the Material rack. A SELECTED badge shows which job you are starting. In Manager and Owner, program each job at the office before cutting.</span></li><li><b>Follow the ticket’s route.</b><span>Load a machine, leave it running, then collect the finished part. A green label means it is ready.</span></li><li><b>Inspect it. Ship it. Repeat.</b><span>Complex parts earn more. Each second saved earns 4 bonus points. Ship on time to build a streak. Park a part on the Hold bench to free your hands.</span></li></ol><div class="help-keys"><p><kbd>WASD / ↑↓←→</kbd> Move <kbd>E / Space</kbd> Use station</p><p><kbd>Shift</kbd> Dash <kbd>Tab / 1–4</kbd> Select order <kbd>Esc / P</kbd> Pause</p></div><p class="help-note">Click the floor to walk, or click a station to walk over and use it. Owner calls interrupt handoffs. Answer at the office and stay for the three-second call, then accept the rush bonus or keep the original promise. Machines and deadlines keep running. Optional injection molding, Wire EDM insert, and sheet metal assembly jobs need capabilities outside this shop. Choose Outsource with Covari, then click the Office computer for a small points bonus, or pass with no penalty. Partner deliveries do not count toward stars. Stuck with full hands? Return a part to Material to recycle it and restart its route.</p><button class="primary-button" id="help-close">GOT IT <span>↗</span></button></section>
       <section id="results-panel" class="modal-panel results" hidden aria-label="Shift results"><div class="eyebrow" id="result-kicker">SHIFT COMPLETE</div><div id="result-stars" aria-label="Shift rating">★ ★ ★</div><h2 id="result-title">Nice chips.</h2><p id="result-message">The machines can take a breather.</p><p id="result-progress" class="result-progress"></p><div class="result-stats"><div><strong id="result-score">0</strong><span>SCORE</span></div><div><strong id="result-shipped">0</strong><span>SHIPPED</span></div><div><strong id="result-missed">0</strong><span>MISSED</span></div></div><p id="result-breakdown" class="score-breakdown"></p><div class="result-best" id="result-best"></div><p id="friend-result" class="friend-result" hidden></p><div id="social-results" class="social-results" hidden><button id="challenge-friend">Challenge a friend ↗</button><button id="result-board">Post score / leaderboard</button><span id="share-status" role="status"></span><input id="share-link" aria-label="Challenge link" readonly hidden><button id="copy-challenge" hidden>Copy challenge link</button></div><button class="primary-button" id="next-button">NEXT SHIFT <span>↗</span></button><button class="text-button" id="replay-button">One more try</button><button class="text-button" id="results-menu">Choose a role</button></section>
     </div>
-    <dialog id="leaderboard-dialog" class="board-dialog"><div class="board-heading"><div><small>CHIP RUSH</small><h2>High scores</h2></div><button id="board-close" aria-label="Close leaderboard">×</button></div><p class="board-note">One leaderboard for every shift. More complex work. Faster shipping. Higher scores.</p><p class="board-scoring">Part complexity + early shipping + streaks.<br>CAM, customer calls and rush deliveries earn extra.</p><form id="post-form" hidden><label for="player-name">Your display name</label><div class="post-row"><input id="player-name" name="name" minlength="2" maxlength="24" required autocomplete="nickname" placeholder="Shop-floor legend"><button id="post-score" type="submit">Post my score</button></div><small>Your name and this result will be visible to everyone.</small><p id="post-status" role="status"></p></form><p id="board-status" role="status"></p><ol id="board-list"></ol></dialog>
+    <dialog id="leaderboard-dialog" class="board-dialog"><div class="board-heading"><div><small>CHIP RUSH</small><h2>High scores</h2></div><button id="board-close" aria-label="Close leaderboard">×</button></div><p class="board-note">One leaderboard for every shift. More complex work. Faster shipping. Higher scores.</p><p class="board-scoring">Part complexity + early shipping + streaks.<br>CAM, customer calls and rush deliveries earn extra.</p><form id="post-form" hidden><p id="post-result-summary" class="post-result-summary"></p><label for="player-name">Your display name</label><div class="post-row"><input id="player-name" name="name" minlength="2" maxlength="24" required autocomplete="nickname" placeholder="Shop-floor legend"><button id="post-score" type="submit">Post my score</button></div><small>Your name and this result will be visible to everyone.</small><p id="post-status" role="status"></p></form><p id="board-status" role="status"></p><ol id="board-list" class="score-list"></ol></dialog>
     <div id="loading"><div class="loader-mark">C</div><strong>Opening the shop…</strong><span>Warming up the spindles.</span></div>
     <div id="fatal" hidden role="alert"><h2>The shop couldn’t open.</h2><p id="fatal-message"></p><button onclick="location.reload()">Try again</button></div>
   </main>
@@ -1414,181 +1421,6 @@ class ShopAudio {
 }
 
 return {ShopAudio};})();
-const Demo=(()=>{// A visible, automated demonstration. This controller reads the live
-// game and sends the same station, ticket, phone and dash inputs as a player.
-// It never advances the clock or changes a score, order, position or rule.
-function parseWatchMode(search) {
-  const value=new URLSearchParams(search).get('watch');
-  return {enabled:['operator','manager','owner','sequence'].includes(value),sequence:value==='sequence',role:Math.max(0,['operator','manager','owner'].indexOf(value))};
-}
-
-function nextWatchRole(mode,role) {
-  return mode.sequence&&role<2?role+1:mode.role;
-}
-
-function createShopDemo(api, {sourcing=false}={}) {
-  const { game } = api;
-  const reaction = .06;
-  let pending, delay, actions, dashes, caption, sourceSeenAt, sourceSelected, callOfferId, callOfferAt;
-
-  function reset() {
-    pending = null;
-    delay = reaction;
-    actions = 0;
-    dashes = 0;
-    sourceSeenAt=null;
-    sourceSelected=false;
-    callOfferId=null;
-    callOfferAt=0;
-    caption = game.config.programming?'Start the first program, then keep the machines running in parallel.':'Collect a billet and keep the machines running in parallel.';
-  }
-
-  function go(station, order, program = false) {
-    if (order) api.selectOrder(order.id);
-    pending = { station, program, orderId:order?.id };
-    const held = game.heldOrder;
-    caption = station === 'office'
-      ? game.call?.state === 'ringing'
-        ? 'The customer is calling. The shop clock keeps running.'
-        : `Program order #${order?.id ?? game.selectedId} while the machines work.`
-      : station === 'material'
-        ? `Collect stock for order #${order?.id ?? game.selectedId}.`
-        : station === 'ship'
-          ? `Ship order #${held?.id}. Every completed order counts.`
-          : held
-            ? `Load order #${held.id}, then use the cycle time elsewhere.`
-            : 'Collect the output so the machine can take its next order.';
-    actions++;
-    api.goToStation(station);
-  }
-
-  function tick(dt) {
-    if (game.mode !== 'playing') return;
-    if(sourcing&&game.sourcing?.state==='offer'&&sourceSeenAt===null)sourceSeenAt=game.elapsed;
-    const navigation = api.navigation();
-    const onPhone = ['answering','offer'].includes(game.call?.state);
-
-    // Dashes obey the production cooldown and end at the next route corner.
-    if (navigation.path.length) {
-      const next = navigation.path[0];
-      if (!onPhone && navigation.dashCooldown <= 0 &&
-          Math.hypot(next.x-navigation.x,next.z-navigation.z) >= 2.2) {
-        api.dash();
-        dashes++;
-      }
-      return;
-    }
-
-    if (pending) {
-      const order = game.order(pending.orderId);
-      if (pending.program && order && !order.programmed &&
-          !['ringing','answering','offer'].includes(game.call?.state)) return;
-      pending = null;
-      delay = reaction;
-    }
-    if (delay > 0) { delay -= dt; return; }
-
-    const call = game.call;
-    if (call && ['ringing','answering','offer'].includes(call.state)) {
-      if (call.state === 'ringing') { go('office'); return; }
-      if (call.state === 'answering') {
-        caption = 'Stay on the phone. Machines and deadlines continue during the call.';
-        return;
-      }
-      if(sourcing){
-        if(callOfferId!==call.orderId){callOfferId=call.orderId;callOfferAt=game.elapsed;}
-        if(game.elapsed-callOfferAt<2.5){caption='Review the customer’s rush request before choosing a promise.';return;}
-      }
-      const rush = game.order(call.orderId);
-      const accept = call.rushAvailable !== false;
-      api.respondCall(accept);
-      caption = accept ? 'Accept the expedite and replan around the rush order.' : 'Keep the original promise. There is no room for a safe expedite.';
-      if (accept && rush && !rush.programmed && !(sourcing&&['offer','approving'].includes(game.sourcing?.state))) go('office', rush, true);
-      else delay = reaction;
-      return;
-    }
-
-    // Review mode visibly selects the ordinary Covari card, then takes the
-    // same office route and attended approval as a human player. All deadlines
-    // and machines keep running while the card and customer reply are read.
-    if(sourcing&&game.sourcing?.state==='offer'&&game.elapsed-sourceSeenAt>=3){
-      if(!sourceSelected){
-        if(api.selectSource()){
-          sourceSelected=true;delay=.8;
-          caption='Select Outsource with Covari. Next, walk to the office computer.';
-        }
-        return;
-      }
-      go('office');caption='Place the selected Covari job at the office computer.';return;
-    }
-    if(sourcing&&game.sourcing?.state==='approving'){
-      if(!game.office.present)go('office');
-      caption='Stay at the computer for the two-second Covari approval. The shop keeps running.';
-      return;
-    }
-
-    const held = game.heldOrder;
-    if (held) {
-      if (!held.programmed) { go('office',held,true); return; }
-      const next = held.route[held.index];
-      if (next === 'ship' || !game.stations[next]?.part) go(next);
-      return;
-    }
-
-    const rush = game.call?.state === 'active' ? game.order(game.call.orderId) : null;
-    if (rush && !rush.started && !game.stations[rush.route[0]]?.part) {
-      go(rush.programmed ? 'material' : 'office',rush,!rush.programmed);
-      return;
-    }
-
-    const priority = order => game.call?.state === 'active' && game.call.orderId === order.id
-      ? -1000 : order.remaining;
-    const distances = new Map();
-    const distanceTo = station => {
-      if (!distances.has(station)) distances.set(station,api.distanceTo(station));
-      return distances.get(station);
-    };
-    const ready = Object.entries(game.stations)
-      .filter(([station,state]) => state.ready ||
-        (state.part && state.remaining <= distanceTo(station)/11))
-      .map(([station,state]) => ({station,state,order:game.order(state.part.orderId)}))
-      .filter(({state,order}) => {
-        // A still-running machine will advance the route when it completes.
-        // Read its countdown and walk there only if it will finish even before
-        // the earliest possible arrival at the legal maximum dash speed.
-        const next = order.route[order.index+(state.ready ? 0 : 1)];
-        return next === 'ship' || !game.stations[next]?.part;
-      });
-    const cost = candidate => (candidate.order.route.length-candidate.order.index)*4 +
-      priority(candidate.order)*.08 + distanceTo(candidate.station)*.3;
-    ready.sort((a,b) => cost(a)-cost(b));
-    if (ready.length) { go(ready[0].station); return; }
-
-    const fresh = game.orders
-      .filter(order => !order.started && !game.stations[order.route[0]]?.part)
-      .sort((a,b) => priority(a)-priority(b));
-    if (fresh.length) {
-      const order = fresh[0];
-      go(order.programmed ? 'material' : 'office',order,!order.programmed);
-      return;
-    }
-
-    const next = game.orders.filter(order => !order.started && !order.programmed)
-      .sort((a,b) => a.remaining-b.remaining)[0];
-    if (next) go('office',next,true);
-    else caption = game.shipped >= game.config.stars[2]
-      ? `Three-star ${game.config.name} achieved. Keep the shop flowing until closing.`
-      : 'Let the active cycle finish, then keep the next handoff moving.';
-  }
-
-  reset();
-  return { tick, reset, status:() => ({caption,actions,dashes}) };
-}
-
-// Keep the original mastery route and timing unchanged for existing links.
-function createOwnerDemo(api) {return createShopDemo(api);}
-
-return {parseWatchMode,nextWatchRole,createShopDemo,createOwnerDemo};})();
 const Social=(()=>{
 function parseChallenge(search) {
   const p=new URLSearchParams(search);
@@ -1605,7 +1437,7 @@ function challengeURL(result,base) {
 }
 function createSocial({onChallenge}) {
   const $=id=>document.getElementById(id),challenge=parseChallenge(location.search);
-  const online=location.protocol!=='file:',demo=['operator','manager','owner','sequence'].includes(new URLSearchParams(location.search).get('watch'));
+  const online=location.protocol!=='file:';
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
@@ -1617,16 +1449,28 @@ function createSocial({onChallenge}) {
     if(!response.ok)throw new Error(value.error||'The board is unavailable. Try again.');return value;
   };
   const summary=value=>`${value.stars} ★ · ${value.shipped} shipped · ${value.score.toLocaleString()} points`;
-  if(challenge&&!demo){$('friend-challenge').hidden=false;$('friend-target').textContent=summary(challenge);$('accept-challenge').onclick=()=>onChallenge(challenge.role);}
-  async function loadBoard(){
-    const token=++boardGeneration;$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';
+  if(challenge){$('friend-challenge').hidden=false;$('friend-target').textContent=summary(challenge);$('accept-challenge').onclick=()=>onChallenge(challenge.role);}
+  function renderScores(id,entries){
+    const list=$(id);list.replaceChildren();
+    for(const [index,row] of entries.entries()){
+      const li=document.createElement('li'),rank=document.createElement('span'),identity=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small'),score=document.createElement('b');
+      rank.className='score-rank';rank.textContent=String(index+1).padStart(2,'0');
+      name.textContent=row.name;detail.textContent=`${row.shipped} shipped · ${row.stars} ★`;identity.append(name,detail);
+      score.className='score-points';score.textContent=row.score.toLocaleString();li.append(rank,identity,score);list.append(li);
+    }
+  }
+  async function loadBoard(showFull=true){
+    const token=++boardGeneration;
+    if(showFull){$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';}
     try{const data=await api('leaderboard');if(token!==boardGeneration)return;
-      $('board-status').textContent=data.entries.length?'Top 30 · current rules':'No scores yet. Set the first one.';
-      for(const row of data.entries){const li=document.createElement('li'),name=document.createElement('strong'),stats=document.createElement('span');name.textContent=row.name;stats.textContent=`${row.score.toLocaleString()} pts · ${row.shipped} shipped · ${row.stars} ★`;li.append(name,stats);$('board-list').append(li);}
-    }catch(error){if(token===boardGeneration)$('board-status').textContent=error.message;}
+      $('board-status').textContent=data.entries.length?'Top 30 · all shifts · points':'No scores yet. Set the first one.';
+      $('home-board-status').textContent=data.entries.length?'All shifts. One leaderboard.':'No scores yet. Your shift could be first.';
+      renderScores('board-list',data.entries);renderScores('home-board-list',data.entries.slice(0,10));
+    }catch(error){if(token!==boardGeneration)return;$('board-status').textContent=error.message;$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
   }
   function openBoard(withResult=false){
-    $('post-form').hidden=!withResult||!result||demo;
+    $('post-form').hidden=!withResult||!result;
+    $('post-result-summary').textContent=result?`Your shift · ${summary(result)}`:'';
     $('post-score').disabled=!run||posted;
     $('post-status').textContent=posted?'Posted. Nice shift.':!run?'This shift was not connected. Play a new shift online to post.':'';
     $('leaderboard-dialog').showModal();loadBoard();
@@ -1650,10 +1494,11 @@ function createSocial({onChallenge}) {
   };
   return {
     challenge,
-    start(role){const token=++generation;result=null;run=null;posted=false;if(demo)return;api('runs',{role,ruleset:RULESET}).then(value=>{if(token===generation)run=value.id;}).catch(()=>{});},
+    refreshBoard:()=>loadBoard(false),
+    start(role){const token=++generation;result=null;run=null;posted=false;api('runs',{role,ruleset:RULESET}).then(value=>{if(token===generation)run=value.id;}).catch(()=>{});},
     finish(value){
       result=Object.freeze({...value,stars:SHIFTS[value.role].stars.filter(n=>value.shipped>=n).length});
-      $('social-results').hidden=demo;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;
+      $('social-results').hidden=false;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;
       $('friend-result').hidden=!challenge;
       if(challenge){$('friend-result').textContent=value.score>challenge.score?'Challenge won. Your friend has a new score to chase.':value.score===challenge.score?'A tie! One more shift to take the lead?':`${(challenge.score-value.score).toLocaleString()} points to catch your friend. One more shift?`;}
     },
@@ -1684,8 +1529,7 @@ function technologyBadges(keys) {
 }
 
 return {TECHNOLOGIES,technologyIcon,technologyBadges};})();
-const {createWorkshop,createMachine,createCharacter,createPart}=Models;const {ShopGame,SHIFTS,OPS}=Core;const {ShopAudio}=Audio;const {createShopDemo,parseWatchMode,nextWatchRole}=Demo;const {RULESET}=Core;const {createSocial}=Social;const {technologyBadges,technologyIcon}=Technology;
-
+const {createWorkshop,createMachine,createCharacter,createPart}=Models;const {ShopGame,SHIFTS,OPS}=Core;const {ShopAudio}=Audio;const {RULESET}=Core;const {createSocial}=Social;const {technologyBadges,technologyIcon}=Technology;
 
 
 
@@ -1694,8 +1538,7 @@ const {createWorkshop,createMachine,createCharacter,createPart}=Models;const {Sh
 
 const $=id=>document.getElementById(id);
 const game=new ShopGame(),audio=new ShopAudio();
-const watch=parseWatchMode(location.search),watchMode=watch.enabled,watchSequence=watch.sequence;
-let demoController=null,selectedByPlayer=false,pendingSource=false,challengeRun=false,sourceReveal=false;
+let selectedByPlayer=false,pendingSource=false,challengeRun=false,sourceReveal=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1745,7 +1588,7 @@ obstacles.push({minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,maxX:-5.
 // Perimeter packing and plants are physical props, outside the working aisle.
 obstacles.push({minX:6.05,maxX:7.85,minZ:-5.58,maxZ:-4.30},{minX:6.98,maxX:7.98,minZ:-4.46,maxZ:-3.46},{minX:-8.82,maxX:-7.80,minZ:2.37,maxZ:3.39});
 
-function save(){if(watchMode)return;try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}catch{}}
+function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}catch{}}
 function toast(message,duration=2.6){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+duration*1000;}
 function safeSpot(x,z){return x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ&&!obstacles.some(o=>x>o.minX&&x<o.maxX&&z>o.minZ&&z<o.maxZ);}
 function movePosition(position,dx,dz){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.12));for(let i=0;i<steps;i++){if(safeSpot(position.x+dx/steps,position.z))position.x+=dx/steps;if(safeSpot(position.x,position.z+dz/steps))position.z+=dz/steps;}}
@@ -1807,7 +1650,7 @@ function boot(){
   new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);officeArt.covariScreenMaterial=new THREE.MeshStandardMaterial({color:0xffffff,map:texture,emissive:0xffffff,emissiveMap:texture,emissiveIntensity:.4,roughness:.65});});
   for(const def of STATION_LAYOUT){
     const model=def.id==='office'?world.userData.office:createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
-    const label=document.createElement('button');label.className='station-label';label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{if(!watchMode)goToStation(def.id);};$('station-labels').appendChild(label);
+    const label=document.createElement('button');label.className='station-label';label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{goToStation(def.id);};$('station-labels').appendChild(label);
     const access=def.access||{x:def.x,z:def.z+def.d/2+.63};stations[def.id]={def,model,label,access};
     if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
   }
@@ -1819,9 +1662,8 @@ function boot(){
   for(const id of ['live-hud','orders','game-footer','shop-sidebar'])layoutObserver.observe($(id));
   resize();buildShiftPicker();bindControls();updateCamera(0,true);renderer.render(scene,camera);$('loading').hidden=true;
   requestAnimationFrame(frame);
-  window.__chipRush={snapshot:()=>({...game.snapshot(),demonstration:watchMode,player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),version:'2.5.0'};
-  registerTools();
-  if(watchMode){document.body.classList.add('watch-mode');showWatchIntro();}
+  window.__chipRush={snapshot:()=>({...game.snapshot(),player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),version:'2.5.0'};
+  registerTools();social.refreshBoard();
 }
 function measureShopFrame(){
   // Fit the whole miniature shop, excluding the enormous backdrop. Keep
@@ -1872,7 +1714,7 @@ function updateParticles(dt){for(let i=particles.length-1;i>=0;i--){const p=part
 function processEvents(){for(const ev of game.drain()){
   audio.event(ev.type);
   if(ev.type==='hint')toast(ev.message);
-  if(ev.type==='sourceOffer'&&(!watchMode||watchSequence)){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
+  if(ev.type==='sourceOffer'){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
   if(ev.type==='sourcePlaced'){pendingSource=false;toast('Outsourced with Covari. Your partner is on it.',3);}
   if(ev.type==='sourceDelivered'){const bonus=ev.points;floatText(`+${bonus} · COVARI`,'office',true);toast(`Outsourced with Covari · delivered! +${bonus} bonus points.`,3);}
   if(ev.type==='programmed'){floatText('PROGRAM READY ✓','office',true);toast(`Order #${ev.orderId} is programmed. Ready for its first cut.`,2);}
@@ -1991,7 +1833,7 @@ function revealSelectedTicket(){
 function updateTickets(force){
   const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${o.id===game.selectedId&&!pendingSource}:${game.stations[o.location]?.ready}:${o.programmed}:${game.office.orderId===o.id}:${game.office.present}:${game.call?.orderId===o.id?game.call.state:""}`).join('|');
   if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. The next Order is on its way.</div>';}
-    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId&&!pendingSource?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId&&!pendingSource?'true':'false');const program=game.config.programming?`<span class="route-step ${o.programmed?'done':'active'}" title="Program at the office">${o.programmed?'✓ ':''}CAM</span><span class="route-arrow">›</span>`:'';const route=program+o.route.map((step,i)=>`<span class="route-step${i<o.index?' done':i===o.index&&o.programmed?' active':''}" title="${OPS[step].name}">${i<o.index?'✓ ':''}${OPS[step].short}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><span class="ticket-select">${o.id===game.selectedId&&!pendingSource?'✓ SELECTED':'CLICK TO SELECT →'}</span><div class="route">${route}</div><div class="ticket-status">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{if(watchMode)return;selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
+    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId&&!pendingSource?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId&&!pendingSource?'true':'false');const program=game.config.programming?`<span class="route-step ${o.programmed?'done':'active'}" title="Program at the office">${o.programmed?'✓ ':''}CAM</span><span class="route-arrow">›</span>`:'';const route=program+o.route.map((step,i)=>`<span class="route-step${i<o.index?' done':i===o.index&&o.programmed?' active':''}" title="${OPS[step].name}">${i<o.index?'✓ ':''}${OPS[step].short}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><span class="ticket-select">${o.id===game.selectedId&&!pendingSource?'✓ SELECTED':'CLICK TO SELECT →'}</span><div class="route">${route}</div><div class="ticket-status">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
     $('orders').appendChild(sourceCard);if(focused)$(focused)?.focus({preventScroll:true});
     $('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
     if(renderedSelection!==game.selectedId){renderedSelection=game.selectedId;revealSelectedTicket();}
@@ -2013,13 +1855,12 @@ function updateUI(force=false){
   if(carrySig!==heldSignature||force){heldSignature=carrySig;$('carry-label').textContent=o?`CARRYING · Order #${o.id}`:selected?`SELECTED · Order #${selected.id}`:'YOUR HANDS';$('carry-name').textContent=o?o.name:selected?.name||'All caught up';$('carry-next').textContent=o?`Next → ${o.programmed?OPS[o.route[o.index]].name:'Program at office'}`:selected?(selected.location==='material'?selected.programmed?'Collect its billet at Material':'Program this job at the Office':ticketState(selected)):'Watch for the next order.';$('carry-icon').textContent=o?'▣':'◇';$('carry-icon').style.color=o?'#'+o.color.toString(16).padStart(6,'0'):'var(--teal)';}
   updateOfficeUI();updateSourceUI();
   if(pendingSource&&!game.hand){$('carry-label').textContent='SELECTED · BONUS ORDER';$('carry-name').textContent=game.sourcing.name;$('carry-next').textContent='Next → click the Office computer';}
-  if(watchMode&&$('watch-caption'))$('watch-caption').textContent=demoController?.status().caption||'';
   $('interaction-hint').innerHTML=`<kbd>E</kbd><span>${nearby?stationAction(nearby.def.id):'Walk up to a station'}</span>`;
-  const showCoach=game.mode==='playing'&&(!watchMode||watchSequence)&&(game.shipped<1||!selectedByPlayer)&&game.shiftIndex===0;$('coach').hidden=!showCoach;
+  const showCoach=game.mode==='playing'&&(game.shipped<1||!selectedByPlayer)&&game.shiftIndex===0;$('coach').hidden=!showCoach;
   if(showCoach){const first=game.order(101)||game.selected;let text='Click another order card to start its job.';if(first){if(first.location==='material')text=`Order #${first.id} is selected. Click Material to collect its billet.`;else if(first.location==='hands')text=`Carry #${first.id} to ${OPS[first.route[first.index]].name}.`;else if(game.stations[first.location]?.ready)text=`${OPS[first.location].name} is ready. Collect your part!`;else if(first.location==='buffer')text='Collect your part from the Hold bench.';else text=`${OPS[first.location].name} is working. Click another order card to start its job.`;}$('coach-text').textContent=pendingSource?'Covari job selected. Click the Office computer.':text;}
 }
 function updateSourceUI(){
-  const job=game.sourcing;if(job?.state!=='offer')pendingSource=false;const visible=job&&!['declined'].includes(job.state)&&(!watchMode||watchSequence);sourceCard.hidden=!visible;if(!visible)return;
+  const job=game.sourcing;if(job?.state!=='offer')pendingSource=false;const visible=job&&!['declined'].includes(job.state);sourceCard.hidden=!visible;if(!visible)return;
   const approving=job.state==='approving',offered=job.state==='offer',bonus=job.points;
   $('source-title').textContent=job.name;
   const technology=$('source-technology');
@@ -2056,7 +1897,6 @@ function positionLabels(){const target=nextTarget();for(const [id,s] of Object.e
 }}
 function frame(now){
   const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;clockTime+=dt;
-  if(watchMode&&game.mode==='playing')demoController?.tick(dt);
   updateMovement(dt);if(game.mode==='playing'){game.setOfficePresence(atOffice());game.tick(dt);processEvents();syncParts();}
   animateShop(game.mode==='paused'||game.mode==='help'?0:dt);updateCamera(dt);positionLabels();audio.update(game.mode==='playing');
   uiElapsed+=dt;if(uiElapsed>.09){uiElapsed=0;if(!menuMode)updateUI();}
@@ -2066,13 +1906,13 @@ function frame(now){
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous role to unlock':''}`);b.innerHTML=`<span class="num">0${i+1}</span><span><b>${s.name}</b><small>${i>unlocked?'Clear the previous role to unlock':s.subtitle}</small></span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});$('start-duration').textContent=`${SHIFTS[selectedShift].duration/60} MINUTE SHIFT`;$('start-target').textContent=`SHIP ${SHIFTS[selectedShift].passTarget} TO CLEAR`;$('migration-note').hidden=!migrationNotice;}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
 function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: program #101 at the office.',2.5);$('scene').focus();if(watchMode)startWatchController();}
-function pause(){if(game.mode!=='playing')return;game.mode='paused';if(!watchMode)clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: program #101 at the office.',2.5);$('scene').focus();}
+function pause(){if(game.mode!=='playing')return;game.mode='paused';clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused')return;game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
   helpReturn={mode:game.mode,panel:['welcome','pause-panel','results-panel','briefing-panel'].find(id=>!$(id).hidden),centered:$('overlay').classList.contains('centered')};
-  if(game.mode==='playing'){game.mode='help';if(!watchMode)clearMovement();}
+  if(game.mode==='playing'){game.mode='help';clearMovement();}
   hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('help-panel').hidden=false;$('help-close').focus();
 }
 function closeHelp(){
@@ -2080,7 +1920,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');last=performance.now();
 }
-function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);if(watchMode){game.mode='menu';clearMovement();showWatchIntro();return;}game.mode='menu';menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;$('coach').hidden=true;$('floor-caption').hidden=false;document.body.classList.remove('playing','paused','has-office');$('shift-number').textContent='WELCOME TO THE SHOP';$('shift-name').textContent='Precision under pressure.';buildShiftPicker();}
+function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;$('coach').hidden=true;$('floor-caption').hidden=false;document.body.classList.remove('playing','paused','has-office');$('shift-number').textContent='WELCOME TO THE SHOP';$('shift-name').textContent='Precision under pressure.';buildShiftPicker();social.refreshBoard();}
 function showBriefing(index){
   selectedShift=index;migrationNotice=false;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes to clear this role. Complex work and earlier shipping earn more points.`;
@@ -2098,8 +1938,8 @@ function showBriefing(index){
   $('briefing-flavor').textContent=lessons[0];$('briefing-text').textContent=lessons[1];$('briefing-tip').textContent=lessons[2];$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
 function showResults(){
-  if(resultShown)return;resultShown=true;clearMovement();const passed=game.passed();if(passed&&!watchMode&&!challengeRun)unlocked=Math.max(unlocked,Math.min(2,game.shiftIndex+1));
-  const previous=bests[game.shiftIndex]||0;if(!watchMode){bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();}hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('coach').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
+  if(resultShown)return;resultShown=true;clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(2,game.shiftIndex+1));
+  const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('coach').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   const stars=game.stars(),ownerMastery=game.shiftIndex===2&&stars===3;
   $('results-panel').classList.toggle('owner-mastery',ownerMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${ownerMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
@@ -2113,44 +1953,6 @@ function showResults(){
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} SHIPPED`;
   $('next-button').innerHTML=passed&&!challengeRun&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered});
-  if(watchMode){
-    $('result-kicker').textContent=`AUTOMATED ${game.config.name.toUpperCase()} ${watchSequence?'REVIEW':'DEMONSTRATION'}`;
-    $('result-message').textContent=`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.unfinished} unfinished at closing. ${game.sourced?'Covari job delivered. ':''}${game.shiftIndex===2?`${game.callsAnswered} customer calls answered. `:''}${watchSequence&&game.shiftIndex<2?'Review this result, then continue to the next role.':'Normal operations, normal deadlines.'}`;
-    $('result-best').textContent='NORMAL RULES · DEMONSTRATION NOT SAVED TO YOUR SCORES';
-    $('next-button').innerHTML=watchSequence&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':watchSequence?'WATCH SEQUENCE AGAIN <span>↻</span>':'WATCH AGAIN <span>↻</span>';
-    $('replay-button').textContent='Replay this role';$('results-menu').textContent=watchSequence?'Back to first role':'Back to demonstration';
-  }
-}
-function showWatchIntro(index=watch.role){
-  showBriefing(index);const cfg=SHIFTS[index];
-  $('briefing-flavor').textContent=watchSequence?`ROLE ${index+1} OF 3 · LIVE REVIEW`:'WATCH THE SHOP IN MOTION';
-  if(!watchSequence){
-    $('briefing-role').textContent=`The ${cfg.name} playthrough`;
-    $('briefing-challenge').textContent=`A ${cfg.duration/60}-minute automated demonstration using the same controls, machines, and deadlines as your game.`;
-    $('briefing-text').textContent=index===2?'Watch the route: overlap cutting and programming, clear inspection, and dash along open aisles. The player answers three customer calls and takes a rush when there is room.':index===1?'Watch programming and machining work together. Prepare the next job while the machines cut, then inspect and ship every finished part.':'Watch billets become finished parts. Load the lathe and mill, collect their output, inspect, and ship.';
-  }
-  $('briefing-tip').textContent+=(watchSequence?' This review also selects a Covari job and places it at the office. Each results screen waits for you before the next role.':'')+' Normal game speed. Scores and unlocks are not saved. Pause and replay anytime.';
-  $('briefing-start').innerHTML=`WATCH ${cfg.name.toUpperCase()} RUN <span>▶</span>`;
-  $('briefing-back').textContent='Play it yourself';
-  $('briefing-back').onclick=()=>{location.href=location.pathname;};
-}
-function startWatchController(){
-  demoController=createShopDemo({
-    game,goToStation,dash,
-    selectOrder(id){selectedByPlayer=true;pendingSource=false;game.select(id);processEvents();updateUI(true);},
-    selectSource:selectSourceJob,
-    respondCall(accept){game.setOfficePresence(atOffice());const id=game.call?.orderId;const accepted=game.respondCall(accept);if(accepted&&accept)game.select(id);processEvents();updateUI(true);return accepted;},
-    navigation:()=>({x:player.x,z:player.z,path,pathStation,dashCooldown}),
-    distanceTo(id){const access=stations[id].access;let previous=player,total=0;for(const p of findPath(access.x,access.z)){total+=Math.hypot(p.x-previous.x,p.z-previous.z);previous=p;}return total;},
-  },{sourcing:watchSequence});
-  $('shift-number').textContent=watchSequence?`LIVE REVIEW · ROLE ${game.shiftIndex+1} OF 3`:'DEMONSTRATION · NORMAL RULES';
-  $('shift-name').textContent=`${game.config.name} · automated playthrough`;
-  $('touch-controls').hidden=true;
-  $('restart-button').textContent='Restart the demonstration';
-  $('menu-button').textContent='Back to demonstration';
-  const guide=document.querySelector('.keyboard-guide');
-  guide.innerHTML=`<strong>WATCHING ${game.config.name.toUpperCase()}</strong><small>Automated clicks + timed dashes<br>Normal game speed · Scores not saved</small><small id="watch-caption"></small>`;
-  toast(`Watching the ${game.config.name} ${watchSequence?'review':'demonstration'}. Pause anytime.`,3);
 }
 function selectSourceJob(){
   if(game.mode!=='playing'||['ringing','answering','offer'].includes(game.call?.state))return false;
@@ -2161,11 +1963,11 @@ function selectSourceJob(){
 }
 function bindControls(){
   addEventListener('resize',resize);$('scene').tabIndex=-1;
-  $('source-accept').onclick=()=>{if(!watchMode)selectSourceJob();};$('source-decline').onclick=()=>{if(watchMode)return;pendingSource=false;game.declineSource();updateUI(true);};
+  $('source-accept').onclick=()=>{selectSourceJob();};$('source-decline').onclick=()=>{pendingSource=false;game.declineSource();updateUI(true);};
   $('briefing-start').onclick=()=>startShift(selectedShift);$('briefing-back').onclick=showMenu;
-  $('office-go').onclick=()=>{if(watchMode)return;if(game.office.orderId&&game.call?.state!=='ringing')game.select(game.office.orderId);goToStation('office');};
-  for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{if(watchMode)return;game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);if(replied&&pendingSource&&game.sourcing?.state==='offer'){if(game.requestSource())pendingSource=false;}processEvents();updateUI(true);$('scene').focus();};
-  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>watchMode?showWatchIntro(nextWatchRole(watch,game.shiftIndex)):showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('office-go').onclick=()=>{if(game.office.orderId&&game.call?.state!=='ringing')game.select(game.office.orderId);goToStation('office');};
+  for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);if(replied&&pendingSource&&game.sourcing?.state==='offer'){if(game.requestSource())pendingSource=false;}processEvents();updateUI(true);$('scene').focus();};
+  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('sound-button').onclick=()=>{audio.init();const on=audio.toggle();$('sound-button').classList.toggle('muted',!on);$('sound-button').textContent=on?'♪':'♫̸';$('sound-button').setAttribute('aria-label',on?'Turn sound off':'Turn sound on');};
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
@@ -2173,13 +1975,13 @@ function bindControls(){
     const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab','KeyE','ShiftLeft','ShiftRight'];
     if(game.mode==='playing'&&!onPhone()&&controls.includes(e.code))e.preventDefault();if(e.repeat)return;
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
-    if(game.mode!=='playing'||onPhone()||watchMode)return;keys.add(e.code);
+    if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
     if(e.code==='KeyE'||e.code==='Space')interact();if(e.code==='Tab'){selectedByPlayer=true;pendingSource=false;game.cycle();processEvents();updateUI(true);}
     if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();if(/^Digit[1-4]$/.test(e.code)){const o=game.orders[Number(e.code.slice(-1))-1];if(o){selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);}}
   });
   addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  renderer.domElement.addEventListener('pointerdown',e=>{if(game.mode!=='playing'||e.button>0||watchMode)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}});
+  renderer.domElement.addEventListener('pointerdown',e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}});
   const joystick=$('joystick');let joystickPointer=null;
   const joyMove=e=>{if(e.pointerId!==joystickPointer)return;const rect=joystick.getBoundingClientRect(),dx=e.clientX-rect.left-rect.width/2,dy=e.clientY-rect.top-rect.height/2;const len=Math.hypot(dx,dy),f=len>30?30/len:1;touchVector={x:dx*f/30,y:dy*f/30};$('joystick-knob').style.transform=`translate(${dx*f}px,${dy*f}px)`;};
   joystick.onpointerdown=e=>{e.preventDefault();joystickPointer=e.pointerId;joystick.setPointerCapture(e.pointerId);joyMove(e);};joystick.onpointermove=joyMove;joystick.onpointerup=joystick.onpointercancel=()=>{joystickPointer=null;touchVector={x:0,y:0};$('joystick-knob').style.transform='';};$('touch-interact').onpointerdown=e=>{e.preventDefault();interact();};$('touch-dash').onpointerdown=e=>{e.preventDefault();dash();};
@@ -2190,7 +1992,7 @@ function registerTools(){
   const lifecycle=new AbortController();addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
   const register=tool=>{try{Promise.resolve(mc.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}};
   register({name:'get_shop_state',title:'Read shop state',description:'Read the current Chip Rush shift, tickets, carried part, machines and player position.',annotations:{readOnlyHint:true,untrustedContentHint:false},inputSchema:{type:'object',properties:{},additionalProperties:false},execute:async()=>window.__chipRush.snapshot()});
-  register({name:'start_walk_to_station',title:'Walk to a station',description:'Start walking the machinist to a station. Automatically interacts on arrival using normal movement and collision rules. Read shop state to check arrival.',annotations:{readOnlyHint:false,untrustedContentHint:false},inputSchema:{type:'object',properties:{station:{type:'string',enum:STATION_LAYOUT.map(s=>s.id)}},required:['station'],additionalProperties:false},execute:async(input)=>{if(!input||typeof input.station!=='string'||!stations[input.station])throw new Error('Choose a valid workshop station.');if(watchMode)throw new Error('The demonstration controls its own inputs.');if(game.mode!=='playing')throw new Error('Clock in or resume the shift first.');goToStation(input.station);return {walkingTo:input.station};}});
+  register({name:'start_walk_to_station',title:'Walk to a station',description:'Start walking the machinist to a station. Automatically interacts on arrival using normal movement and collision rules. Read shop state to check arrival.',annotations:{readOnlyHint:false,untrustedContentHint:false},inputSchema:{type:'object',properties:{station:{type:'string',enum:STATION_LAYOUT.map(s=>s.id)}},required:['station'],additionalProperties:false},execute:async(input)=>{if(!input||typeof input.station!=='string'||!stations[input.station])throw new Error('Choose a valid workshop station.');if(game.mode!=='playing')throw new Error('Clock in or resume the shift first.');goToStation(input.station);return {walkingTo:input.station};}});
 }
 try{boot();}catch(error){console.error(error);$('loading').hidden=true;$('fatal').hidden=false;$('fatal-message').textContent='This game needs WebGL 2 in a current browser. Enable hardware acceleration, then reload. '+(error?.message||'');}
 
