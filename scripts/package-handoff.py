@@ -11,7 +11,7 @@ for folder in ('dist', 'qa', 'scripts', 'db', 'drizzle', 'server'):
     paths.extend(p for p in (root / folder).rglob('*') if p.is_file()
         and not p.is_symlink() and 'downloads' not in p.relative_to(root).parts
         and not (folder == 'dist' and p.relative_to(root / folder).parts[0] in ('client', 'server', '.openai'))
-        and p.name != 'offline-syntax.js' and p.suffix not in ('.png', '.jpg')
+        and p.name != 'offline-syntax.js' and not (folder == 'qa' and p.suffix in ('.png', '.jpg'))
         and p.name != '.DS_Store' and '__pycache__' not in p.parts)
 with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
     for source in sorted(paths):

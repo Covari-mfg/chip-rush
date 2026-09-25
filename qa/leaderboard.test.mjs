@@ -5,14 +5,15 @@ import { readFile } from 'node:fs/promises';
 import worker, { validateResult } from '../server/worker.js';
 import { RULESET, SHIFTS } from '../dist/core.js';
 
-const migration=await readFile(new URL('../drizzle/0000_omniscient_wasp.sql',import.meta.url),'utf8');
+const journal=JSON.parse(await readFile(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'));
+const migrations=await Promise.all(journal.entries.map(({tag})=>readFile(new URL('../drizzle/'+tag+'.sql',import.meta.url),'utf8')));
 const ORIGIN='https://chip-rush.example';
 const START=1_800_000_000_000;
 
 // Exercise the real worker and migration with SQLite, adapting only D1's
 // prepare/bind/result envelopes. No network or deployed database is involved.
 function fixture(t) {
-  const sqlite=new DatabaseSync(':memory:');sqlite.exec(migration);t.after(()=>sqlite.close());
+  const sqlite=new DatabaseSync(':memory:');for(const migration of migrations)sqlite.exec(migration);t.after(()=>sqlite.close());
   const prepare=(sql,values=[])=>({
     bind(...next){return prepare(sql,next);},
     async first(){return sqlite.prepare(sql).get(...values)??null;},
@@ -55,10 +56,11 @@ test('starting a run issues an ownership cookie and a completed owned run can po
   assert.equal(run.response.headers.get('x-content-type-options'),'nosniff');
   const response=await f.post(run,{name:'  Josué   Parker  '});
   assert.equal(response.status,200);assert.deepEqual(await response.json(),{posted:true,id:run.id});
-  const board=await f.send('/api/leaderboard?role=2');assert.equal(board.status,200);
-  const data=await board.json();assert.equal(data.ruleset,RULESET);assert.equal(data.role,2);
+  const board=await f.send('/api/leaderboard');assert.equal(board.status,200);
+  const data=await board.json();assert.equal(data.ruleset,RULESET);assert.equal('role' in data,false);
   assert.equal(data.entries.length,1);assert.equal(data.entries[0].name,'Josué Parker');
-  assert.equal(data.entries[0].stars,1);assert.equal(data.entries[0].score,1000);
+  assert.equal(data.entries[0].stars,1);assert.equal(data.entries[0].score,1000);assert.equal(data.entries[0].rawScore,1000);
+  assert.equal('role' in data.entries[0],false,'Role is used for scoring but not exposed as a board category');
   assert.equal('player' in data.entries[0],false,'Public entries do not expose ownership identifiers');
 });
 
@@ -143,14 +145,17 @@ test('result caps reject noninteger counts, impossible role counts, and unearned
   for(const key of ['score','shipped','missed','sourced','calls']) {
     for(const value of [-1,.5,'1',null,undefined,Infinity])assert.ok(validateResult({...valid,[key]:value},run,START+180000),key+' rejects '+String(value));
   }
-  for(const [key,value] of [['score',9001],['shipped',13],['missed',16],['sourced',2],['calls',4]]) {
+  for(const [key,value] of [['score',20001],['shipped',13],['missed',16],['sourced',2],['calls',4]]) {
     assert.ok(validateResult({...valid,[key]:value},run,START+180000));
   }
-  assert.equal(validateResult({...valid,score:4560,sourced:1},run,START+180000),null);
-  assert.match(validateResult({...valid,score:4561,sourced:1},run,START+180000),/shipment count/);
-  assert.match(validateResult({...valid,score:59,sourced:1},run,START+180000),/shipment count/);
-  assert.match(validateResult({...valid,score:1,shipped:0,calls:0},run,START+180000),/shipment count/);
+  assert.equal(validateResult({...valid,score:9735,sourced:1},run,START+180000),null);
+  assert.match(validateResult({...valid,score:9736,sourced:1},run,START+180000),/completed work/);
+  assert.match(validateResult({...valid,score:134,sourced:1},run,START+180000),/completed work/);
+  assert.match(validateResult({...valid,score:1,shipped:0,calls:0},run,START+180000),/completed work/);
   assert.equal(validateResult({...valid,score:60,shipped:0,sourced:1,calls:0},run,START+180000),null,'A sourced job may earn points without an in-house shipment');
+  assert.equal(validateResult({...valid,score:75,shipped:0,calls:3},run,START+180000),null,'Completed phone conversations earn their own points');
+  assert.match(validateResult({...valid,score:76,shipped:0,calls:3},run,START+180000),/completed work/);
+  assert.equal(validateResult({...valid,score:6000},run,START+180000),null,'Real performance is not limited by a role ceiling');
   for(const role of [0,1]) {
     assert.ok(validateResult({...valid,role,calls:1},{...run,role},START+180000));
   }
@@ -166,28 +171,53 @@ test('repeated posts are idempotent and cannot overwrite the first accepted resu
   assert.equal(rows.length,1);assert.equal(rows[0].name,'First Player');assert.equal(rows[0].score,1000);
 });
 
-test('boards separate roles and rulesets and derive stars from shipments',async t=>{
+test('one board mixes all roles by earned score and excludes older rulesets',async t=>{
   const f=fixture(t);
-  for(const role of [0,1,2]) {
-    const run=await f.start(role);assert.equal((await f.post(run,{name:'Role '+role,score:1000+role,shipped:SHIFTS[role].stars[2]})).status,200);
+  const results=[{role:0,name:'Alex',score:3000,shipped:5},{role:1,name:'Bea',score:2000,shipped:7},{role:2,name:'Charlie',score:2100,shipped:10},{role:2,name:'Dana',score:1500,shipped:6}];
+  for(const result of results) {
+    const run=await f.start(result.role);assert.equal((await f.post(run,result)).status,200);
   }
-  f.sqlite.prepare('INSERT INTO scores VALUES(?,?,?,?,?,?,?,?,?,?)').run('old-score','Legacy',2,'old-rules',9000,12,0,0,3,START);
-  for(const role of [0,1,2]) {
-    const response=await f.send('/api/leaderboard?role='+role);assert.equal(response.status,200);
-    const {entries}=await response.json();assert.equal(entries.length,1);assert.equal(entries[0].name,'Role '+role);assert.equal(entries[0].stars,3);
+  f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('old-score','Legacy',2,'roles-v4-covari',9000,9000,12,0,0,3,START);
+  const {entries}=await (await f.send('/api/leaderboard')).json();
+  assert.deepEqual(entries.map(row=>row.name),['Alex','Charlie','Bea','Dana']);
+  assert.deepEqual(entries.map(row=>row.score),[3000,2100,2000,1500]);
+  assert.deepEqual(entries.map(row=>row.stars),[3,3,3,1]);
+  assert.ok(entries.every(row=>!('role' in row)));
+  for(const suffix of ['?role=0','?role=2','?role=owner']) {
+    const response=await f.send('/api/leaderboard'+suffix);assert.equal(response.status,200);
+    assert.deepEqual((await response.json()).entries,entries,'Old role parameters cannot split the board');
   }
-  for(const suffix of ['', '?role=-1','?role=3','?role=1.5','?role=owner'])assert.equal((await f.send('/api/leaderboard'+suffix)).status,400);
 });
 
-test('boards return at most thirty entries in score, shipment, then creation order',async t=>{
-  const f=fixture(t),insert=f.sqlite.prepare('INSERT INTO scores VALUES(?,?,?,?,?,?,?,?,?,?)');
-  for(let i=0;i<32;i++)insert.run('entry-'+i,'Player '+i,2,RULESET,1000+i,6,0,0,3,START+i);
-  insert.run('tie-a','Tie earlier',2,RULESET,2000,8,0,0,3,START);
-  insert.run('tie-b','Tie later',2,RULESET,2000,8,0,0,3,START+1);
-  insert.run('tie-c','Fewer shipped',2,RULESET,2000,6,0,0,3,START-1);
-  const {entries}=await (await f.send('/api/leaderboard?role=2')).json();
+test('the unified board returns at most thirty entries in points, shipment, then creation order',async t=>{
+  const f=fixture(t),insert=f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+  for(let i=0;i<32;i++)insert.run('entry-'+i,'Player '+i,2,RULESET,300+i,300+i,6,0,0,3,START+i);
+  insert.run('tie-a','Tie earlier',0,RULESET,650,650,8,0,0,0,START);
+  insert.run('tie-b','Tie later',1,RULESET,650,650,8,0,0,0,START+1);
+  insert.run('tie-c','Fewer shipped',2,RULESET,650,650,6,0,0,3,START-1);
+  const {entries}=await (await f.send('/api/leaderboard')).json();
   assert.equal(entries.length,30);
   assert.deepEqual(entries.slice(0,4).map(row=>row.name),['Tie earlier','Tie later','Fewer shipped','Player 31']);
+});
+
+test('the server persists the validated score instead of trusting separate client ranking fields',async t=>{
+  const f=fixture(t),run=await f.start(0);
+  assert.equal((await f.post(run,{score:2000,shipped:5,points:1500,rawScore:9000,stars:99})).status,200);
+  const stored=f.sqlite.prepare('SELECT score,points FROM scores WHERE id=?').get(run.id);
+  assert.equal(stored.score,2000);assert.equal(stored.points,2000);
+  const {entries}=await (await f.send('/api/leaderboard')).json();
+  assert.equal(entries[0].score,2000);assert.equal(entries[0].rawScore,2000);assert.equal(entries[0].stars,3);
+});
+
+test('the ranking migration preserves previous score data while adding a default points column',t=>{
+  const db=new DatabaseSync(':memory:');t.after(()=>db.close());db.exec(migrations[0]);
+  db.prepare('INSERT INTO scores VALUES(?,?,?,?,?,?,?,?,?,?)').run('prior-score','Prior Player',2,'roles-v4-covari',4173,10,0,1,3,START);
+  for(const migration of migrations.slice(1))db.exec(migration);
+  const row=db.prepare('SELECT * FROM scores WHERE id=?').get('prior-score');
+  assert.equal(row.score,4173);assert.equal(row.points,0);assert.equal(row.ruleset,'roles-v4-covari');
+  assert.equal(row.shipped,10);assert.equal(row.name,'Prior Player');
+  const columns=db.prepare('PRAGMA index_info(scores_board)').all().map(column=>column.name);
+  assert.deepEqual(columns,['ruleset','points','shipped','created_at']);
 });
 
 test('run restart throttle rejects the eleventh request and recovers after one minute',async t=>{
@@ -200,7 +230,7 @@ test('run restart throttle rejects the eleventh request and recovers after one m
 
 test('API unavailability does not prevent the static game from loading',async t=>{
   const f=fixture(t);
-  const api=await worker.fetch(new Request(ORIGIN+'/api/leaderboard?role=2'),{ASSETS:f.env.ASSETS});
+  const api=await worker.fetch(new Request(ORIGIN+'/api/leaderboard'),{ASSETS:f.env.ASSETS});
   assert.equal(api.status,503);
   const staticResponse=await worker.fetch(new Request(ORIGIN+'/'),{ASSETS:f.env.ASSETS});
   assert.equal(await staticResponse.text(),'static game');

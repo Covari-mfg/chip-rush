@@ -151,3 +151,11 @@ test('closing prevents a late supplier payout and reset clears every sourcing st
     advance(game,24);assert.equal(game.sourcing,null,'Old supplier work cannot leak into the next shift');
   }
 });
+
+for(const role of [0,1,2])test(`role ${role+1}: Covari delivery earns only the optional points bonus`,()=>{
+  const game=offer(role),shipped=game.shipped,stars=game.stars();
+  game.setOfficePresence(true);assert.equal(game.requestSource(),true);
+  advance(game,24.2);assert.equal(game.sourcing.state,'delivered');
+  assert.equal(game.sourced,1);assert.equal(game.score,60);assert.equal(game.sourcePoints,60);
+  assert.equal(game.shipped,shipped);assert.equal(game.stars(),stars);
+});

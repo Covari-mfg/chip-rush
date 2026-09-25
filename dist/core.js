@@ -1,4 +1,15 @@
-export const RULESET = 'roles-v4-covari';
+export const RULESET = 'roles-v5-performance';
+// Complexity and speed earn points on delivery. CAM is only paid when its
+// part ships, so restarting or reprogramming a job cannot farm points.
+export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
+  const base=order.value;
+  const program=programming ? 60 : 0;
+  const speed=Math.round(Math.max(0,order.remaining)*4);
+  const subtotal=base+program+speed;
+  const multiplier=1+(Math.max(1,Math.min(5,combo))-1)*.15;
+  const streak=Math.round(subtotal*multiplier)-subtotal;
+  return {base,program,speed,streak,rush:rushBonus,total:subtotal+streak+rushBonus};
+}
 export const OPS = {
   lathe:{name:'Lathe',short:'TURN',duration:8,color:'#7cdeca'},
   mill:{name:'Mill',short:'MILL',duration:10,color:'#8dc9f1'},
@@ -69,6 +80,7 @@ export class ShopGame {
     this.sourced = 0;
     this.sourcePoints = 0;
     this.score = 0;
+    this.scoreDetails = {base:0,program:0,speed:0,streak:0,rush:0,calls:0,sourcing:0};
     this.shipped = 0;
     this.missed = 0;
     this.unfinished = 0;
@@ -213,7 +225,7 @@ export class ShopGame {
       if(job.approvalRemaining<=0){job.state='sourcing';this.emit('sourcePlaced');}
     } else if(job.state === 'sourcing') {
       job.remaining = Math.max(0,job.remaining-dt);
-      if(job.remaining<=0){job.state='delivered';this.score+=job.points;this.sourcePoints+=job.points;this.sourced++;this.emit('sourceDelivered',{points:job.points});}
+      if(job.remaining<=0){job.state='delivered';this.score+=job.points;this.sourcePoints+=job.points;this.scoreDetails.sourcing+=job.points;this.sourced++;this.emit('sourceDelivered',{points:job.points});}
     }
   }
 
@@ -285,7 +297,9 @@ export class ShopGame {
         if (this.call.answerRemaining <= 0) {
           this.call.state = 'offer';
           this.callsAnswered++;
-          this.emit('callAnswered', {orderId:this.call.orderId,window:this.call.window,bonus:this.call.bonus});
+          this.score+=25;
+          this.scoreDetails.calls+=25;
+          this.emit('callAnswered', {orderId:this.call.orderId,window:this.call.window,bonus:this.call.bonus,points:25});
         }
       } else {
         this.call.ringRemaining = Math.max(0, this.call.ringRemaining - dt);
@@ -404,9 +418,10 @@ export class ShopGame {
       if (order.route[order.index] !== 'ship') return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
       this.combo = Math.min(this.combo + 1, 5);
       this.bestCombo = Math.max(this.bestCombo, this.combo);
-      const multiplier = 1 + (this.combo - 1) * .15;
       const rushBonus = this.call?.orderId === order.id && this.call.state === 'active' ? this.call.bonus : 0;
-      const points = Math.round((order.value + Math.ceil(Math.max(0, order.remaining)) * 2) * multiplier) + rushBonus;
+      const breakdown=scoreShipment(order,this.combo,{programming:this.config.programming,rushBonus});
+      const points=breakdown.total;
+      for(const key of ['base','program','speed','streak','rush'])this.scoreDetails[key]+=breakdown[key];
       this.score += points;
       this.shipped++;
       if (rushBonus) {
@@ -418,7 +433,7 @@ export class ShopGame {
       this.hand = null;
       this.orders = this.orders.filter(candidate => candidate.id !== order.id);
       if (this.selectedId === order.id) this.selectedId = this.orders.find(candidate => !candidate.started)?.id ?? this.orders[0]?.id ?? null;
-      this.emit('shipped', {orderId:order.id,points,rushBonus,combo:this.combo,station:key});
+      this.emit('shipped', {orderId:order.id,points,rushBonus,breakdown,combo:this.combo,station:key});
       return true;
     }
 

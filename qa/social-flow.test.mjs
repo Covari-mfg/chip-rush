@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { RULESET, SHIFTS } from '../dist/core.js';
-import { parseChallenge } from '../dist/social.js';
+import { challengeURL, parseChallenge } from '../dist/social.js';
 
 const source=await readFile(new URL('../dist/social.js',import.meta.url),'utf8');
 const executable=source.replace(/^import .*;\n/,'').replaceAll('export function ','function ')
@@ -19,8 +19,8 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher}=
   const element=()=>({hidden:true,disabled:false,value:'',textContent:'',children:[],open:false,selected:false,
     append(...children){this.children.push(...children);},replaceChildren(...children){this.children=[...children];},
     showModal(){this.open=true;},close(){this.open=false;},select(){this.selected=true;}});
-  const $=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
-  $('board-role').value='0';$('player-name').value='Test Player';
+  const $=id=>{assert.notEqual(id,'board-role','The unified board must not depend on a role picker');if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
+  $('player-name').value='Test Player';
   const navigator={clipboard:{writeText:async text=>{copies.push(text);if(clipboard)return clipboard(text);}}};
   if(nativeShare)navigator.share=async payload=>{shares.push(payload);return nativeShare(payload);};
   const fetch=async(path,options)=>{
@@ -57,7 +57,8 @@ test('sharing uses the exact finished snapshot and derived stars even if its inp
   const url=new URL(f.$('share-link').value);
   assert.deepEqual(parseChallenge(url.search),{role:2,score:3895,shipped:10,stars:3});
   assert.equal(url.hash,'');assert.equal(url.searchParams.has('old'),false);
-  assert.match(f.copies[0],/Owner · 3 ★ · 10 shipped · 3,895 points/);
+  assert.match(f.copies[0],/3 ★ · 10 shipped · 3,895 points/);
+  assert.doesNotMatch(f.copies[0],/Owner ·|Production Manager ·|Operator ·/);
   assert.doesNotMatch(f.copies[0],/9,000|99 ★/);
 });
 
@@ -82,7 +83,7 @@ for(const outcome of ['success','failure'])test('a stale post '+outcome+' cannot
   if(outcome==='success')pending.resolve(response({posted:true}));else pending.reject(new Error('Old request failed'));
   await oldSubmission;await settle();
   assert.equal(f.$('post-score').disabled,false);assert.equal(f.$('post-status').textContent,'');
-  assert.equal(f.$('board-role').value,'1');
+  assert.ok(f.requests.filter(request=>request.path.startsWith('/api/leaderboard')).every(request=>request.path==='/api/leaderboard'));
   await f.submit();
   const posts=f.requests.filter(request=>request.path==='/api/scores');assert.equal(posts.length,2);
   assert.equal(posts[1].body.runId,'run-2');assert.equal(posts[1].body.role,1);assert.equal(posts[1].body.score,2700);
@@ -100,6 +101,29 @@ test('an older run-registration response cannot replace the new shift ownership 
   assert.equal(f.requests.find(request=>request.path==='/api/scores').body.runId,'current-run');
 });
 
+test('one unfiltered board shows server scores in rank order without role labels',async()=>{
+  const f=setup({fetcher:request=>request.path==='/api/leaderboard'?response({entries:[
+    {name:'First Player',score:5100,shipped:10,stars:3},
+    {name:'Second Player',score:3500,shipped:7,stars:3},
+  ]}):undefined});
+  f.$('board-open').onclick();await settle();
+  assert.deepEqual(f.requests.map(request=>request.path),['/api/leaderboard']);
+  const rows=f.$('board-list').children;
+  assert.equal(rows.length,2);assert.equal(rows[0].children[0].textContent,'First Player');
+  assert.equal(rows[0].children[1].textContent,'5,100 pts · 10 shipped · 3 ★');
+  assert.equal(rows[1].children[1].textContent,'3,500 pts · 7 shipped · 3 ★');
+});
+
+test('friend challenges compare actual total points across roles without hiding the result',()=>{
+  const url=challengeURL({role:0,score:2500,shipped:5},'https://chip-rush.example/');
+  const f=setup({url});
+  assert.equal(f.$('friend-target').textContent,'3 ★ · 5 shipped · 2,500 points');
+  f.finish({role:2,score:2400});assert.equal(f.$('friend-result').hidden,false);
+  assert.match(f.$('friend-result').textContent,/100 points to catch/);
+  f.finish({role:2,score:2500});assert.match(f.$('friend-result').textContent,/tie/);
+  f.finish({role:2,score:2501});assert.match(f.$('friend-result').textContent,/Challenge won/);
+});
+
 test('demonstration mode never registers a run or posts its result',async()=>{
   const f=setup({url:'https://chip-rush.example/?watch=owner'});
   f.social.start(2);await settle();f.finish();await f.submit();
@@ -110,14 +134,43 @@ test('demonstration mode never registers a run or posts its result',async()=>{
 });
 
 test('offline play keeps sharing available and explains that the community board needs hosting',async()=>{
-  const f=setup({url:'file:///tmp/CHIP-RUSH.html'});
+  const f=setup({url:'file:///tmp/CHIP-RUSH.html',nativeShare:async()=>{}});
   f.social.start(0);await settle();f.finish({role:0,score:800,shipped:3,calls:0});
   f.$('result-board').onclick();await settle();
   assert.equal(f.requests.length,0);assert.equal(f.$('post-score').disabled,true);
   assert.match(f.$('board-status').textContent,/hosted game/);
   await f.$('challenge-friend').onclick();
-  const url=new URL(f.$('share-link').value);assert.equal(url.protocol,'https:');
+  const url=new URL(f.$('share-link').value);assert.equal(url.protocol,'file:');assert.equal(url.pathname,'/tmp/CHIP-RUSH.html');
   assert.deepEqual(parseChallenge(url.search),{role:0,score:800,shipped:3,stars:1});
+  assert.equal(f.shares.length,0,'An offline file link is copied locally, not sent through native sharing');
+  assert.match(f.$('share-status').textContent,/Local file link.*this computer only.*copy of the game files/);
+  assert.match(f.copies[0],/Local file link.*this computer only/);
+  assert.doesNotMatch(f.copies[0],/chatgpt\.site/);
+});
+
+test('loopback challenge links preserve the preview origin and path and explain their local scope',async()=>{
+  for(const origin of ['http://localhost:4173','http://127.0.0.1:4173','http://127.0.0.2:8080','http://[::1]:4173','http://game.localhost:4173','http://0.0.0.0:4173']) {
+    const f=setup({url:origin+'/preview/chip-rush/?old=1#results',nativeShare:async()=>{}});
+    f.finish();await f.$('challenge-friend').onclick();
+    const url=new URL(f.$('share-link').value);
+    assert.equal(url.origin,origin);assert.equal(url.pathname,'/preview/chip-rush/');
+    assert.equal(url.hash,'');assert.equal(url.searchParams.has('old'),false);
+    assert.deepEqual(parseChallenge(url.search),{role:2,score:4173,shipped:10,stars:3});
+    assert.equal(f.shares.length,0);assert.equal(f.copies.length,1);
+    assert.match(f.$('share-status').textContent,/Local preview link.*this computer only.*preview is running/);
+    assert.match(f.copies[0],/Local preview link.*this computer only/);
+    assert.doesNotMatch(f.copies[0],/chatgpt\.site/);
+    await f.$('copy-challenge').onclick();
+    assert.equal(f.copies[1],url.href);assert.match(f.$('share-status').textContent,/this computer only/);
+  }
+});
+
+test('manual-copy fallback keeps the local-link limitation visible when clipboard permission is denied',async()=>{
+  const f=setup({url:'http://127.0.0.1:4173/game/',clipboard:async()=>{throw new Error('Clipboard denied');}});
+  f.finish();await f.$('challenge-friend').onclick();
+  assert.equal(f.$('share-link').hidden,false);assert.equal(f.$('copy-challenge').hidden,false);
+  assert.equal(f.$('share-link').selected,true);assert.match(f.$('share-status').textContent,/local challenge link.*this computer only/);
+  await f.$('copy-challenge').onclick();assert.match(f.$('share-status').textContent,/Select and copy.*this computer only/);
 });
 
 test('denied clipboard permission leaves the challenge text selected for manual copying',async()=>{

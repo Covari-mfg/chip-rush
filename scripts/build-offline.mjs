@@ -14,7 +14,8 @@ for(const [file,name] of modules){const content=await read('dist/'+file);const n
 bundle+='\nconst {createWorkshop,createMachine,createCharacter,createPart}=Models;const {ShopGame,SHIFTS,OPS}=Core;const {ShopAudio}=Audio;const {createOwnerDemo}=Demo;const {RULESET}=Core;const {createSocial}=Social;\n';
 bundle+=(await read('dist/main.js')).replace(/^import .*?;\s*$/gm,'');
 const css=await read('dist/style.css');
-const html=(await read('dist/index.html')).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
+const logoData=(await readFile(path.join(root,'dist/assets/covari-logo.png'))).toString('base64');
+const html=(await read('dist/index.html')).replace('src="./assets/covari-logo.png"',()=>`src="data:image/png;base64,${logoData}"`).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
 if(/(?:src|href)="\.\//.test(html.replace('href="./"','')))throw new Error('Unexpected external asset reference in standalone game.');
 await writeFile(path.join(root,'dist/CHIP-RUSH.html'),html);
 await writeFile(path.join(root,'qa/offline-syntax.js'),bundle);
