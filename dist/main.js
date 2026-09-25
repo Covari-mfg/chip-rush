@@ -2,12 +2,12 @@ import * as THREE from './vendor/three.module.js';
 import { createWorkshop, createMachine, createCharacter, createPart } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS } from './core.js';
 import { ShopAudio } from './audio.js';
-import { createOwnerDemo } from './demo.js';
+import { createShopDemo, parseWatchMode, nextWatchRole } from './demo.js';
 import { createSocial } from './social.js';
 
 const $=id=>document.getElementById(id);
 const game=new ShopGame(),audio=new ShopAudio();
-const watchMode=new URLSearchParams(location.search).get('watch')==='owner';
+const watch=parseWatchMode(location.search),watchMode=watch.enabled,watchSequence=watch.sequence;
 let demoController=null,selectedByPlayer=false,pendingSource=false,challengeRun=false,sourceReveal=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
@@ -185,7 +185,7 @@ function updateParticles(dt){for(let i=particles.length-1;i>=0;i--){const p=part
 function processEvents(){for(const ev of game.drain()){
   audio.event(ev.type);
   if(ev.type==='hint')toast(ev.message);
-  if(ev.type==='sourceOffer'&&!watchMode){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
+  if(ev.type==='sourceOffer'&&(!watchMode||watchSequence)){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
   if(ev.type==='sourcePlaced'){pendingSource=false;toast('Outsourced with Covari. Your partner is on it.',3);}
   if(ev.type==='sourceDelivered'){const bonus=ev.points;floatText(`+${bonus} · COVARI`,'office',true);toast(`Outsourced with Covari · delivered! +${bonus} bonus points.`,3);}
   if(ev.type==='programmed'){floatText('PROGRAM READY ✓','office',true);toast(`Order #${ev.orderId} is programmed. Ready for its first cut.`,2);}
@@ -325,16 +325,17 @@ function updateUI(force=false){
   const o=game.heldOrder,selected=game.selected;const carrySig=o?`${o.id}:${o.index}:${o.programmed}`:`empty:${selected?.id}:${selected?.programmed}:${selected?.location}:${pendingSource}`;
   if(carrySig!==heldSignature||force){heldSignature=carrySig;$('carry-label').textContent=o?`CARRYING · Order #${o.id}`:selected?`SELECTED · Order #${selected.id}`:'YOUR HANDS';$('carry-name').textContent=o?o.name:selected?.name||'All caught up';$('carry-next').textContent=o?`Next → ${o.programmed?OPS[o.route[o.index]].name:'Program at office'}`:selected?(selected.location==='material'?selected.programmed?'Collect its billet at Material':'Program this job at the Office':ticketState(selected)):'Watch for the next order.';$('carry-icon').textContent=o?'▣':'◇';$('carry-icon').style.color=o?'#'+o.color.toString(16).padStart(6,'0'):'var(--teal)';}
   updateOfficeUI();updateSourceUI();
-  if(pendingSource&&!game.hand){$('carry-label').textContent='SELECTED · BONUS ORDER';$('carry-name').textContent='Wire EDM insert';$('carry-next').textContent='Next → click the Office computer';}
+  if(pendingSource&&!game.hand){$('carry-label').textContent='SELECTED · BONUS ORDER';$('carry-name').textContent=game.sourcing.name;$('carry-next').textContent='Next → click the Office computer';}
   if(watchMode&&$('watch-caption'))$('watch-caption').textContent=demoController?.status().caption||'';
   $('interaction-hint').innerHTML=`<kbd>E</kbd><span>${nearby?stationAction(nearby.def.id):'Walk up to a station'}</span>`;
-  const showCoach=game.mode==='playing'&&!watchMode&&(game.shipped<1||!selectedByPlayer)&&game.shiftIndex===0;$('coach').hidden=!showCoach;
+  const showCoach=game.mode==='playing'&&(!watchMode||watchSequence)&&(game.shipped<1||!selectedByPlayer)&&game.shiftIndex===0;$('coach').hidden=!showCoach;
   if(showCoach){const first=game.order(101)||game.selected;let text='Click another order card to start its job.';if(first){if(first.location==='material')text=`Order #${first.id} is selected. Click Material to collect its billet.`;else if(first.location==='hands')text=`Carry #${first.id} to ${OPS[first.route[first.index]].name}.`;else if(game.stations[first.location]?.ready)text=`${OPS[first.location].name} is ready. Collect your part!`;else if(first.location==='buffer')text='Collect your part from the Hold bench.';else text=`${OPS[first.location].name} is working. Click another order card to start its job.`;}$('coach-text').textContent=pendingSource?'Covari job selected. Click the Office computer.':text;}
 }
 function updateSourceUI(){
-  const job=game.sourcing;if(job?.state!=='offer')pendingSource=false;const visible=job&&!['declined'].includes(job.state)&&!watchMode;sourceCard.hidden=!visible;if(!visible)return;
+  const job=game.sourcing;if(job?.state!=='offer')pendingSource=false;const visible=job&&!['declined'].includes(job.state)&&(!watchMode||watchSequence);sourceCard.hidden=!visible;if(!visible)return;
   const approving=job.state==='approving',offered=job.state==='offer',bonus=job.points;
-  $('source-detail').textContent=offered?(pendingSource?`Selected. Click the Office computer to outsource this job · ${Math.ceil(job.offerRemaining)}s.`:`Needs Wire EDM, outside our shop’s capabilities. +${bonus} bonus points · offer ${Math.ceil(job.offerRemaining)}s.`):approving?`Placing your job · ${Math.ceil(job.approvalRemaining)}s${game.office.present?' · stay at the computer':' · return to the computer'}`:job.state==='sourcing'?`Outsourced with Covari · partner delivery in ${Math.ceil(job.remaining)}s`:`✓ Outsourced with Covari · +${bonus} points`;
+  $('source-title').textContent=job.name;
+  $('source-detail').textContent=offered?(pendingSource?`Selected. Click the Office computer to outsource this job · ${Math.ceil(job.offerRemaining)}s.`:`Needs ${job.capability}, outside our shop’s capabilities. +${bonus} bonus points · offer ${Math.ceil(job.offerRemaining)}s.`):approving?`Placing your job · ${Math.ceil(job.approvalRemaining)}s${game.office.present?' · stay at the computer':' · return to the computer'}`:job.state==='sourcing'?`Outsourced with Covari · partner delivery in ${Math.ceil(job.remaining)}s`:`✓ Outsourced with Covari · +${bonus} points`;
   $('source-accept').hidden=!offered&&!approving;$('source-decline').hidden=!offered;
   const interrupted=['ringing','answering','offer'].includes(game.call?.state);$('source-accept').disabled=interrupted;$('source-accept').textContent=interrupted?'Answer customer first':approving?'Back to the office ↗':pendingSource?'✓ Selected · click OFFICE':'Outsource with Covari ↗';
   sourceCard.classList.toggle('delivered',job.state==='delivered');sourceCard.classList.toggle('chosen',pendingSource||approving);
@@ -423,43 +424,59 @@ function showResults(){
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} SHIPPED`;
   $('next-button').innerHTML=passed&&!challengeRun&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered});
-  if(watchMode){$('result-kicker').textContent='AUTOMATED OWNER DEMONSTRATION';$('result-best').textContent='NORMAL RULES · DEMONSTRATION NOT SAVED TO YOUR SCORES';$('next-button').innerHTML='WATCH AGAIN <span>↻</span>';$('replay-button').textContent='Replay immediately';$('results-menu').textContent='Back to demonstration';}
+  if(watchMode){
+    $('result-kicker').textContent=`AUTOMATED ${game.config.name.toUpperCase()} ${watchSequence?'REVIEW':'DEMONSTRATION'}`;
+    $('result-message').textContent=`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.unfinished} unfinished at closing. ${game.sourced?'Covari job delivered. ':''}${game.shiftIndex===2?`${game.callsAnswered} customer calls answered. `:''}${watchSequence&&game.shiftIndex<2?'Review this result, then continue to the next role.':'Normal operations, normal deadlines.'}`;
+    $('result-best').textContent='NORMAL RULES · DEMONSTRATION NOT SAVED TO YOUR SCORES';
+    $('next-button').innerHTML=watchSequence&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':watchSequence?'WATCH SEQUENCE AGAIN <span>↻</span>':'WATCH AGAIN <span>↻</span>';
+    $('replay-button').textContent='Replay this role';$('results-menu').textContent=watchSequence?'Back to first role':'Back to demonstration';
+  }
 }
-function showWatchIntro(){
-  showBriefing(2);
-  $('briefing-flavor').textContent='WATCH THE SHOP IN MOTION';
-  $('briefing-role').textContent='The Owner playthrough';
-  $('briefing-challenge').textContent='A three-minute automated demonstration using the same controls, machines, calls, and deadlines as your game.';
-  $('briefing-text').textContent='Watch the route: overlap cutting and programming, clear inspection, and dash along open aisles. The player answers three customer calls and takes a rush when there is room.';
-  $('briefing-tip').textContent='The score is earned through normal operations. This demonstration does not change your best scores or role unlocks. Pause and replay anytime.';
-  $('briefing-start').innerHTML='WATCH OWNER RUN <span>▶</span>';
+function showWatchIntro(index=watch.role){
+  showBriefing(index);const cfg=SHIFTS[index];
+  $('briefing-flavor').textContent=watchSequence?`ROLE ${index+1} OF 3 · LIVE REVIEW`:'WATCH THE SHOP IN MOTION';
+  if(!watchSequence){
+    $('briefing-role').textContent=`The ${cfg.name} playthrough`;
+    $('briefing-challenge').textContent=`A ${cfg.duration/60}-minute automated demonstration using the same controls, machines, and deadlines as your game.`;
+    $('briefing-text').textContent=index===2?'Watch the route: overlap cutting and programming, clear inspection, and dash along open aisles. The player answers three customer calls and takes a rush when there is room.':index===1?'Watch programming and machining work together. Prepare the next job while the machines cut, then inspect and ship every finished part.':'Watch billets become finished parts. Load the lathe and mill, collect their output, inspect, and ship.';
+  }
+  $('briefing-tip').textContent+=(watchSequence?' This review also selects a Covari job and places it at the office. Each results screen waits for you before the next role.':'')+' Normal game speed. Scores and unlocks are not saved. Pause and replay anytime.';
+  $('briefing-start').innerHTML=`WATCH ${cfg.name.toUpperCase()} RUN <span>▶</span>`;
   $('briefing-back').textContent='Play it yourself';
   $('briefing-back').onclick=()=>{location.href=location.pathname;};
 }
 function startWatchController(){
-  demoController=createOwnerDemo({
+  demoController=createShopDemo({
     game,goToStation,dash,
-    selectOrder(id){game.select(id);processEvents();updateUI(true);},
+    selectOrder(id){selectedByPlayer=true;pendingSource=false;game.select(id);processEvents();updateUI(true);},
+    selectSource:selectSourceJob,
     respondCall(accept){game.setOfficePresence(atOffice());const id=game.call?.orderId;const accepted=game.respondCall(accept);if(accepted&&accept)game.select(id);processEvents();updateUI(true);return accepted;},
     navigation:()=>({x:player.x,z:player.z,path,pathStation,dashCooldown}),
     distanceTo(id){const access=stations[id].access;let previous=player,total=0;for(const p of findPath(access.x,access.z)){total+=Math.hypot(p.x-previous.x,p.z-previous.z);previous=p;}return total;},
-  });
-  $('shift-number').textContent='DEMONSTRATION · NORMAL RULES';
-  $('shift-name').textContent='Owner · automated playthrough';
+  },{sourcing:watchSequence});
+  $('shift-number').textContent=watchSequence?`LIVE REVIEW · ROLE ${game.shiftIndex+1} OF 3`:'DEMONSTRATION · NORMAL RULES';
+  $('shift-name').textContent=`${game.config.name} · automated playthrough`;
   $('touch-controls').hidden=true;
   $('restart-button').textContent='Restart the demonstration';
   $('menu-button').textContent='Back to demonstration';
   const guide=document.querySelector('.keyboard-guide');
-  guide.innerHTML='<strong>WATCHING OWNER</strong><small>Automated clicks + timed dashes<br>Normal game speed · Scores not saved</small><small id="watch-caption"></small>';
-  toast('Watching the Owner demonstration. Pause anytime.',3);
+  guide.innerHTML=`<strong>WATCHING ${game.config.name.toUpperCase()}</strong><small>Automated clicks + timed dashes<br>Normal game speed · Scores not saved</small><small id="watch-caption"></small>`;
+  toast(`Watching the ${game.config.name} ${watchSequence?'review':'demonstration'}. Pause anytime.`,3);
+}
+function selectSourceJob(){
+  if(game.mode!=='playing'||['ringing','answering','offer'].includes(game.call?.state))return false;
+  if(game.sourcing?.state==='approving'){goToStation('office');return true;}
+  pendingSource=game.sourcing?.state==='offer';updateUI(true);
+  if(pendingSource)toast('Covari job selected. Click the Office computer to place it.',3);
+  return pendingSource;
 }
 function bindControls(){
   addEventListener('resize',resize);$('scene').tabIndex=-1;
-  $('source-accept').onclick=()=>{if(watchMode||game.mode!=='playing')return;if(game.sourcing?.state==='approving'){goToStation('office');return;}pendingSource=game.sourcing?.state==='offer';updateUI(true);if(pendingSource)toast('Covari job selected. Click the Office computer to place it.',3);};$('source-decline').onclick=()=>{pendingSource=false;game.declineSource();updateUI(true);};
+  $('source-accept').onclick=()=>{if(!watchMode)selectSourceJob();};$('source-decline').onclick=()=>{if(watchMode)return;pendingSource=false;game.declineSource();updateUI(true);};
   $('briefing-start').onclick=()=>startShift(selectedShift);$('briefing-back').onclick=showMenu;
   $('office-go').onclick=()=>{if(watchMode)return;if(game.office.orderId&&game.call?.state!=='ringing')game.select(game.office.orderId);goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{if(watchMode)return;game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);if(replied&&pendingSource&&game.sourcing?.state==='offer'){if(game.requestSource())pendingSource=false;}processEvents();updateUI(true);$('scene').focus();};
-  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>watchMode?showWatchIntro():showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>watchMode?showWatchIntro(nextWatchRole(watch,game.shiftIndex)):showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('sound-button').onclick=()=>{audio.init();const on=audio.toggle();$('sound-button').classList.toggle('muted',!on);$('sound-button').textContent=on?'♪':'♫̸';$('sound-button').setAttribute('aria-label',on?'Turn sound off':'Turn sound on');};
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;

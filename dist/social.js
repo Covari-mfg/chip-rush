@@ -15,7 +15,7 @@ export function challengeURL(result,base) {
 }
 export function createSocial({onChallenge}) {
   const $=id=>document.getElementById(id),challenge=parseChallenge(location.search);
-  const online=location.protocol!=='file:',demo=new URLSearchParams(location.search).get('watch')==='owner';
+  const online=location.protocol!=='file:',demo=['operator','manager','owner','sequence'].includes(new URLSearchParams(location.search).get('watch'));
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');

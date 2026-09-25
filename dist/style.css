@@ -153,3 +153,14 @@
 .board-scoring{font-size:13.5px;line-height:1.8;color:#e4d9a8;padding:12px 14px;background:#ffffff06;border-radius:6px;border:1px solid #567b7166}
 
 .score-breakdown{font-size:12px;line-height:1.6;color:var(--muted);margin:10px 0;}
+
+/* Match the Covari website wordmark with its locally bundled brand typeface. */
+@font-face{font-family:"Covari Instrument Sans";font-style:normal;font-weight:400 700;font-display:swap;src:url("./assets/fonts/instrument-sans-latin.woff2") format("woff2")}
+.source-card{font-family:"Covari Instrument Sans",Arial,sans-serif;overflow:hidden}
+.source-card .covari-brand{gap:9px;background:#fafafa;color:#1b2c3c;margin:-13px -13px 4px;padding:12px 13px;border-bottom:1px solid #1dbcae55}
+.source-card .covari-mark{width:34px;height:34px;border-radius:0;background:transparent}
+.source-card .covari-mark img{width:75px;height:75px}
+.source-card .covari-brand>span:last-child{font-family:"Covari Instrument Sans",Arial,sans-serif;font-size:29px;font-weight:700;letter-spacing:-.8px;line-height:1.1}
+.source-card>strong{font-weight:600;font-size:16px;letter-spacing:-.15px}
+.source-card #source-accept{background:#1dbcae;border-color:#1dbcae;color:#102a32;font-weight:600}
+.source-card #source-accept:hover{background:#55d6c9}

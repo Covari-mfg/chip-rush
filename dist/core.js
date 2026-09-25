@@ -27,6 +27,11 @@ export const RECIPES = [
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
 ];
+export const SOURCE_JOBS = [
+  {name:'Injection molding',capability:'Injection molding'},
+  {name:'Wire EDM insert',capability:'Wire EDM'},
+  {name:'Sheet metal assembly',capability:'Sheet metal fabrication'},
+];
 // Clearing a role is the introduction; its third star is the mastery target.
 // Owner supplies enough work for ten shipments, but keeps the same six-order
 // promotion floor and deterministic recipe sequence. A little deadline slack
@@ -212,7 +217,12 @@ export class ShopGame {
   tickSourcing(dt, phoneInterrupting) {
     if(!this.sourceOffered && this.elapsed >= 35) {
       this.sourceOffered = true;
-      this.sourcing = {id:'C-201',name:'Wire EDM insert',capability:'Wire EDM',state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
+      // Only an actual offer advances the cosmetic rotation. Preserve this
+      // cursor through resets, so retries can show every outside capability.
+      this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
+      const job=SOURCE_JOBS[this.nextSourceKind];
+      this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
+      this.sourcing = {id:'C-201',...job,state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
       this.emit('sourceOffer');
     }
     const job=this.sourcing;

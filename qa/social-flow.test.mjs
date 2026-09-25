@@ -124,8 +124,8 @@ test('friend challenges compare actual total points across roles without hiding 
   f.finish({role:2,score:2501});assert.match(f.$('friend-result').textContent,/Challenge won/);
 });
 
-test('demonstration mode never registers a run or posts its result',async()=>{
-  const f=setup({url:'https://chip-rush.example/?watch=owner'});
+for(const mode of ['operator','manager','owner','sequence'])test(mode+' demonstration never registers a run or posts its result',async()=>{
+  const f=setup({url:'https://chip-rush.example/?watch='+mode});
   f.social.start(2);await settle();f.finish();await f.submit();
   f.$('result-board').onclick();await settle();
   assert.equal(f.requests.some(request=>request.path==='/api/runs'||request.path==='/api/scores'),false);

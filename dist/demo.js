@@ -1,17 +1,30 @@
-// A visible, automated Owner demonstration. This controller reads the live
+// A visible, automated demonstration. This controller reads the live
 // game and sends the same station, ticket, phone and dash inputs as a player.
 // It never advances the clock or changes a score, order, position or rule.
-export function createOwnerDemo(api) {
+export function parseWatchMode(search) {
+  const value=new URLSearchParams(search).get('watch');
+  return {enabled:['operator','manager','owner','sequence'].includes(value),sequence:value==='sequence',role:Math.max(0,['operator','manager','owner'].indexOf(value))};
+}
+
+export function nextWatchRole(mode,role) {
+  return mode.sequence&&role<2?role+1:mode.role;
+}
+
+export function createShopDemo(api, {sourcing=false}={}) {
   const { game } = api;
   const reaction = .06;
-  let pending, delay, actions, dashes, caption;
+  let pending, delay, actions, dashes, caption, sourceSeenAt, sourceSelected, callOfferId, callOfferAt;
 
   function reset() {
     pending = null;
     delay = reaction;
     actions = 0;
     dashes = 0;
-    caption = 'Start the first program, then keep the machines running in parallel.';
+    sourceSeenAt=null;
+    sourceSelected=false;
+    callOfferId=null;
+    callOfferAt=0;
+    caption = game.config.programming?'Start the first program, then keep the machines running in parallel.':'Collect a billet and keep the machines running in parallel.';
   }
 
   function go(station, order, program = false) {
@@ -35,6 +48,7 @@ export function createOwnerDemo(api) {
 
   function tick(dt) {
     if (game.mode !== 'playing') return;
+    if(sourcing&&game.sourcing?.state==='offer'&&sourceSeenAt===null)sourceSeenAt=game.elapsed;
     const navigation = api.navigation();
     const onPhone = ['answering','offer'].includes(game.call?.state);
 
@@ -65,12 +79,35 @@ export function createOwnerDemo(api) {
         caption = 'Stay on the phone. Machines and deadlines continue during the call.';
         return;
       }
+      if(sourcing){
+        if(callOfferId!==call.orderId){callOfferId=call.orderId;callOfferAt=game.elapsed;}
+        if(game.elapsed-callOfferAt<2.5){caption='Review the customer’s rush request before choosing a promise.';return;}
+      }
       const rush = game.order(call.orderId);
       const accept = call.rushAvailable !== false;
       api.respondCall(accept);
       caption = accept ? 'Accept the expedite and replan around the rush order.' : 'Keep the original promise. There is no room for a safe expedite.';
-      if (accept && rush && !rush.programmed) go('office', rush, true);
+      if (accept && rush && !rush.programmed && !(sourcing&&['offer','approving'].includes(game.sourcing?.state))) go('office', rush, true);
       else delay = reaction;
+      return;
+    }
+
+    // Review mode visibly selects the ordinary Covari card, then takes the
+    // same office route and attended approval as a human player. All deadlines
+    // and machines keep running while the card and customer reply are read.
+    if(sourcing&&game.sourcing?.state==='offer'&&game.elapsed-sourceSeenAt>=3){
+      if(!sourceSelected){
+        if(api.selectSource()){
+          sourceSelected=true;delay=.8;
+          caption='Select Outsource with Covari. Next, walk to the office computer.';
+        }
+        return;
+      }
+      go('office');caption='Place the selected Covari job at the office computer.';return;
+    }
+    if(sourcing&&game.sourcing?.state==='approving'){
+      if(!game.office.present)go('office');
+      caption='Stay at the computer for the two-second Covari approval. The shop keeps running.';
       return;
     }
 
@@ -123,11 +160,14 @@ export function createOwnerDemo(api) {
     const next = game.orders.filter(order => !order.started && !order.programmed)
       .sort((a,b) => a.remaining-b.remaining)[0];
     if (next) go('office',next,true);
-    else caption = game.shipped >= 10
-      ? 'Ten orders shipped. Three-star Owner achieved.'
+    else caption = game.shipped >= game.config.stars[2]
+      ? `Three-star ${game.config.name} achieved. Keep the shop flowing until closing.`
       : 'Let the active cycle finish, then keep the next handoff moving.';
   }
 
   reset();
   return { tick, reset, status:() => ({caption,actions,dashes}) };
 }
+
+// Keep the original mastery route and timing unchanged for existing links.
+export function createOwnerDemo(api) {return createShopDemo(api);}
