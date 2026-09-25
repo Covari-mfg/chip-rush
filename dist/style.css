@@ -164,3 +164,16 @@
 .source-card>strong{font-weight:600;font-size:16px;letter-spacing:-.15px}
 .source-card #source-accept{background:#1dbcae;border-color:#1dbcae;color:#102a32;font-weight:600}
 .source-card #source-accept:hover{background:#55d6c9}
+
+.ticket-heading,.source-card .source-heading{display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0}
+.ticket-heading h3{flex:1;min-width:0;margin:5px 0}
+.technology-badges{display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
+.technology-badge{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #2a77733d;border-radius:6px;background:#d7e8df;color:#155c51;flex-shrink:0}
+.technology-badge.tech-mill{background:#d6e5ec;border-color:#3b78963d;color:#285f7a}
+.technology-icon{display:block;width:24px;height:24px;flex-shrink:0}
+.source-card .source-heading>strong{font-size:16px;font-weight:600;letter-spacing:-.15px;min-width:0}
+.source-card .technology-badge{color:#a4efdf;background:#214a4b;border-color:#6eb4a755}
+.source-card.delivered>.source-heading{display:flex}
+.station-label>.technology-icon{width:19px;height:19px}
+
+.source-card .technology-badge{width:auto;gap:4px;padding:3px 6px}.technology-code{font-size:11.5px;font-weight:700;letter-spacing:.15px;line-height:1}

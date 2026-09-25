@@ -48,6 +48,8 @@ Station clicks follow smooth collision-safe paths. Shift adds a short dash that 
 
 In desktop windows, active orders stay in a permanent left column, oldest first. Customer-call controls and the carrying panel share that column, giving the 3D shop the main area on the right. Essential game text stays at 13.5 CSS pixels or larger. The rail scrolls rather than shrinking cards; keyboard selection reveals the selected order. Narrow screens use a horizontal order list.
 
+Small technology badges connect each order to its machine: turning and milling use matching icons on the card and station label, and orders needing both show both. Covari cards have distinct EDM, IM and SM badges for wire EDM, injection molding and sheet metal assembly. Each badge also has a full technology name for assistive text and its tooltip.
+
 Select an order, collect its billet at **Material**, and follow its route. Machines work unattended. Collect the finished part when the station label says **READY**. Inspection must finish before Shipping accepts the part. The Hold bench stores one part. Return a carried part to Material to recycle it and restart that order if the shop gets jammed. Expired orders are canceled and their parts are cleared. The Hold Bench is optional storage, not a required operation. Deburring and anodizing equipment are omitted from these three roles to avoid unused stations. There is no collision damage or random machine failure.
 
 Programming takes four attended seconds at the office. Select a ticket, then click Office or walk to the desk and press E. You can collect material first, but the first cut requires a completed program. Machines keep running while you program. The machinist sits in the office chair to type or answer the phone, and stands up when leaving. Walking away preserves your progress. The ticket and Office label show programming progress; there is no separate programming panel.
@@ -87,6 +89,7 @@ The self-contained `dist/CHIP-RUSH.html` still opens offline with all 3D assets.
 - `dist/index.html`, `style.css`: responsive game interface, tutorials, shift selection, and results.
 - `dist/main.js`: Three.js scene, lighting, animations, collision, keyboard/touch input, A* click routing, and UI.
 - `dist/core.js`: deterministic order, station, scoring, and shift logic.
+- `dist/technology.js`: shared manufacturing-technology icons for order cards, Covari offers and machine labels.
 - `dist/assets/models.js`: original dimensional asset constructors. Chamfered machine enclosures, machining internals, actual tools, storage, shipping rollers, office, articulated character, and staged parts. Static meshes are batched by material; machine pivots remain animated. This is actual 3D geometry, not a reference image or sprite background.
 - `dist/social.js`: friend challenges, optional posting, and board UI.
 - `server/worker.js`, `db/schema.ts`, `drizzle/`: shared leaderboard API and versioned D1 schema.

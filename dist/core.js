@@ -28,9 +28,9 @@ export const RECIPES = [
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
 ];
 export const SOURCE_JOBS = [
-  {name:'Injection molding',capability:'Injection molding'},
-  {name:'Wire EDM insert',capability:'Wire EDM'},
-  {name:'Sheet metal assembly',capability:'Sheet metal fabrication'},
+  {name:'Injection molding',capability:'Injection molding',technology:'im'},
+  {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
+  {name:'Sheet metal assembly',capability:'Sheet metal fabrication',technology:'sm'},
 ];
 // Clearing a role is the introduction; its third star is the mastery target.
 // Owner supplies enough work for ten shipments, but keeps the same six-order

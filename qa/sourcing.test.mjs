@@ -160,7 +160,7 @@ for(const role of [0,1,2])test(`role ${role+1}: Covari delivery earns only the o
   assert.equal(game.shipped,shipped);assert.equal(game.stars(),stars);
 });
 
-const sourceIdentity=job=>({name:job.name,capability:job.capability});
+const sourceIdentity=job=>({name:job.name,capability:job.capability,technology:job.technology});
 function nextOffer(game,role) {
   game.reset(role);game.nextCallAt=Infinity;
   advance(game,35.05);assert.equal(game.sourcing.state,'offer');
@@ -169,9 +169,9 @@ function nextOffer(game,role) {
 
 test('the three Covari variants describe distinct outside-shop capabilities',()=>{
   assert.deepEqual(SOURCE_JOBS,[
-    {name:'Injection molding',capability:'Injection molding'},
-    {name:'Wire EDM insert',capability:'Wire EDM'},
-    {name:'Sheet metal assembly',capability:'Sheet metal fabrication'},
+    {name:'Injection molding',capability:'Injection molding',technology:'im'},
+    {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
+    {name:'Sheet metal assembly',capability:'Sheet metal fabrication',technology:'sm'},
   ]);
 });
 
