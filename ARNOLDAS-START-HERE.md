@@ -67,3 +67,7 @@ node scripts/build-offline.mjs
 See [README.md](README.md) for the source map and [qa/PLAYTEST.md](qa/PLAYTEST.md) for verification history. Sections below the latest version describe older builds.
 
 The package has no existing hosted Site ID or repository history. Opening it in your Codex does not connect your copy to Josh’s published test site.
+
+## Community update
+
+Run `node scripts/dev-server.mjs` with Node 24+ and open http://127.0.0.1:4174/ to test the complete game and a local persistent score board. No dependency install is needed to play locally. `pnpm install && pnpm build` creates the hosted Worker + assets. See README for the D1 schema, player-reported score validation boundary, friend links, and optional Covari sourcing job. `CHIP-RUSH.html` remains fully playable offline; the shared board needs the hosted API.

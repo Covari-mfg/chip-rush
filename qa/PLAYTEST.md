@@ -167,3 +167,12 @@ The browser registered `get_shop_state` and `start_walk_to_station` with the exp
 - The modular game was browser-tested on the local HTTP server. It has not been published to an external host.
 - `dist/CHIP-RUSH.html` is a generated single-file edition, with CSS, Three.js, models, logic, and audio embedded. Its JavaScript syntax and asset references were checked. The automated browser blocks direct `file://` navigation, so direct double-click launch was not verified in that browser. No browser-policy workaround was attempted.
 - Small-screen layouts were tested using viewport overrides. Physical mobile touch hardware and every browser/GPU combination were not tested.
+
+## Community update · 2026-09-25
+
+- Real browser playtest completed an Operator shift with the optional Wire EDM job. The two-second office approval and partner delivery awarded exactly 60 points and no shipment or star credit. Regular work still accepted lathe loads. The closing screen showed that actual result and a second shift started normally. This run tested UI and sourcing rather than a high-scoring route.
+- Posted that result as Local QA to the local SQLite board, observed the saved 60-point entry and disabled repeat-post button. Nothing was posted to the public board during QA.
+- Opened a valid Owner challenge (10 shipped, 4,173 points), saw its target and Owner briefing, then returned to ordinary selection and verified Operator remained selected with Manager/Owner locked.
+- Visually checked the live layout at 1000×700 and 390×844. Selection badges and instructions are visible; desktop keeps the shop to the right and narrow screens scroll cards above it.
+- The complete 103-test suite includes sourcing, challenge parsing, social async/cancellation flows, API ownership/validation/idempotence, and four actual-movement Owner demo profiles. Full difficulty assertions retain the normal ten-shipment, three-call Owner proof.
+- Public scores are player-reported with server-side bounds/ownership checks, not verified anti-cheat results. Native sharing is OS-dependent; a visible challenge link and explicit Copy button remain available when sharing is cancelled or unsupported.

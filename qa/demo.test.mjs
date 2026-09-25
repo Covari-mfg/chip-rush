@@ -34,7 +34,7 @@ function runtime(frames) {
     ${section('const bounds=','\nfunction save')}
     const player={...SPAWN,angle:Math.PI};
     let path=[],pathStation=null,dashTime=0,dashCooldown=0,
-      dashDirection=new THREE.Vector3(),walkPhase=0,clockTime=0,nearby=null;
+      dashDirection=new THREE.Vector3(),walkPhase=0,clockTime=0,nearby=null,pendingSource=false;
     const stations=Object.fromEntries(STATION_LAYOUT.map(def=>[def.id,
       {def,access:def.access||{x:def.x,z:def.z+def.d/2+.63}}]));
     ${section('function safeSpot(','\n// A* routing')}

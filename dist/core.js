@@ -1,3 +1,4 @@
+export const RULESET = 'roles-v4-covari';
 export const OPS = {
   lathe:{name:'Lathe',short:'TURN',duration:8,color:'#7cdeca'},
   mill:{name:'Mill',short:'MILL',duration:10,color:'#8dc9f1'},
@@ -63,6 +64,10 @@ export class ShopGame {
     this.nextId = 101;
     this.spawnIndex = 0;
     this.nextArrival = 12;
+    this.sourcing = null;
+    this.sourceOffered = false;
+    this.sourced = 0;
+    this.sourcePoints = 0;
     this.score = 0;
     this.shipped = 0;
     this.missed = 0;
@@ -175,6 +180,43 @@ export class ShopGame {
     return true;
   }
 
+  requestSource() {
+    if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
+    if(this.call && this.call.state !== 'active') return this.fail('Answer the customer call before placing this job.');
+    if(!this.office.present) return this.fail('Go to the office to source this job with Covari.');
+    this.office.orderId = null;
+    this.sourcing.state = 'approving';
+    this.emit('sourceApproving');
+    return true;
+  }
+
+  declineSource() {
+    if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
+    this.sourcing.state = 'declined';
+    this.emit('sourceDeclined');
+    return true;
+  }
+
+  tickSourcing(dt, phoneInterrupting) {
+    if(!this.sourceOffered && this.elapsed >= 35) {
+      this.sourceOffered = true;
+      this.sourcing = {id:'C-201',name:'Wire EDM insert',capability:'Wire EDM',state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
+      this.emit('sourceOffer');
+    }
+    const job=this.sourcing;
+    if(!job)return;
+    if(job.state === 'offer') {
+      job.offerRemaining = Math.max(0,job.offerRemaining-dt);
+      if(job.offerRemaining<=0)job.state='declined';
+    } else if(job.state === 'approving' && this.office.present && !phoneInterrupting) {
+      job.approvalRemaining = Math.max(0,job.approvalRemaining-dt);
+      if(job.approvalRemaining<=0){job.state='sourcing';this.emit('sourcePlaced');}
+    } else if(job.state === 'sourcing') {
+      job.remaining = Math.max(0,job.remaining-dt);
+      if(job.remaining<=0){job.state='delivered';this.score+=job.points;this.sourcePoints+=job.points;this.sourced++;this.emit('sourceDelivered',{points:job.points});}
+    }
+  }
+
   select(id) {
     if (this.order(id)) {
       this.selectedId = id;
@@ -195,7 +237,7 @@ export class ShopGame {
     this.elapsed += dt;
 
     const phoneInterrupting = this.call && this.call.state !== 'active';
-    if (!phoneInterrupting && this.office.present && this.office.orderId !== null) {
+    if (!phoneInterrupting && this.sourcing?.state !== 'approving' && this.office.present && this.office.orderId !== null) {
       const order = this.order(this.office.orderId);
       if (!order || order.programmed) this.office.orderId = null;
       else {
@@ -256,6 +298,7 @@ export class ShopGame {
       this.nextArrival = this.elapsed + (this.spawn() ? this.config.interval : 2);
     }
     this.maybeCall();
+    this.tickSourcing(dt, phoneInterrupting);
     if (this.time <= 0) {
       this.unfinished = this.orders.length;
       this.office.orderId = null;
@@ -296,9 +339,11 @@ export class ShopGame {
     if (this.call?.state === 'ringing' && key !== 'office' && key !== 'phone') {
       return this.fail('The customer is calling. Answer the phone at the office first.');
     }
+    if (key === 'source') return this.requestSource();
     if (key === 'office') {
       if (this.call?.state === 'ringing') return this.interact('phone');
       if (!this.office.present) return this.fail('Walk to the office to program this job.');
+      if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('Your jobs are already programmed for this shift.');
       const order = this.selected;
       if (!order) return this.fail('Select an order to program.');
@@ -409,7 +454,8 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,ruleset:RULESET,
+      sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),
       rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,

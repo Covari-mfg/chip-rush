@@ -6,3 +6,9 @@ qa/*.jpg
 /CHIP-RUSH-complete.zip
 .sites-runtime/
 __pycache__/
+
+node_modules/
+dist/client/
+dist/server/
+.local/
+dist/downloads/

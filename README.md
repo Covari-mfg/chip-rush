@@ -20,7 +20,7 @@ Clearing a role unlocks the next. Operator is welcoming, Production Manager rewa
 
 Owner orders arrive every 15 seconds after the opening order and first 12-second gap, subject to the four-order cap and enough time left to finish. Its 105-second ordinary deadlines leave recovery room, while ten shipments in three minutes requires very precise routing, machine overlap, and well-timed dashes. Rush bonuses remain optional even for three stars.
 
-Best scores and unlocks use the `chip-rush-roles-v3` save in this browser when local storage is available. Upgrading from v2 preserves unlocked roles, starts fresh ratings and scores for the new challenge, and leaves the old save untouched. Some browsers isolate or disable storage for local files; the game still works for that session.
+Best scores and unlocks use the `chip-rush-roles-v4` save in this browser when local storage is available. Upgrading from v3 (or v2) preserves unlocked roles, starts fresh ratings and scores for the new challenge, and leaves the old save untouched. Some browsers isolate or disable storage for local files; the game still works for that session.
 
 ## Watch an Owner playthrough
 
@@ -56,15 +56,29 @@ The compact floor groups Material and optional Hold storage on the left, larger 
 
 Fast shipping earns more points; consecutive on-time shipments build a streak up to five. Each role has its own star thresholds shown above. Closing ends all work immediately and reports unfinished orders separately from missed deadlines. Only shipment count determines clearing and stars; rush bonuses are optional. These are difficulty design targets, not measured human completion rates. The balance simulations establish attainability and separation between play styles; real-player testing is needed to measure how rare Owner three stars actually is.
 
+## Community features
+
+Every role receives one optional Wire EDM job at 35 seconds. It uses no regular order slot. Choose **Source with Covari?**, walk to the office and spend two attended seconds approving it. A partner delivers 22 seconds later for 60 points, below normal machining rewards. Passing or ignoring the offer has no penalty. Sourcing never adds shipments, stars or streak credit, and calls pause approval. This is a game simulation; it does not submit a real sourcing request.
+
+After a real shift, **Challenge a friend** opens the native share sheet or copies an invitation containing that run's role, score and shipments. A recipient can try the challenged role even before unlocking it; the link never imports scores or permanent unlocks. Share links contain no display name. Challenge targets are self-reported.
+
+**Post score / leaderboard** optionally publishes a display name and completed result to the role's shared top-30 board. Boards are scoped to the current ruleset (`roles-v4-covari`). Demo runs cannot post. Scores are player-reported: the server checks run ownership, elapsed time, bounds, role and duplicate submissions, but is not an authoritative anti-cheat system. Do not use it for prizes or verified competitions without server-side replay validation and moderation. A board outage does not block the game. Local personal records remain separate from public posting.
+
+Cards now show **SELECTED** or **CLICK TO SELECT**, and the first machine operation prompts players to select a second card. Switching cards never changes a carried part.
+
 ## Run or host the modular version
 
-From this directory:
+Node 24 or newer runs the game plus a local persistent leaderboard without installing dependencies:
 
 ```sh
-python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
+node scripts/dev-server.mjs
 ```
 
-Open http://127.0.0.1:4173/. For a static host or ChatGPT Site, upload the contents of `dist/`, with `index.html` as the entry point. This is a static game, with no backend, runtime secrets, external services, or server bindings. The optional standalone `CHIP-RUSH.html` can also be hosted by itself. The download package has no hosted Site identity, so it can be reviewed or developed independently.
+Open http://127.0.0.1:4174/. The local board lives in `.local/board.sqlite`, uses the same Worker routes, and applies the checked-in Drizzle migrations once. It is separate from the public board. `PORT=4175` can select another local port.
+
+For the hosted build, install with `pnpm install`, then run `pnpm build`. Output is `dist/client/` for public assets and `dist/server/index.js` for a Cloudflare-compatible Worker. The generic `.openai/hosting.json` declares the logical D1 binding `DB`; Sites applies `drizzle/` migrations on publication. No runtime secrets are required. Keep the configured Site identity in the separate publishing checkout.
+
+The self-contained `dist/CHIP-RUSH.html` still opens offline with all 3D assets. A plain static server can also serve `dist/`. Gameplay and challenge sharing work there; public score posting requires the hosted API. The portable ZIP includes source, migrations, checks and setup instructions, without the original Site identity or any local database.
 
 ## Structure
 
@@ -72,6 +86,9 @@ Open http://127.0.0.1:4173/. For a static host or ChatGPT Site, upload the conte
 - `dist/main.js`: Three.js scene, lighting, animations, collision, keyboard/touch input, A* click routing, and UI.
 - `dist/core.js`: deterministic order, station, scoring, and shift logic.
 - `dist/assets/models.js`: original dimensional asset constructors. Chamfered machine enclosures, machining internals, actual tools, storage, shipping rollers, office, articulated character, and staged parts. Static meshes are batched by material; machine pivots remain animated. This is actual 3D geometry, not a reference image or sprite background.
+- `dist/social.js`: friend challenges, optional posting, and board UI.
+- `server/worker.js`, `db/schema.ts`, `drizzle/`: shared leaderboard API and versioned D1 schema.
+- `scripts/dev-server.mjs`: local Node/SQLite development server.
 - `dist/audio.js`: locally synthesized feedback and light rhythm.
 - `dist/vendor/`: pinned Three.js r169 and its MIT license.
 - `scripts/build-offline.mjs`: reproducible standalone-file packaging, using Node and no build dependencies.
@@ -85,7 +102,7 @@ To regenerate the standalone file after editing:
 
 ```sh
 node scripts/build-offline.mjs
-node --test qa/core.test.mjs qa/difficulty.test.mjs qa/demo.test.mjs
+node --test qa/*.test.mjs
 node qa/balance.mjs --rush --ignore-calls --expert --assert
 ```
 
