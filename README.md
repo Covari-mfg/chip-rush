@@ -1,0 +1,96 @@
+# CHIP RUSH
+
+A complete single-player 3D machine-shop game. Original procedural assets, short shifts, timed CNC operations, multiple orders, a carried part, and a shipping streak.
+
+[Play the current hosted build](https://chip-rush-shop.parker-joshua179.chatgpt.site/) or use the source in this repository. The hosted build is maintained separately; GitHub changes do not automatically update it. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose improvements.
+
+## Play without installing anything
+
+Open **dist/CHIP-RUSH.html** in a current Chrome, Edge, Firefox, or Safari browser. Everything is embedded, including the 3D renderer. No account, server, network, or build step is required. WebGL 2 and hardware acceleration must be available.
+
+Three roles, one little shop:
+
+| Role | Shift | Clear target | New responsibility | Stars |
+| --- | --- | --- | --- | --- |
+| Operator | 2½ minutes | 3 shipments | Material → turn or mill → inspect → ship | 3 / 4 / 5 |
+| Production Manager | 3 minutes | 4 shipments | Program each order at the office before its first cut | 4 / 6 / 7 |
+| Owner | 3 minutes | 6 shipments | Tighter arrivals, combined routes, interrupting customer calls | 6 / 8 / 10 |
+
+Clearing a role unlocks the next. Operator is welcoming, Production Manager rewards practiced scheduling, and Owner separates clearing the shift from an exceptional three-star run. The intended experience is Operator mastery after a little practice, Manager mastery after several focused attempts, and rare Owner mastery. Those are goals to validate with players, not claims about measured success rates. Briefings show all three shipment targets before the clock starts; the live counter tracks the next star. Retries use the same job sequence.
+
+Owner orders arrive every 15 seconds after the opening order and first 12-second gap, subject to the four-order cap and enough time left to finish. Its 105-second ordinary deadlines leave recovery room, while ten shipments in three minutes requires very precise routing, machine overlap, and well-timed dashes. Rush bonuses remain optional even for three stars.
+
+Best scores and unlocks use the `chip-rush-roles-v3` save in this browser when local storage is available. Upgrading from v2 preserves unlocked roles, starts fresh ratings and scores for the new challenge, and leaves the old save untouched. Some browsers isolate or disable storage for local files; the game still works for that session.
+
+## Watch an Owner playthrough
+
+Open `http://127.0.0.1:4173/?watch=owner` and choose **Watch Owner run**. This is an automated expert demonstration in the actual 3D game, using ordinary selection, station travel, dashes, programming, and customer-call inputs. It uses the normal 180-second clock and ten-shipment three-star target. The controller anticipates visible machine countdowns and overlaps work. It does not inject shipments, move the character directly, or alter the rules, and it never writes your best scores or unlocks. Pause and replay controls are available.
+
+The demonstration uses a 60ms decision interval to show a precise route; it is not a claim about human execution or completion rates. It runs live at normal speed rather than playing a prerecorded video.
+
+## Review handoff
+
+Start with `ARNOLDAS-START-HERE.md` for local play, the review checklist, and a Codex continuation prompt. Rebuild the complete source ZIP with `python3 scripts/package-handoff.py`; it also puts a downloadable copy in `dist/downloads/`. The ZIP includes a generic hosting manifest with no existing Site identity.
+
+## Controls
+
+| Action | Keyboard | Mouse / touch |
+| --- | --- | --- |
+| Move | WASD / arrow keys | Click floor; touch joystick on touch devices |
+| Use station | E / Space | Click a machine or its label to walk over and interact |
+| Dash | Shift | Touch dash button |
+| Select order | Tab / 1–4 | Click ticket |
+| Pause | Escape / P | Pause button |
+
+Station clicks follow smooth collision-safe paths. Shift adds a short dash that stops at the next corner or station, so precise click-and-dash routing is available on desktop.
+
+In desktop windows, active orders stay in a permanent left column, oldest first. Customer-call controls and the carrying panel share that column, giving the 3D shop the main area on the right. Essential game text stays at 13.5 CSS pixels or larger. The rail scrolls rather than shrinking cards; keyboard selection reveals the selected order. Narrow screens use a horizontal order list.
+
+Select an order, collect its billet at **Material**, and follow its route. Machines work unattended. Collect the finished part when the station label says **READY**. Inspection must finish before Shipping accepts the part. The Hold bench stores one part. Return a carried part to Material to recycle it and restart that order if the shop gets jammed. Expired orders are canceled and their parts are cleared. The Hold Bench is optional storage, not a required operation. Deburring and anodizing equipment are omitted from these three roles to avoid unused stations. There is no collision damage or random machine failure.
+
+Programming takes four attended seconds at the office. Select a ticket, then click Office or walk to the desk and press E. You can collect material first, but the first cut requires a completed program. Machines keep running while you program. The machinist sits in the office chair to type or answer the phone, and stands up when leaving. Walking away preserves your progress. The ticket and Office label show programming progress; there is no separate programming panel.
+
+Owner has three customer calls scheduled at 27, 77, and 127 seconds. Busy machines do not suppress the ringing. The phone chatters and physical handoffs stop until you answer at the office or the caller hangs up. Answering starts a three-second conversation that you cannot walk away from. Programming pauses, but machines and deadlines keep running. You then accept a separate 45-second delivery window worth 100 extra points, or keep the original promise. Accept is only available when machine capacity and remaining time support a fair rush; the call still happens when there is no spare capacity. Declining has no score penalty. Calls never overlap, and a delayed call waits at least ten seconds after the preceding call or rush ends. Missing a bonus leaves the ordinary order and shipping streak intact.
+
+The compact floor groups Material and optional Hold storage on the left, larger CNC machines across the back, and Inspection followed by Shipping in one right-side work area. Physical packing cartons and floor markings give that area a purpose while keeping the central aisle clear.
+
+Fast shipping earns more points; consecutive on-time shipments build a streak up to five. Each role has its own star thresholds shown above. Closing ends all work immediately and reports unfinished orders separately from missed deadlines. Only shipment count determines clearing and stars; rush bonuses are optional. These are difficulty design targets, not measured human completion rates. The balance simulations establish attainability and separation between play styles; real-player testing is needed to measure how rare Owner three stars actually is.
+
+## Run or host the modular version
+
+From this directory:
+
+```sh
+python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
+```
+
+Open http://127.0.0.1:4173/. For a static host or ChatGPT Site, upload the contents of `dist/`, with `index.html` as the entry point. This is a static game, with no backend, runtime secrets, external services, or server bindings. The optional standalone `CHIP-RUSH.html` can also be hosted by itself. The download package has no hosted Site identity, so it can be reviewed or developed independently.
+
+## Structure
+
+- `dist/index.html`, `style.css`: responsive game interface, tutorials, shift selection, and results.
+- `dist/main.js`: Three.js scene, lighting, animations, collision, keyboard/touch input, A* click routing, and UI.
+- `dist/core.js`: deterministic order, station, scoring, and shift logic.
+- `dist/assets/models.js`: original dimensional asset constructors. Chamfered machine enclosures, machining internals, actual tools, storage, shipping rollers, office, articulated character, and staged parts. Static meshes are batched by material; machine pivots remain animated. This is actual 3D geometry, not a reference image or sprite background.
+- `dist/audio.js`: locally synthesized feedback and light rhythm.
+- `dist/vendor/`: pinned Three.js r169 and its MIT license.
+- `scripts/build-offline.mjs`: reproducible standalone-file packaging, using Node and no build dependencies.
+- `qa/core.test.mjs`: regression checks for the full simulation and recovery paths.
+- `qa/balance.mjs`: reproducible movement-aware balance simulation with serial, concurrent, and expert dash strategies.
+- `qa/difficulty.test.mjs`: checks accessible clears, separated mastery targets, and repeatable legal ten-shipment Owner routes.
+- `dist/demo.js`, `qa/demo.test.mjs`: visible expert demonstration and checks using the real movement, collision, station, and game code at multiple frame rates.
+- `qa/PLAYTEST.md`: observed browser playtest results and validation boundaries.
+
+To regenerate the standalone file after editing:
+
+```sh
+node scripts/build-offline.mjs
+node --test qa/core.test.mjs qa/difficulty.test.mjs qa/demo.test.mjs
+node qa/balance.mjs --rush --ignore-calls --expert --assert
+```
+
+The optional WebMCP enhancement exposes a read-only shop snapshot and a start-walking action in browsers that support `document.modelContext`; the game does not depend on it.
+
+## Art and dependencies
+
+The supplied workshop reference informed the teal/cream palette, miniature cutaway perspective, and layout details. It is not bundled or used as a flat background. All game art, interface, logic, and synthesized sound were made for this project. Three.js is used under its MIT license; see `dist/vendor/THREE-LICENSE.txt`. Renderer API reference: https://threejs.org/docs/.

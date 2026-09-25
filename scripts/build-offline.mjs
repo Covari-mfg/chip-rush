@@ -1,0 +1,21 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const read=p=>readFile(path.join(root,p),'utf8');
+const source=await read('dist/vendor/three.module.js');
+const match=source.match(/export\s*\{([^}]+)\};?\s*$/);
+if(!match)throw new Error('Expected pinned Three.js named exports.');
+const exports=match[1].split(',').map(s=>{const [local,name]=s.trim().split(/\s+as\s+/);return `${name||local}:${local}`;}).join(',');
+const three=`const THREE=(()=>{${source.slice(0,match.index)}\nreturn {${exports}};})();`;
+const modules=[['assets/models.js','Models'],['core.js','Core'],['audio.js','Audio'],['demo.js','Demo']];
+let bundle=three;
+for(const [file,name] of modules){const content=await read('dist/'+file);const names=[...content.matchAll(/export (?:function|class|const) (\w+)/g)].map(m=>m[1]);const clean=content.replace(/^import .*?;\s*$/gm,'').replace(/export (?=function|class|const)/g,'');bundle+=`\nconst ${name}=(()=>{${clean}\nreturn {${names.join(',')}};})();`;}
+bundle+='\nconst {createWorkshop,createMachine,createCharacter,createPart}=Models;const {ShopGame,SHIFTS,OPS}=Core;const {ShopAudio}=Audio;const {createOwnerDemo}=Demo;\n';
+bundle+=(await read('dist/main.js')).replace(/^import .*?;\s*$/gm,'');
+const css=await read('dist/style.css');
+const html=(await read('dist/index.html')).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
+if(/(?:src|href)="\.\//.test(html.replace('href="./"','')))throw new Error('Unexpected external asset reference in standalone game.');
+await writeFile(path.join(root,'dist/CHIP-RUSH.html'),html);
+await writeFile(path.join(root,'qa/offline-syntax.js'),bundle);
+console.log(`Built dist/CHIP-RUSH.html (${Math.round(Buffer.byteLength(html)/1024)} KB), all assets embedded.`);

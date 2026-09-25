@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#102a32"><meta name="description" content="A tiny machine shop. A very big rush. Run, machine, inspect, and ship in this original 3D manufacturing game.">
+  <title>CHIP RUSH — A little shop. A big shift.</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23102a32'/%3E%3Cpath d='M8 8h16v6H14v4h10v6H8z' fill='%235de2cb'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main id="game" aria-label="Chip Rush 3D machine shop game">
+    <div id="scene" aria-label="3D workshop. Use WASD or arrow keys to move, E to interact. You can also click stations." role="application"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Chip Rush home"><span class="brand-icon" aria-hidden="true">C<span>▰</span></span><span>CHIP<span class="brand-rush">RUSH</span><small>A LITTLE SHOP. A BIG SHIFT.</small></span></a>
+      <div class="shift-heading"><span class="eyebrow" id="shift-number">WELCOME TO THE SHOP</span><strong id="shift-name">Precision under pressure.</strong></div>
+      <div class="top-actions"><button class="icon-button" id="sound-button" title="Toggle sound" aria-label="Turn sound off">♪</button><button class="icon-button" id="help-button" title="Controls" aria-label="Show controls">?</button><button class="icon-button" id="pause-button" title="Pause (Escape)" aria-label="Pause game" hidden>Ⅱ</button></div>
+    </header>
+    <section id="live-hud" hidden aria-label="Shift status">
+      <div class="status-row"><div class="rfq-label"><span class="live-dot"></span>ACTIVE ORDERS <span id="order-count">0 / 4</span></div><div class="scoreboard"><span id="shipment-progress"><small id="shipped-label">TO ★</small><b id="shipped">0</b></span><span><small>SCORE</small><b id="score">0</b></span><span class="timer"><small>SHIFT ENDS</small><b id="timer">2:30</b></span></div></div>
+    </section>
+    <div id="station-labels" aria-label="Workshop stations"></div>
+    <div id="floating-text" aria-hidden="true"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="coach" hidden><span class="coach-number">01</span><div><small>YOUR NEXT MOVE</small><strong id="coach-text">Pick up a billet at Material.</strong></div></div>
+    <div class="floor-caption" id="floor-caption"><span>THE SHOP FLOOR</span><span>01 / CNC DIVISION</span></div>
+    <aside id="shop-sidebar" hidden aria-label="Orders and shop controls"><div id="orders" aria-label="Active orders, oldest first"></div><footer id="game-footer" hidden><div id="office-panel" class="office-panel" hidden><div><strong id="office-title">CUSTOMER CALL</strong><span id="office-detail"></span></div><div class="office-actions"><button id="office-go">Answer at office ↗</button><button id="call-accept" hidden>Accept rush</button><button id="call-decline" hidden>Keep original promise</button></div></div><div class="carry-panel"><span class="carry-icon" id="carry-icon">◇</span><div><small id="carry-label">YOUR HANDS</small><strong id="carry-name">Ready for a billet</strong><span id="carry-next">Select an order, then visit Material.</span></div></div><div class="interaction-hint" id="interaction-hint"><kbd>E</kbd><span>Walk up to a station</span></div><div class="keyboard-guide"><span><kbd>WASD</kbd> move</span><span><kbd>⇧</kbd> dash</span><span><kbd>Tab</kbd> next order</span><small>or click a station to walk & interact</small></div></footer></aside>
+    <div id="touch-controls" hidden><div id="joystick" aria-label="Drag to move"><div id="joystick-knob"></div></div><button id="touch-dash" aria-label="Dash">⇧</button><button id="touch-interact" aria-label="Interact">E</button></div>
+    <div id="overlay" class="overlay">
+      <section id="welcome" class="welcome-panel" aria-label="Choose your shop role">
+        <div class="edition"><span></span> THE MACHINE SHOP GAME <span>VOL. 01</span></div>
+        <h1>MAKE CHIPS.<br><em>BEAT THE<br> CLOCK.</em></h1>
+        <p>One shop. Three hats. Work your way from Operator to Owner, one frantic shift at a time.</p>
+        <div class="shift-picker" id="shift-picker"></div>
+        <p id="migration-note" class="migration-note" role="status" hidden>New star targets. Your unlocked roles are kept.</p>
+        <button class="primary-button" id="start-button">CHOOSE THIS ROLE <span>↗</span></button>
+        <div class="start-details"><span id="start-duration">2½ MINUTE SHIFT</span><span id="start-target">SHIP 3 TO CLEAR</span></div>
+        <div class="quick-controls"><span><kbd>WASD</kbd> Move</span><span><kbd>E</kbd> Interact</span><span><kbd>⇧</kbd> Dash</span></div>
+        <small class="click-tip">Mouse or touch? Tap a machine to walk over and use it.</small>
+      </section>
+      <section id="briefing-panel" class="modal-panel" hidden aria-label="Role briefing"><div class="eyebrow" id="briefing-flavor"></div><h2 id="briefing-role"></h2><p id="briefing-goal" class="briefing-goal"></p><div id="briefing-targets" class="star-targets" aria-label="Star targets by orders shipped"></div><p id="briefing-challenge" class="briefing-challenge"></p><p id="briefing-text"></p><p id="briefing-tip" class="help-note"></p><p class="briefing-fair">The clock starts when you clock in. Pause anytime. Each retry has the same job sequence.</p><button class="primary-button" id="briefing-start">CLOCK IN <span>↗</span></button><button class="text-button" id="briefing-back">Choose another role</button></section>
+      <section id="pause-panel" class="modal-panel" hidden aria-label="Game paused"><div class="eyebrow">TAKE A BREATHER</div><h2>Machines on hold.</h2><p>Your shift clock and every order are paused.</p><button class="primary-button" id="resume-button">BACK TO THE FLOOR <span>↗</span></button><button class="text-button" id="restart-button">Restart this shift</button><button class="text-button" id="menu-button">Return to role selection</button></section>
+      <section id="help-panel" class="modal-panel" hidden aria-label="How to play"><div class="eyebrow">THE QUICK START</div><h2>Keep the shop flowing.</h2><ol class="how-to"><li><b>Pick a ticket. Grab its billet.</b><span>Choose an order, then use the Material rack. In Manager and Owner, program each job at the office before cutting.</span></li><li><b>Follow the ticket’s route.</b><span>Load a machine, leave it running, then collect the finished part. A green label means it is ready.</span></li><li><b>Inspect it. Ship it. Repeat.</b><span>Ship before the ticket runs out to build a streak. Park a part on the Hold bench to free your hands.</span></li></ol><div class="help-keys"><p><kbd>WASD / ↑↓←→</kbd> Move <kbd>E / Space</kbd> Use station</p><p><kbd>Shift</kbd> Dash <kbd>Tab / 1–4</kbd> Select order <kbd>Esc / P</kbd> Pause</p></div><p class="help-note">Click the floor to walk, or click a station to walk over and use it. Owner calls interrupt handoffs. Answer at the office and stay for the three-second call, then accept the rush bonus or keep the original promise. Machines and deadlines keep running. Stuck with full hands? Return a part to Material to recycle it and restart its route.</p><button class="primary-button" id="help-close">GOT IT <span>↗</span></button></section>
+      <section id="results-panel" class="modal-panel results" hidden aria-label="Shift results"><div class="eyebrow" id="result-kicker">SHIFT COMPLETE</div><div id="result-stars" aria-label="Shift rating">★ ★ ★</div><h2 id="result-title">Nice chips.</h2><p id="result-message">The machines can take a breather.</p><p id="result-progress" class="result-progress"></p><div class="result-stats"><div><strong id="result-score">0</strong><span>SCORE</span></div><div><strong id="result-shipped">0</strong><span>SHIPPED</span></div><div><strong id="result-missed">0</strong><span>MISSED</span></div></div><div class="result-best" id="result-best"></div><button class="primary-button" id="next-button">NEXT SHIFT <span>↗</span></button><button class="text-button" id="replay-button">One more try</button><button class="text-button" id="results-menu">Choose a role</button></section>
+    </div>
+    <div id="loading"><div class="loader-mark">C</div><strong>Opening the shop…</strong><span>Warming up the spindles.</span></div>
+    <div id="fatal" hidden role="alert"><h2>The shop couldn’t open.</h2><p id="fatal-message"></p><button onclick="location.reload()">Try again</button></div>
+  </main>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
