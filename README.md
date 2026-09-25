@@ -86,7 +86,7 @@ The self-contained `dist/CHIP-RUSH.html` still opens offline with all 3D assets.
 - `dist/social.js`: friend challenges, optional posting, and board UI.
 - `server/worker.js`, `db/schema.ts`, `drizzle/`: shared leaderboard API and versioned D1 schema.
 - `scripts/dev-server.mjs`: local Node/SQLite development server.
-- `dist/audio.js`: locally synthesized feedback and light rhythm.
+- `dist/audio.js`: original 104 BPM country/bluegrass background loop, call ducking, and synthesized shop cues. The track is bundled and embedded in the standalone build; there are no external audio services.
 - `dist/vendor/`: pinned Three.js r169 and its MIT license.
 - `scripts/build-offline.mjs`: reproducible standalone-file packaging, using Node and no build dependencies.
 - `qa/core.test.mjs`: regression checks for the full simulation and recovery paths.

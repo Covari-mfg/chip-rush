@@ -213,3 +213,12 @@ The browser registered `get_shop_state` and `start_walk_to_station` with the exp
 - The headless balance check still reaches three stars in all roles; expert Owner ships ten orders with zero misses and answers all three calls. These are QA simulations, not a shipped watch mode.
 - Checked game-only modular, standalone, hosted and portable ZIP outputs for removed controller code and local preview/sample assets. The 44-file handoff ZIP passed integrity checks.
 - Browser verification of an old `?watch=owner` link showed normal role selection and player-driven material collection. Both sample leaderboard views were reviewed locally; sample API replies exist only in that separate preview copy.
+
+## Country music release · 2026-09-25
+
+- Replaced the light synthesized rhythm with the selected original 104 BPM country/bluegrass arrangement. The 16-bar MP3 loop is bundled locally and embedded into the standalone HTML. No external music service is used.
+- Background gain is 0.156 of the audition (about 16 dB lower), dropping to 0.04368 during ringing, answering and rush-offer states. Existing machine and feedback cues keep their own levels.
+- Music transport stops synchronously for pause, help, menu and results, including background-tab pauses; resume retains loop position. Delayed decoding cannot start a paused track, and failed music loading does not prevent gameplay or cues.
+- Removed the sound button and binding. The clock-in and resume gestures initialize audio.
+- Browser audio verification decoded the MP3 as two channels and 36.92308333 seconds, matching the intended loop within one output sample, and observed a running source beyond its first loop boundary. Pause/resume and phone ducking were checked. This is playback/transport verification, not a claim of subjective listening quality.
+- 145 automated tests pass, including six audio lifecycle checks and the existing scoring, sourcing, leaderboard, and difficulty tests. The earlier gameplay balance results remain applicable: no rules, timing or scoring changed.

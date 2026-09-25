@@ -16,7 +16,7 @@ const mimeTypes = {
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
   '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2',
-  '.zip': 'application/zip', '.glb': 'model/gltf-binary',
+  '.mp3': 'audio/mpeg', '.zip': 'application/zip', '.glb': 'model/gltf-binary',
 };
 const textResponse = (message, status, headers = {}) => new Response(message, {
   status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...headers },

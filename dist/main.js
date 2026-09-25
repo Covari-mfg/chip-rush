@@ -367,7 +367,7 @@ function positionLabels(){const target=nextTarget();for(const [id,s] of Object.e
 function frame(now){
   const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;clockTime+=dt;
   updateMovement(dt);if(game.mode==='playing'){game.setOfficePresence(atOffice());game.tick(dt);processEvents();syncParts();}
-  animateShop(game.mode==='paused'||game.mode==='help'?0:dt);updateCamera(dt);positionLabels();audio.update(game.mode==='playing');
+  animateShop(game.mode==='paused'||game.mode==='help'?0:dt);updateCamera(dt);positionLabels();audio.update(game.mode==='playing',['ringing','answering','offer'].includes(game.call?.state));
   uiElapsed+=dt;if(uiElapsed>.09){uiElapsed=0;if(!menuMode)updateUI();}
   if(toastUntil&&now>toastUntil){$('toast').classList.remove('visible');toastUntil=0;}
   renderer.render(scene,camera);requestAnimationFrame(frame);
@@ -376,12 +376,12 @@ function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildre
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
 function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
 function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: program #101 at the office.',2.5);$('scene').focus();}
-function pause(){if(game.mode!=='playing')return;game.mode='paused';clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
-function resume(){if(game.mode!=='paused')return;game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
+function pause(){if(game.mode!=='playing')return;game.mode='paused';audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function resume(){if(game.mode!=='paused')return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
   helpReturn={mode:game.mode,panel:['welcome','pause-panel','results-panel','briefing-panel'].find(id=>!$(id).hidden),centered:$('overlay').classList.contains('centered')};
-  if(game.mode==='playing'){game.mode='help';clearMovement();}
+  if(game.mode==='playing'){game.mode='help';audio.update(false);clearMovement();}
   hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('help-panel').hidden=false;$('help-close').focus();
 }
 function closeHelp(){
@@ -389,7 +389,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');last=performance.now();
 }
-function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;$('coach').hidden=true;$('floor-caption').hidden=false;document.body.classList.remove('playing','paused','has-office');$('shift-number').textContent='WELCOME TO THE SHOP';$('shift-name').textContent='Precision under pressure.';buildShiftPicker();social.refreshBoard();}
+function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';audio.update(false);menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;$('coach').hidden=true;$('floor-caption').hidden=false;document.body.classList.remove('playing','paused','has-office');$('shift-number').textContent='WELCOME TO THE SHOP';$('shift-name').textContent='Precision under pressure.';buildShiftPicker();social.refreshBoard();}
 function showBriefing(index){
   selectedShift=index;migrationNotice=false;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes to clear this role. Complex work and earlier shipping earn more points.`;
@@ -407,7 +407,7 @@ function showBriefing(index){
   $('briefing-flavor').textContent=lessons[0];$('briefing-text').textContent=lessons[1];$('briefing-tip').textContent=lessons[2];$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
 function showResults(){
-  if(resultShown)return;resultShown=true;clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(2,game.shiftIndex+1));
+  if(resultShown)return;resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(2,game.shiftIndex+1));
   const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('coach').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   const stars=game.stars(),ownerMastery=game.shiftIndex===2&&stars===3;
   $('results-panel').classList.toggle('owner-mastery',ownerMastery);
@@ -437,7 +437,6 @@ function bindControls(){
   $('office-go').onclick=()=>{if(game.office.orderId&&game.call?.state!=='ringing')game.select(game.office.orderId);goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);if(replied&&pendingSource&&game.sourcing?.state==='offer'){if(game.requestSource())pendingSource=false;}processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=()=>startShift(game.shiftIndex);$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>showBriefing(game.passed()&&!challengeRun?Math.min(2,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=()=>startShift(game.shiftIndex);$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
-  $('sound-button').onclick=()=>{audio.init();const on=audio.toggle();$('sound-button').classList.toggle('muted',!on);$('sound-button').textContent=on?'♪':'♫̸';$('sound-button').setAttribute('aria-label',on?'Turn sound off':'Turn sound on');};
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
     if(['Space','Enter'].includes(e.code)&&e.target.closest?.('button'))return;
