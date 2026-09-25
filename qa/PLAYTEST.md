@@ -167,3 +167,65 @@ The browser registered `get_shop_state` and `start_walk_to_station` with the exp
 - The modular game was browser-tested on the local HTTP server. It has not been published to an external host.
 - `dist/CHIP-RUSH.html` is a generated single-file edition, with CSS, Three.js, models, logic, and audio embedded. Its JavaScript syntax and asset references were checked. The automated browser blocks direct `file://` navigation, so direct double-click launch was not verified in that browser. No browser-policy workaround was attempted.
 - Small-screen layouts were tested using viewport overrides. Physical mobile touch hardware and every browser/GPU combination were not tested.
+
+## Community update · 2026-09-25
+
+- Real browser playtest completed an Operator shift with the optional Wire EDM job. The two-second office approval and partner delivery awarded exactly 60 points and no shipment or star credit. Regular work still accepted lathe loads. The closing screen showed that actual result and a second shift started normally. This run tested UI and sourcing rather than a high-scoring route.
+- Posted that result as Local QA to the local SQLite board, observed the saved 60-point entry and disabled repeat-post button. Nothing was posted to the public board during QA.
+- Opened a valid Owner challenge (10 shipped, 4,173 points), saw its target and Owner briefing, then returned to ordinary selection and verified Operator remained selected with Manager/Owner locked.
+- Visually checked the live layout at 1000×700 and 390×844. Selection badges and instructions are visible; desktop keeps the shop to the right and narrow screens scroll cards above it.
+- The complete 103-test suite includes sourcing, challenge parsing, social async/cancellation flows, API ownership/validation/idempotence, and four actual-movement Owner demo profiles. Full difficulty assertions retain the normal ten-shipment, three-call Owner proof.
+- Public scores are player-reported with server-side bounds/ownership checks, not verified anti-cheat results. Native sharing is OS-dependent; a visible challenge link and explicit Copy button remain available when sharing is cancelled or unsupported.
+
+
+## Unified performance scoring and Covari review · 2026-09-25
+
+- One top-30 leaderboard now combines all roles, without a role filter or role labels. Actual earned points are posted unchanged; the game has no fixed score ceiling or role multiplier. More complex parts, early shipping, CAM, streaks, completed calls and rush deliveries supply the points. Results show the component totals.
+- All 124 automated tests pass. New scoring checks cover quarter-second speed differences, complexity, CAM credited only on shipment, call rewards credited once, score totals beyond the discarded role caps, and reset/breakdown consistency. Unified API and challenge tests include validation, preserved migrations, sorting, cross-role comparisons and local-only links.
+- Full difficulty assertions remain green. Expert Owner simulations ship ten orders, answer all three calls and earn three stars with zero missed deadlines: 6,503 points with declined rushes and 6,654 when accepting available rushes. Operator flow scores 3,654 and Manager flow scores 4,688. Four actual-movement demo profiles also pass. These demonstrate attainability, not measured human completion rates.
+- Browser review verified the actual Covari logo, all-role bonus card, selecting Outsource with Covari before clicking the office computer, seated office approval, partner delivery, and a 60-point bonus. Challenge a friend exposed a copyable local invitation with an explicit same-computer notice; it did not silently redirect to the older public build.
+- The new score season preserves earlier board data outside the current rankings. Local v4 unlocks and stars are carried forward, while personal scores reset for the changed formula. No deployment was performed.
+- A fresh browser run under `roles-v5-performance` completed one ordinary part and finished the full shift. Results showed 177 points = Parts 120 + Early shipping 57; the friend link carried exactly 177, and the local board accepted and displayed exactly 177. The board had no role picker or role label and the repeat-post button was disabled. Browser console showed no warnings or errors. This was a UI/scoring check, not a mastery run.
+
+
+## Covari brand and live sequential review · 2026-09-25
+
+- Compared the live Covari website header: its C uses `/brand/covari-logo.png`, and its wordmark uses Instrument Sans at weight 700. The game now uses that canonical C with a locally bundled Instrument Sans font, a clean light brand header, and the font’s SIL Open Font License. Browser checks confirmed the font and logo loaded and the brand header had no horizontal overflow. The standalone edition embeds the font.
+- Added `?watch=sequence` for ordinary-input Operator → Production Manager → Owner review. It shows the Covari offer, selection, office approval, partner delivery and customer replies. Each results screen waits before starting the next role. It does not record video, alter clocks/positions/scores, save personal records, or post scores. Individual role review links remain available.
+- Live browser Operator review finished its full normal-speed shift: 7 shipments, 3,882 points, three stars, zero missed, zero unfinished, and Covari delivered.
+- Live browser Production Manager review then finished: 7 shipments, 5,131 points, three stars, zero missed, zero unfinished, and Covari delivered. Its result breakdown included Parts 1,100 + CAM 420 + Early shipping 2,126 + Streak 1,425 + Covari 60.
+- Live browser Owner review finished third: 10 shipments, 6,760 points, three stars, zero missed or unfinished, all three calls answered, one rush bonus, and Covari delivered. Its breakdown was Parts 1,500 + CAM 600 + Early shipping 2,443 + Streak 1,982 + Rush 100 + Calls 75 + Covari 60. These were visible automated normal-input playthroughs at normal speed, not recordings or score injections.
+- Added three cosmetic Covari order types during the live review: Injection molding, Wire EDM insert and Sheet metal assembly. The current run was allowed to finish before reloading these names. All 144 automated tests pass, including variant rotation in every role, no rotation before an actual offer, identical timing/rewards/ordinary-work traces, and all-role sequential demos.
+- After reloading the new variant build, the first actual offer displayed Injection molding with the Covari font/logo and proceeded through office approval into the partner-delivery countdown. The live card remained legible and contained within its sidebar.
+
+## Manufacturing technology badges · 2026-09-25
+
+- Added matching turning and milling icons to order cards and the Lathe/Mill station labels. Orders with both operations display both badges; Covari cards identify wire EDM, injection molding and sheet metal assembly with distinct icons and EDM / IM / SM labels. Full technology names remain available through assistive text and tooltips.
+- Browser review confirmed the turning/milling card-to-machine pairing and the Injection molding card with its IM badge. At 1000 × 700, the document and cards had no horizontal overflow, and the Lathe/Mill label rectangles did not overlap. Restored the normal viewport after this check.
+- All **148 automated tests pass**, including technology mapping and source-badge update caching. The three full normal-speed browser playthroughs recorded above remain the gameplay evidence; the subsequent icon previews were partial shifts, not additional completion runs. Icon artwork changes do not change operations, timing or scoring.
+
+## Game-only release and leaderboard layout · 2026-09-25
+
+- Preserved the automated review in a separate local-only checkout, then removed the controller, watch UI and demo bundling from the GitHub/runtime source and handoff documentation. Old watch query parameters now open the ordinary playable game. Earlier demonstration records above remain historical local playtest evidence.
+- Added a start-page top 10 and enlarged the centered end-of-shift leaderboard. Both render actual server scores as text, and empty boards remain empty. A finished result appears with the optional posting form.
+- Created clearly labeled local-only icon and sample-score previews outside the release repository. The user approved both EDM and sheet metal icons. Neither sample scores nor preview pages are shipped or added to the public database.
+- 139 automated tests pass, including normal scoring on old watch URLs, top-10 slicing, complete-board retention and empty-state behavior.
+- The headless balance check still reaches three stars in all roles; expert Owner ships ten orders with zero misses and answers all three calls. These are QA simulations, not a shipped watch mode.
+- Checked game-only modular, standalone, hosted and portable ZIP outputs for removed controller code and local preview/sample assets. The 44-file handoff ZIP passed integrity checks.
+- Browser verification of an old `?watch=owner` link showed normal role selection and player-driven material collection. Both sample leaderboard views were reviewed locally; sample API replies exist only in that separate preview copy.
+
+## Country music release · 2026-09-25
+
+- Replaced the light synthesized rhythm with the selected original 104 BPM country/bluegrass arrangement. The 16-bar MP3 loop is bundled locally and embedded into the standalone HTML. No external music service is used.
+- Background gain is 0.156 of the audition (about 16 dB lower), dropping to 0.04368 during ringing, answering and rush-offer states. Existing machine and feedback cues keep their own levels.
+- Music transport stops synchronously for pause, help, menu and results, including background-tab pauses; resume retains loop position. Delayed decoding cannot start a paused track, and failed music loading does not prevent gameplay or cues.
+- Removed the sound button and binding. The clock-in and resume gestures initialize audio.
+- Browser audio verification decoded the MP3 as two channels and 36.92308333 seconds, matching the intended loop within one output sample, and observed a running source beyond its first loop boundary. Pause/resume and phone ducking were checked. This is playback/transport verification, not a claim of subjective listening quality.
+- 145 automated tests pass, including six audio lifecycle checks and the existing scoring, sourcing, leaderboard, and difficulty tests. The earlier gameplay balance results remain applicable: no rules, timing or scoring changed.
+
+## Operator arrival pacing · 2026-09-25
+
+- Moved Operator's second order from 12 to 18 seconds and its subsequent interval from 21 to 19 seconds. This gentler opening leaves enough late-shift headroom for the existing seventh order to pass the shared safe-arrival check. It does not add an eighth order, change recipes or alter shipment scoring/star targets. Manager and Owner settings are unchanged.
+- Baseline ordinary serial no-dash play (0.5s handoffs) received six jobs and ended with 28.11 empty seconds. The adjusted run receives and ships seven, leaving 8.56 seconds. Ordinary concurrent play ships seven with 15.96 seconds left. Very efficient players can still finish early; this does not promise zero idle time.
+- Across 62 serial/concurrent no-dash profiles with 0–3s handoff delays, every adjusted run receives seven orders, ships at least five and misses no deadlines. The longest genuinely empty ending is 18.61s, compared with 31.02s before. These are deterministic simulations using production walking routes, not human completion-rate estimates.
+- 146 automated tests pass. Movement-aware all-role balance assertions and both legal ten-shipment, three-call Owner mastery routes pass unchanged.

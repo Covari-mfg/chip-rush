@@ -12,7 +12,7 @@ Click a station to walk there and use it. Alternatively, move with WASD or the a
 
 The standalone file was built and syntax checked. Full browser playtests used the local server below; if opening the file directly gives trouble, use that route. The browser needs WebGL 2 and hardware acceleration.
 
-## Run locally and watch the Owner demonstration
+## Run locally
 
 With Python 3 installed, open a terminal in the extracted folder containing this document and run:
 
@@ -21,9 +21,8 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
 ```
 
 - Play: <http://127.0.0.1:4173/>
-- Watch: <http://127.0.0.1:4173/?watch=owner>, then choose **Watch Owner run**.
 
-Keep the terminal open while playing; Ctrl+C stops the server. The watch mode runs an automated expert live at normal speed, using the same movement, machine times, and rules as the game. It does not save scores or unlocks. It demonstrates a legal route, not a human success rate.
+Keep the terminal open while playing; Ctrl+C stops the server.
 
 ## What to review
 
@@ -49,12 +48,12 @@ Open the extracted folder containing this document and `README.md` as a project 
 
 Copy this prompt into a new task in that project:
 
-> Review this CHIP RUSH game. First read ARNOLDAS-START-HERE.md, README.md, and the latest section of qa/PLAYTEST.md. Run the baseline commands below, then play the game and the Owner demonstration. Start by reporting concrete issues and suggested improvements. Preserve the current work and keep changes focused. Keep star targets at Operator 3/4/5, Production Manager 4/6/7, and Owner 6/8/10, with three scheduled Owner calls. Do not lower targets or add hidden demonstration advantages to make tests pass. The demo must use ordinary movement, interactions, timings, and scoring. After any edits, rerun the relevant checks, playtest the affected flow, and rebuild the standalone file. Report exactly what was tested and any remaining limitations.
+> Review this CHIP RUSH game. First read ARNOLDAS-START-HERE.md, README.md, and the latest section of qa/PLAYTEST.md. Run the baseline commands below, then play the game. Start by reporting concrete issues and suggested improvements. Preserve the current work and keep changes focused. Keep star targets at Operator 3/4/5, Production Manager 4/6/7, and Owner 6/8/10, with three scheduled Owner calls. Do not lower targets or change the rules to make tests pass. After any edits, rerun the relevant checks, playtest the affected flow, and rebuild the standalone file. Report exactly what was tested and any remaining limitations.
 
 Baseline checks:
 
 ```sh
-node --test qa/core.test.mjs qa/difficulty.test.mjs qa/demo.test.mjs
+node --test qa/core.test.mjs qa/difficulty.test.mjs
 node qa/balance.mjs --rush --ignore-calls --expert --assert
 ```
 
@@ -67,3 +66,9 @@ node scripts/build-offline.mjs
 See [README.md](README.md) for the source map and [qa/PLAYTEST.md](qa/PLAYTEST.md) for verification history. Sections below the latest version describe older builds.
 
 The package has no existing hosted Site ID or repository history. Opening it in your Codex does not connect your copy to Josh’s published test site.
+
+## Community update
+
+Run `node scripts/dev-server.mjs` with Node 24+ and open http://127.0.0.1:4174/ to test the complete game and a local persistent score board. No dependency install is needed to play locally. `pnpm install && pnpm build` creates the hosted Worker + assets. See README for the D1 schema, player-reported score validation boundary, friend links, and optional Covari sourcing job. `CHIP-RUSH.html` remains fully playable offline; the shared board needs the hosted API.
+
+Publication is coordinated separately from GitHub collaboration. The Covari bonus is offered in all three roles: select **Outsource with Covari**, then click the Office computer.

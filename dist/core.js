@@ -1,3 +1,15 @@
+export const RULESET = 'roles-v5-performance';
+// Complexity and speed earn points on delivery. CAM is only paid when its
+// part ships, so restarting or reprogramming a job cannot farm points.
+export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
+  const base=order.value;
+  const program=programming ? 60 : 0;
+  const speed=Math.round(Math.max(0,order.remaining)*4);
+  const subtotal=base+program+speed;
+  const multiplier=1+(Math.max(1,Math.min(5,combo))-1)*.15;
+  const streak=Math.round(subtotal*multiplier)-subtotal;
+  return {base,program,speed,streak,rush:rushBonus,total:subtotal+streak+rushBonus};
+}
 export const OPS = {
   lathe:{name:'Lathe',short:'TURN',duration:8,color:'#7cdeca'},
   mill:{name:'Mill',short:'MILL',duration:10,color:'#8dc9f1'},
@@ -15,12 +27,17 @@ export const RECIPES = [
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
 ];
+export const SOURCE_JOBS = [
+  {name:'Injection molding',capability:'Injection molding',technology:'im'},
+  {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
+  {name:'Sheet metal assembly',capability:'Sheet metal fabrication',technology:'sm'},
+];
 // Clearing a role is the introduction; its third star is the mastery target.
 // Owner supplies enough work for ten shipments, but keeps the same six-order
 // promotion floor and deterministic recipe sequence. A little deadline slack
 // leaves room to recover; the three-star challenge is sustained throughput.
 export const SHIFTS = [
-  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,interval:21,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
+  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,firstArrival:18,interval:19,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
   {name:'Production Manager',subtitle:'Program the work. Keep it moving.',brief:'Spend 4 seconds programming each order at the office, then ship 4 orders.',duration:180,interval:23,deadline:105,recipes:[0,1,0,1,6,0,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,6,7]},
   {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 6 orders to clear. Ten shipments earns the exceptional three-star Owner shift.',duration:180,interval:15,deadline:105,recipes:[0,1,0,6,1,1,6,0,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:6,stars:[6,8,10]},
 ];
@@ -62,8 +79,15 @@ export class ShopGame {
     this.rushesWon = 0;
     this.nextId = 101;
     this.spawnIndex = 0;
-    this.nextArrival = 12;
+    // Operator gets room to learn its first part; the later cadence leaves
+    // enough time for the final order to pass the shared safe-arrival check.
+    this.nextArrival = this.config.firstArrival ?? 12;
+    this.sourcing = null;
+    this.sourceOffered = false;
+    this.sourced = 0;
+    this.sourcePoints = 0;
     this.score = 0;
+    this.scoreDetails = {base:0,program:0,speed:0,streak:0,rush:0,calls:0,sourcing:0};
     this.shipped = 0;
     this.missed = 0;
     this.unfinished = 0;
@@ -175,6 +199,48 @@ export class ShopGame {
     return true;
   }
 
+  requestSource() {
+    if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
+    if(this.call && this.call.state !== 'active') return this.fail('Answer the customer call before placing this job.');
+    if(!this.office.present) return this.fail('Go to the office to source this job with Covari.');
+    this.office.orderId = null;
+    this.sourcing.state = 'approving';
+    this.emit('sourceApproving');
+    return true;
+  }
+
+  declineSource() {
+    if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
+    this.sourcing.state = 'declined';
+    this.emit('sourceDeclined');
+    return true;
+  }
+
+  tickSourcing(dt, phoneInterrupting) {
+    if(!this.sourceOffered && this.elapsed >= 35) {
+      this.sourceOffered = true;
+      // Only an actual offer advances the cosmetic rotation. Preserve this
+      // cursor through resets, so retries can show every outside capability.
+      this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
+      const job=SOURCE_JOBS[this.nextSourceKind];
+      this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
+      this.sourcing = {id:'C-201',...job,state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
+      this.emit('sourceOffer');
+    }
+    const job=this.sourcing;
+    if(!job)return;
+    if(job.state === 'offer') {
+      job.offerRemaining = Math.max(0,job.offerRemaining-dt);
+      if(job.offerRemaining<=0)job.state='declined';
+    } else if(job.state === 'approving' && this.office.present && !phoneInterrupting) {
+      job.approvalRemaining = Math.max(0,job.approvalRemaining-dt);
+      if(job.approvalRemaining<=0){job.state='sourcing';this.emit('sourcePlaced');}
+    } else if(job.state === 'sourcing') {
+      job.remaining = Math.max(0,job.remaining-dt);
+      if(job.remaining<=0){job.state='delivered';this.score+=job.points;this.sourcePoints+=job.points;this.scoreDetails.sourcing+=job.points;this.sourced++;this.emit('sourceDelivered',{points:job.points});}
+    }
+  }
+
   select(id) {
     if (this.order(id)) {
       this.selectedId = id;
@@ -195,7 +261,7 @@ export class ShopGame {
     this.elapsed += dt;
 
     const phoneInterrupting = this.call && this.call.state !== 'active';
-    if (!phoneInterrupting && this.office.present && this.office.orderId !== null) {
+    if (!phoneInterrupting && this.sourcing?.state !== 'approving' && this.office.present && this.office.orderId !== null) {
       const order = this.order(this.office.orderId);
       if (!order || order.programmed) this.office.orderId = null;
       else {
@@ -243,7 +309,9 @@ export class ShopGame {
         if (this.call.answerRemaining <= 0) {
           this.call.state = 'offer';
           this.callsAnswered++;
-          this.emit('callAnswered', {orderId:this.call.orderId,window:this.call.window,bonus:this.call.bonus});
+          this.score+=25;
+          this.scoreDetails.calls+=25;
+          this.emit('callAnswered', {orderId:this.call.orderId,window:this.call.window,bonus:this.call.bonus,points:25});
         }
       } else {
         this.call.ringRemaining = Math.max(0, this.call.ringRemaining - dt);
@@ -256,6 +324,7 @@ export class ShopGame {
       this.nextArrival = this.elapsed + (this.spawn() ? this.config.interval : 2);
     }
     this.maybeCall();
+    this.tickSourcing(dt, phoneInterrupting);
     if (this.time <= 0) {
       this.unfinished = this.orders.length;
       this.office.orderId = null;
@@ -296,9 +365,11 @@ export class ShopGame {
     if (this.call?.state === 'ringing' && key !== 'office' && key !== 'phone') {
       return this.fail('The customer is calling. Answer the phone at the office first.');
     }
+    if (key === 'source') return this.requestSource();
     if (key === 'office') {
       if (this.call?.state === 'ringing') return this.interact('phone');
       if (!this.office.present) return this.fail('Walk to the office to program this job.');
+      if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('Your jobs are already programmed for this shift.');
       const order = this.selected;
       if (!order) return this.fail('Select an order to program.');
@@ -359,9 +430,10 @@ export class ShopGame {
       if (order.route[order.index] !== 'ship') return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
       this.combo = Math.min(this.combo + 1, 5);
       this.bestCombo = Math.max(this.bestCombo, this.combo);
-      const multiplier = 1 + (this.combo - 1) * .15;
       const rushBonus = this.call?.orderId === order.id && this.call.state === 'active' ? this.call.bonus : 0;
-      const points = Math.round((order.value + Math.ceil(Math.max(0, order.remaining)) * 2) * multiplier) + rushBonus;
+      const breakdown=scoreShipment(order,this.combo,{programming:this.config.programming,rushBonus});
+      const points=breakdown.total;
+      for(const key of ['base','program','speed','streak','rush'])this.scoreDetails[key]+=breakdown[key];
       this.score += points;
       this.shipped++;
       if (rushBonus) {
@@ -373,7 +445,7 @@ export class ShopGame {
       this.hand = null;
       this.orders = this.orders.filter(candidate => candidate.id !== order.id);
       if (this.selectedId === order.id) this.selectedId = this.orders.find(candidate => !candidate.started)?.id ?? this.orders[0]?.id ?? null;
-      this.emit('shipped', {orderId:order.id,points,rushBonus,combo:this.combo,station:key});
+      this.emit('shipped', {orderId:order.id,points,rushBonus,breakdown,combo:this.combo,station:key});
       return true;
     }
 
@@ -409,7 +481,8 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,ruleset:RULESET,
+      sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),
       rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,

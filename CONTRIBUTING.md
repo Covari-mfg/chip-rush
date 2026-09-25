@@ -6,10 +6,10 @@ The editable game is in `dist/`. After changing it, rebuild the standalone `dist
 
 ```sh
 node scripts/build-offline.mjs
-node --test qa/core.test.mjs qa/difficulty.test.mjs qa/demo.test.mjs
+node --test qa/*.test.mjs
 node qa/balance.mjs --rush --ignore-calls --expert --assert
 ```
 
-For a local browser preview, run `python3 -m http.server 4173 --bind 127.0.0.1 --directory dist` and open <http://127.0.0.1:4173/>. The [start guide](ARNOLDAS-START-HERE.md) explains the controls and playtest questions.
+For a complete local preview with the shared-score API, run `node scripts/dev-server.mjs` (Node 24+) and open <http://127.0.0.1:4174/>. Its SQLite database stays in ignored `.local/`. Use `pnpm install` then `pnpm build` for the hosted Worker build. Add schema changes to `db/schema.ts`, generate new migrations with `pnpm db:generate`, and preserve previously applied migration files. The [start guide](ARNOLDAS-START-HERE.md) explains the controls and playtest questions.
 
 Please keep the role targets and the three Owner calls intact unless a change explicitly proposes a new balance design. The automated Owner run should obey the same game rules as a player.

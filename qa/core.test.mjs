@@ -193,14 +193,14 @@ test('phone requires office presence and explicit acceptance; decline preserves 
   const game=incomingCall(),id=game.call.orderId,order=game.order(id),remaining=order.remaining;
   game.combo=3;assert.equal(game.interact('phone'),false);assert.equal(game.respondCall(true),false);
   game.setOfficePresence(true);assert.equal(game.respondCall(true),false,'Cannot accept an unanswered invitation');answerCall(game);
-  assert.equal(game.respondCall(false),true);assert.equal(game.order(id),order);assert.ok(Math.abs(order.remaining-(remaining-3.05))<1e-6);assert.equal(game.combo,3);assert.equal(game.rushesAccepted,0);assert.equal(game.score,0);
+  assert.equal(game.respondCall(false),true);assert.equal(game.order(id),order);assert.ok(Math.abs(order.remaining-(remaining-3.05))<1e-6);assert.equal(game.combo,3);assert.equal(game.rushesAccepted,0);assert.equal(game.score,25);
 });
 
 test('accepted rush uses a separate 45-second promise and fixed 100-point bonus exactly once',()=>{
   const game=acceptedCall(),id=game.call.orderId,order=game.order(id),normalDeadline=order.remaining;
   assert.equal(game.call.remaining,45);assert.equal(order.remaining,normalDeadline);assert.equal(game.rushesAccepted,1);
   game.drain();finishOrder(game,id);const events=game.drain(),shipment=events.find(event=>event.type==='shipped');
-  assert.equal(game.rushesWon,1);assert.equal(shipment.rushBonus,100);assert.equal(game.score,shipment.points);
+  assert.equal(game.rushesWon,1);assert.equal(shipment.rushBonus,100);assert.equal(game.score,shipment.points+25);
   const baseline=incomingCall();answerCall(baseline);baseline.respondCall(false);baseline.setOfficePresence(false);finishOrder(baseline,id);
   assert.equal(game.score,baseline.score+100,'Rush adds exactly 100, independent of the normal shipment formula');
   const score=game.score;assert.equal(game.interact('ship'),false);assert.equal(game.respondCall(true),false);advance(game,.2);
