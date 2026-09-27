@@ -1,9 +1,10 @@
 import * as THREE from './vendor/three.module.js';
 import { createWorkshop, createMachine, createCharacter, createPart } from './assets/models.js';
-import { ShopGame, SHIFTS, OPS } from './core.js';
+import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION } from './core.js';
 import { ShopAudio } from './audio.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
+import { orderWorkflow } from './workflow.js';
 
 const $=id=>document.getElementById(id);
 const game=new ShopGame(),audio=new ShopAudio();
@@ -12,7 +13,7 @@ const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keys=new Set();let touchVector={x:0,y:0},selectedShift=0,unlocked=0,bests=[0,0,0],grades=[0,0,0];
-const SAVE_KEY='chip-rush-roles-v5';
+const SAVE_KEY='chip-rush-roles-v6';
 let migrationNotice=false;
 function readRoleSave(key){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'&&!Array.isArray(value)?value:null;}catch{return null;}}
 function readUnlocked(value){return Math.max(0,Math.min(2,Math.trunc(Number(value))||0));}
@@ -22,12 +23,13 @@ if(roleSave){
   bests=bests.map((_,i)=>Math.max(0,Number(roleSave.bests?.[i])||0));
   grades=grades.map((_,i)=>Math.max(0,Math.min(3,Math.trunc(Number(roleSave.grades?.[i]))||0)));
 }else{
-  const sameTargets=readRoleSave('chip-rush-roles-v4');
-  const previousRoles=sameTargets||readRoleSave('chip-rush-roles-v3')||readRoleSave('chip-rush-roles-v2');
+  const oldScores=readRoleSave('chip-rush-roles-v5');
+  const previousRoles=oldScores||readRoleSave('chip-rush-roles-v4')||readRoleSave('chip-rush-roles-v3')||readRoleSave('chip-rush-roles-v2');
   if(previousRoles){
     unlocked=readUnlocked(previousRoles.unlocked);migrationNotice=true;
-    if(sameTargets)grades=grades.map((_,i)=>Math.max(0,Math.min(3,Math.trunc(Number(sameTargets.grades?.[i]))||0)));
-    // Preserve progress, but start new personal scores for the new scoring rules.
+    // Operator is unchanged. Keep its records and all unlocked roles. Old
+    // advanced-role results remain in the previous save under their own rules.
+    if(oldScores){bests[0]=Math.max(0,Number(oldScores.bests?.[0])||0);grades[0]=Math.max(0,Math.min(3,Math.trunc(Number(oldScores.grades?.[0]))||0));}
     save();
   }
 }
@@ -186,12 +188,12 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='sourceOffer'){sourceReveal=true;toast('Bonus order! Outsource with Covari, then click the office computer.',4);}
   if(ev.type==='sourcePlaced'){pendingSource=false;toast('Outsourced with Covari. Your partner is on it.',3);}
   if(ev.type==='sourceDelivered'){const bonus=ev.points;floatText(`+${bonus} · COVARI`,'office',true);toast(`Outsourced with Covari · delivered! +${bonus} bonus points.`,3);}
-  if(ev.type==='programmed'){floatText('PROGRAM READY ✓','office',true);toast(`Order #${ev.orderId} is programmed. Ready for its first cut.`,2);}
+  if(ev.type==='programmed'){floatText('CAD READY ✓','office',true);toast(`Order #${ev.orderId} CAD is ready. Collect its billet at Material.`,2);}
   if(ev.type==='call'){nextPhoneRing=clockTime+2.2;toast(`Customer calling about #${ev.orderId}. Answer at the office to keep work moving.`,3);}
   if(ev.type==='callAnswering'){clearMovement();player.angle=Math.atan2(stations.office.def.x-player.x,stations.office.def.z-player.z);toast('On the phone. Machines and deadlines keep running.',3);}
   if(ev.type==='callAnswered'){floatText(`+${ev.points} · CALL HANDLED`,'office',true);$('call-accept').focus();}
   if(ev.type==='rushAccepted')toast('Rush accepted. The bonus clock starts now.',2);
-  if(ev.type==='rushExpired')toast('Rush bonus missed. The regular order is still good.',2.5);
+  if(ev.type==='rushExpired'){floatText(`−${ev.penalty} · RUSH MISSED`,'office',true);toast(`Rush missed · −${ev.penalty} points.`+(ev.reason==='timeout'?' The regular order is still good.':''),3);}
   if(ev.type==='rushWon'){floatText('RUSH DELIVERED ✓','ship',true);toast('Rush delivered. Customer happy. Back to the floor!',2.5);}
   if(ev.type==='recycle')toast(`Order #${ev.orderId} recycled. Collect a fresh billet to restart.`,3);
   if(ev.type==='arrival'&&game.elapsed>1)toast(`New order #${ev.orderId}. Keep it moving.`,1.5);
@@ -290,7 +292,7 @@ function animateShop(dt){
   if(menuMode){character.position.set(.1,Math.sin(clockTime*2)*.018,2.5);character.rotation.y=-.4;playerRing.position.set(.1,.07,2.5);const u=character.userData;if(u.head)u.head.rotation.y=Math.sin(clockTime*.5)*.12;}
   targetRing.scale.setScalar(1+Math.sin(clockTime*6)*.09);updateParticles(dt);shake=Math.max(0,shake-dt*2);
 }
-function ticketState(o){if(!o.programmed)return game.office.orderId===o.id?`Programming ${game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)?'':'paused · '}${Math.ceil(o.programRemaining)}s`:'Program at the office before cutting';if(o.location==='material')return 'Pick up material';if(o.location==='hands')return `In your hands · ${OPS[o.route[o.index]].name} next`;if(o.location==='buffer')return 'Parked on Hold bench';const s=game.stations[o.location];return s?.ready?`${OPS[o.location].name} ready · collect part`:`${OPS[o.location]?.name||'Machine'} working…`;}
+function ticketState(o){if(!o.programmed)return game.office.orderId===o.id?`CAD ${game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)?'':'paused · '}${Math.ceil(o.programRemaining)}s`:'Complete CAD at the office, then collect material';if(o.location==='material')return 'Pick up material';if(o.location==='hands')return `In your hands · ${OPS[o.route[o.index]].name} next`;if(o.location==='buffer')return 'Parked on Hold bench';const s=game.stations[o.location];return s?.ready?`${OPS[o.location].name} ready · collect part`:`${OPS[o.location]?.name||'Machine'} working…`;}
 function revealSelectedTicket(){
   const selected=$('ticket-'+game.selectedId);if(!selected)return;
   const rail=$('orders'),area=rail.getBoundingClientRect(),card=selected.getBoundingClientRect(),gap=5;
@@ -301,8 +303,8 @@ function revealSelectedTicket(){
 }
 function updateTickets(force){
   const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${o.id===game.selectedId&&!pendingSource}:${game.stations[o.location]?.ready}:${o.programmed}:${game.office.orderId===o.id}:${game.office.present}:${game.call?.orderId===o.id?game.call.state:""}`).join('|');
-  if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. The next Order is on its way.</div>';}
-    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId&&!pendingSource?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId&&!pendingSource?'true':'false');const program=game.config.programming?`<span class="route-step ${o.programmed?'done':'active'}" title="Program at the office">${o.programmed?'✓ ':''}CAM</span><span class="route-arrow">›</span>`:'';const route=program+o.route.map((step,i)=>`<span class="route-step${i<o.index?' done':i===o.index&&o.programmed?' active':''}" title="${OPS[step].name}">${i<o.index?'✓ ':''}${OPS[step].short}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><span class="ticket-select">${o.id===game.selectedId&&!pendingSource?'✓ SELECTED':'CLICK TO SELECT →'}</span><div class="route">${route}</div><div class="ticket-status">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
+  if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. Keep an eye on incoming orders.</div>';}
+    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId&&!pendingSource?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId&&!pendingSource?'true':'false');const route=orderWorkflow(o,game.config.programming).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><span class="ticket-select">${o.id===game.selectedId&&!pendingSource?'✓ SELECTED':'CLICK TO SELECT →'}</span><div class="route">${route}</div><div class="ticket-status">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{selectedByPlayer=true;pendingSource=false;game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
     $('orders').appendChild(sourceCard);if(focused)$(focused)?.focus({preventScroll:true});
     $('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
     if(renderedSelection!==game.selectedId){renderedSelection=game.selectedId;revealSelectedTicket();}
@@ -310,7 +312,7 @@ function updateTickets(force){
   for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=ticketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
 }
 function nextTarget(){if(pendingSource||game.sourcing?.state==='approving')return 'office';if(['ringing','answering','offer'].includes(game.call?.state))return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(!game.hand&&game.selected&&!game.selected.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const o=game.selected;if(!o)return null;return o.location==='hands'?o.route[o.index]:o.location;}
-function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';if(game.call?.state==='ringing'&&id!=='office')return 'Customer waiting. Answer at the office.';const o=game.heldOrder,s=game.stations[id];if(id==='office'&&(pendingSource||game.sourcing?.state==='approving'))return 'Outsource with Covari · use the computer';if(id==='office')return !game.config.programming?'Programs prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.selected?.programmed?'Select a job that needs programming':`Program #${game.selectedId} · stay at the desk`;if(id==='material')return game.hand?`Recycle #${game.hand.orderId} · restart route`:game.selected?.started?'Select an unstarted Order':`Collect billet #${game.selectedId||'—'}`;if(id==='buffer')return game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?'Hands full':`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${OPS[id].name.toLowerCase()}`:`${OPS[id]?.name||id} station`;}
+function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';if(game.call?.state==='ringing'&&id!=='office')return 'Customer waiting. Answer at the office.';const o=game.heldOrder,s=game.stations[id];if(id==='office'&&(pendingSource||game.sourcing?.state==='approving'))return 'Outsource with Covari · use the computer';if(id==='office')return !game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.selected?.programmed?'Select a job that needs CAD':`CAD #${game.selectedId} · stay at the desk`;if(id==='material')return game.hand?`Recycle #${game.hand.orderId} · restart route`:game.selected?.started?'Select an unstarted Order':game.selected&&!game.selected.programmed?'Complete CAD at the office first':`Collect billet #${game.selectedId||'—'}`;if(id==='buffer')return game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?'Hands full':`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${OPS[id].name.toLowerCase()}`:`${OPS[id]?.name||id} station`;}
 function updateUI(force=false){
   $('score').textContent=game.score.toLocaleString();
   const nextStar=game.config.stars.findIndex(target=>game.shipped<target);
@@ -321,7 +323,7 @@ function updateUI(force=false){
   $('order-count').textContent=`${game.orders.length} / 4`;
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);updateTickets(force);
   const o=game.heldOrder,selected=game.selected;const carrySig=o?`${o.id}:${o.index}:${o.programmed}`:`empty:${selected?.id}:${selected?.programmed}:${selected?.location}:${pendingSource}`;
-  if(carrySig!==heldSignature||force){heldSignature=carrySig;$('carry-label').textContent=o?`CARRYING · Order #${o.id}`:selected?`SELECTED · Order #${selected.id}`:'YOUR HANDS';$('carry-name').textContent=o?o.name:selected?.name||'All caught up';$('carry-next').textContent=o?`Next → ${o.programmed?OPS[o.route[o.index]].name:'Program at office'}`:selected?(selected.location==='material'?selected.programmed?'Collect its billet at Material':'Program this job at the Office':ticketState(selected)):'Watch for the next order.';$('carry-icon').textContent=o?'▣':'◇';$('carry-icon').style.color=o?'#'+o.color.toString(16).padStart(6,'0'):'var(--teal)';}
+  if(carrySig!==heldSignature||force){heldSignature=carrySig;$('carry-label').textContent=o?`CARRYING · Order #${o.id}`:selected?`SELECTED · Order #${selected.id}`:'YOUR HANDS';$('carry-name').textContent=o?o.name:selected?.name||'All caught up';$('carry-next').textContent=o?`Next → ${o.programmed?OPS[o.route[o.index]].name:'CAD at office'}`:selected?(selected.location==='material'?selected.programmed?'Collect its billet at Material':'Complete CAD at the Office':ticketState(selected)):'Watch for the next order.';$('carry-icon').textContent=o?'▣':'◇';$('carry-icon').style.color=o?'#'+o.color.toString(16).padStart(6,'0'):'var(--teal)';}
   updateOfficeUI();updateSourceUI();
   if(pendingSource&&!game.hand){$('carry-label').textContent='SELECTED · BONUS ORDER';$('carry-name').textContent=game.sourcing.name;$('carry-next').textContent='Next → click the Office computer';}
   $('interaction-hint').innerHTML=`<kbd>E</kbd><span>${nearby?stationAction(nearby.def.id):'Walk up to a station'}</span>`;
@@ -347,12 +349,12 @@ function updateOfficeUI(){
   if(panel.hidden)return;
   const title=$('office-title'),detail=$('office-detail');
   $('office-go').hidden=!ringing;$('call-accept').hidden=!offer;$('call-decline').hidden=!offer;
-  $('call-accept').disabled=offer&&(!atOffice()||!call.rushAvailable);$('call-decline').disabled=offer&&!atOffice();
+  $('call-accept').disabled=offer&&!atOffice();$('call-decline').disabled=offer&&!atOffice();
   panel.classList.add('calling');
   if(answering){title.textContent=`ON THE PHONE · ${Math.ceil(call.answerRemaining)}s`;detail.textContent='“Any chance you could squeeze this one in?” Stay on the call. The shop keeps running.';}
   else if(offer){
     const o=game.order(call.orderId);title.textContent=`Rush #${call.orderId} · +${call.bonus} points`;
-    detail.textContent=call.rushAvailable&&o?`${o.route.map(k=>OPS[k].short).join(' › ')} · ship within ${call.window}s. Regular deadline stays. ${Math.ceil(call.ringRemaining)}s to decide.`:'The shop is too busy to promise this rush. Keep the original delivery date, or wait for capacity to clear.';
+    detail.textContent=o?`Ship within ${Math.ceil(call.window)}s. +${call.bonus} on time; −${call.penalty} if missed. Accept even if machines are busy. ${Math.ceil(call.ringRemaining)}s to decide.`:'This order is no longer active.';
   }
   else {title.textContent=`CUSTOMER CALL ${game.callsReceived}/3 · #${call.orderId}`;detail.textContent=`Handoffs are on hold. Answer at the office · ${Math.ceil(call.ringRemaining)}s.`;$('office-go').textContent='Answer at office ↗';}
 }
@@ -362,7 +364,7 @@ function positionLabels(){const target=nextTarget();for(const [id,s] of Object.e
   const locked=id==='office'?!game.config.programming&&!['offer','approving'].includes(game.sourcing?.state):!!OPS[id]&&id!=='ship'&&!game.config.unlocks.includes(id);
   s.label.hidden=!menuMode&&locked;s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='office'&&game.sourcing?.state==='approving'?Math.ceil(game.sourcing.approvalRemaining)+'s':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
-  s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/4)}%`:busy?`${100*(1-st.remaining/OPS[id].duration)}%`:'0';s.label.style.opacity=menuMode?'.72':'';
+  s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:busy?`${100*(1-st.remaining/OPS[id].duration)}%`:'0';s.label.style.opacity=menuMode?'.72':'';
 }}
 function frame(now){
   const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;clockTime+=dt;
@@ -375,7 +377,7 @@ function frame(now){
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous role to unlock':''}`);b.innerHTML=`<span class="num">0${i+1}</span><span><b>${s.name}</b><small>${i>unlocked?'Clear the previous role to unlock':s.subtitle}</small></span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});$('start-duration').textContent=`${SHIFTS[selectedShift].duration/60} MINUTE SHIFT`;$('start-target').textContent=`SHIP ${SHIFTS[selectedShift].passTarget} TO CLEAR`;$('migration-note').hidden=!migrationNotice;}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
 function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: program #101 at the office.',2.5);$('scene').focus();}
+function startShift(index){audio.init();game.reset(index);social.start(index);selectedByPlayer=false;pendingSource=false;sourceReveal=false;selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;$('floor-caption').hidden=true;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);toast(index===0?'Clocked in. Start with the highlighted Order.':'Clocked in. First stop: CAD #101 at the office, then Material.',2.5);$('scene').focus();}
 function pause(){if(game.mode!=='playing')return;game.mode='paused';audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused')return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
@@ -401,8 +403,8 @@ function showBriefing(index){
   ][index];
   const lessons=[
     ['Keep the chips flying.','Select an Order, collect its material, then follow TURN or MILL → QC → SHIP. Click a station to walk over and use it.','Machines work while you move. Collect green outputs before loading another job.'],
-    ['The machines need a plan.','Every job needs four seconds of programming at the office before its first cut. Select its ticket, then use the computer.','Stay at the desk to program. Leaving saves your progress. Start a cut, then prepare the next job while it runs.'],
-    ['Everyone needs five minutes.','Programming, shared machines, tighter arrivals. Some parts need both TURN and MILL. Same arrivals every retry.','Three customer calls interrupt handoffs. Answer at the office, stay for the three-second call, then accept the expedite or keep the original promise. Machines and deadlines keep running.']
+    ['The machines need a plan.','Every job follows CAD → MATERIAL → TURN or MILL → QC → SHIP. Complete CAD at the office, then collect its billet at Material.','Stay at the desk for CAD. Leaving saves your progress. Every completed CAD job earns extra points when shipped.'],
+    ['Everyone needs five minutes.','CAD, material, shared machines, inspection, shipping. Some parts need both TURN and MILL. Same arrivals every retry.','Three customer calls interrupt handoffs. Answer at the office, stay for the three-second call, then accept any rush or keep the original promise. Deliver a rush for +100; miss it for −25. Machines and deadlines keep running.']
   ][index];
   $('briefing-flavor').textContent=lessons[0];$('briefing-text').textContent=lessons[1];$('briefing-tip').textContent=lessons[2];$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -413,12 +415,12 @@ function showResults(){
   $('results-panel').classList.toggle('owner-mastery',ownerMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${ownerMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
   $('result-title').textContent=ownerMastery?'You run this shop.':passed?(game.shiftIndex===2?'You kept the doors open.':stars===3?'Absolute machine.':'That’s a good shift.'):'One more shift?';
-  $('result-message').textContent=`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.unfinished} unfinished at closing. `+(passed?(game.shiftIndex===2?`Owner cleared. ${game.callsAnswered} calls answered. ${game.rushesWon} rush bonus${game.rushesWon===1?'':'es'} delivered.`:challengeRun?'Challenge shift complete.':'Next role unlocked.'):(game.shiftIndex===0?'Load both machines before waiting for either.':game.shiftIndex===1?'Program the next job while a machine is cutting.':'Keep both machines cutting. Clear inspection before collecting another part.'));
+  $('result-message').textContent=`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.unfinished} unfinished at closing. `+(passed?(game.shiftIndex===2?`Owner cleared. ${game.callsAnswered} calls answered. ${game.rushesWon} rush bonus${game.rushesWon===1?'':'es'} delivered.`:challengeRun?'Challenge shift complete.':'Next role unlocked.'):(game.shiftIndex===0?'Load both machines before waiting for either.':game.shiftIndex===1?'Complete the next CAD job while a machine is cutting.':'Keep both machines cutting. Clear inspection before collecting another part.'));
   const nextStar=game.config.stars.findIndex(target=>game.shipped<target);
   $('result-progress').textContent=nextStar<0?(ownerMastery?'Three stars. Exceptional precision under pressure.':'All three stars earned.'):`${game.config.stars[nextStar]-game.shipped} more shipped order${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;
   $('result-score').textContent=game.score.toLocaleString();$('result-shipped').textContent=game.shipped;$('result-missed').textContent=game.missed;
-  const labels={base:'Parts',program:'CAM',speed:'Early shipping',streak:'Streak',rush:'Rush',calls:'Calls',sourcing:'Covari'};
-  $('result-breakdown').textContent=Object.entries(game.scoreDetails).filter(([,v])=>v>0).map(([k,v])=>`${labels[k]} ${v.toLocaleString()}`).join(' · ')||'Ship a part to start earning points.';
+  const labels={base:'Parts',program:'CAD',speed:'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
+  $('result-breakdown').textContent=Object.entries(game.scoreDetails).filter(([,v])=>v!==0).map(([k,v])=>`${labels[k]} ${v.toLocaleString()}`).join(' · ')||'Ship a part to start earning points.';
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} SHIPPED`;
   $('next-button').innerHTML=passed&&!challengeRun&&game.shiftIndex<2?'NEXT ROLE <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered});

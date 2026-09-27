@@ -4,7 +4,7 @@ import { RULESET, SHIFTS } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 
 function query(extra={}) {
-  return '?'+new URLSearchParams({challenge:'1',rules:RULESET,role:'2',score:'4173',shipped:'10',...extra});
+  return '?'+new URLSearchParams({challenge:'1',rules:RULESET,role:'2',score:'4173',shipped:String(SHIFTS[2].stars[2]),...extra});
 }
 
 test('challenge links round-trip each role and keep only current challenge parameters',()=>{
@@ -19,7 +19,7 @@ test('challenge links round-trip each role and keep only current challenge param
 });
 
 test('challenge construction never changes a local preview or offline file into a published address',()=>{
-  const result={role:2,score:3895,shipped:10};
+  const result={role:2,score:3895,shipped:SHIFTS[2].stars[2]};
   for(const base of ['http://localhost:4173/preview/game.html?watch=owner#results','http://[::1]:8080/shop/','file:///tmp/Chip%20Rush/CHIP-RUSH.html?old=1']) {
     const original=new URL(base),url=new URL(challengeURL(result,base));
     assert.equal(url.protocol,original.protocol);assert.equal(url.origin,original.origin);assert.equal(url.pathname,original.pathname);
@@ -36,6 +36,15 @@ test('challenge parsing rejects absent markers, old rules, and missing result fi
   }
 });
 
+test('v5 Operator links remain playable and regenerate with current rules while advanced links expire',()=>{
+  const operator=parseChallenge(query({rules:'roles-v5-performance',role:'0',score:'3000',shipped:'5'}));
+  assert.deepEqual(operator,{role:0,score:3000,shipped:5,stars:3});
+  const renewed=new URL(challengeURL(operator,'https://chip-rush.example/'));
+  assert.equal(renewed.searchParams.get('rules'),RULESET);assert.deepEqual(parseChallenge(renewed.search),operator);
+  for(const role of [1,2])assert.equal(parseChallenge(query({rules:'roles-v5-performance',role:String(role),score:'3000',shipped:'5'})),null);
+  assert.equal(parseChallenge(query({rules:'roles-v5-performance',role:'0',score:'3000',shipped:'9'})),null,'Legacy compatibility does not bypass Operator limits');
+});
+
 test('challenge numeric fields reject signs, decimals, nonfinite values, markup, and overflow',()=>{
   for(const field of ['role','score','shipped']) {
     for(const value of ['', '-1','+1','1.5','1e2','NaN','Infinity',' 1','1 ','<script>','20001']) {
@@ -46,6 +55,7 @@ test('challenge numeric fields reject signs, decimals, nonfinite values, markup,
   assert.equal(parseChallenge(query({score:'20001'})),null);
   assert.equal(parseChallenge(query({shipped:'13'})),null);
   assert.equal(parseChallenge(query({role:'0',shipped:'9'})),null);
+  for(const role of [1,2])assert.equal(parseChallenge(query({role:String(role),shipped:String(SHIFTS[role].maxOrders+1)})),null,'Current higher-role order limits are enforced');
 });
 
 test('challenge stars are derived from role targets and cannot be supplied in the link',()=>{
@@ -61,8 +71,10 @@ test('challenge stars are derived from role targets and cannot be supplied in th
 
 test('valid zero and maximum counts parse without silently changing the challenge',()=>{
   assert.deepEqual(parseChallenge(query({role:'0',score:'0',shipped:'0'})),{role:0,score:0,shipped:0,stars:0});
-  assert.deepEqual(parseChallenge(query({role:'2',score:'9000',shipped:'12'})),{role:2,score:9000,shipped:12,stars:3});
-  assert.deepEqual(parseChallenge(query({role:'2',score:'19200',shipped:'12'})),{role:2,score:19200,shipped:12,stars:3});
+  for(const role of [1,2]) {
+    const shipped=SHIFTS[role].maxOrders,score=shipped*1600;
+    assert.deepEqual(parseChallenge(query({role:String(role),score:String(score),shipped:String(shipped)})),{role,score,shipped,stars:3});
+  }
   assert.deepEqual(parseChallenge(query({role:'0',score:'6000',shipped:'8'})),{role:0,score:6000,shipped:8,stars:3});
 });
 

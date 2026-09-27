@@ -2,10 +2,12 @@ import { RULESET, SHIFTS } from './core.js';
 
 export function parseChallenge(search) {
   const p=new URLSearchParams(search);
-  if(p.get('challenge')!=='1'||p.get('rules')!==RULESET)return null;
+  if(p.get('challenge')!=='1')return null;
   const values=['role','score','shipped'].map(k=>/^\d{1,5}$/.test(p.get(k)||'')?Number(p.get(k)):NaN);
   const [role,score,shipped]=values;
-  if(!Number.isInteger(role)||role>2||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(role===0?8:12)||score>shipped*1600+60+(role===2?75:0))return null;
+  // Existing Operator challenges remain comparable; higher roles changed in v6.
+  if(p.get('rules')!==RULESET&&!(p.get('rules')==='roles-v5-performance'&&role===0))return null;
+  if(!Number.isInteger(role)||role>2||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+60+(role===2?75:0))return null;
   return Object.freeze({role,score,shipped,stars:SHIFTS[role].stars.filter(n=>shipped>=n).length});
 }
 export function challengeURL(result,base) {

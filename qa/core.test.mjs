@@ -65,13 +65,13 @@ test('menu rejects interactions and leaves all clocks untouched',()=>{
   advance(game,2);assert.deepEqual(game.snapshot(),before);
 });
 
-test('roles share intuitive routes and introduce programming before optional rush calls',()=>{
+test('roles share intuitive routes and introduce CAD before optional rush calls',()=>{
   assert.equal(SHIFTS.length,3);
   for(const shift of SHIFTS)for(const index of shift.recipes){assert.ok([0,1,6].includes(index));assert.ok(RECIPES[index].route.every(key=>['lathe','mill','inspect'].includes(key)));}
   const operator=fresh(0),manager=fresh(1),owner=fresh(2);
   assert.equal(operator.selected.programmed,true);assert.equal(operator.selected.programRemaining,0);
-  assert.equal(manager.selected.programmed,false);assert.equal(manager.selected.programRemaining,4);
-  assert.equal(owner.selected.programmed,false);assert.equal(owner.selected.programRemaining,4);
+  assert.equal(manager.selected.programmed,false);assert.equal(manager.selected.programRemaining,6);
+  assert.equal(owner.selected.programmed,false);assert.equal(owner.selected.programRemaining,6);
 });
 
 for(let shift=0;shift<SHIFTS.length;shift++)for(const recipeIndex of new Set(SHIFTS[shift].recipes)){
@@ -87,13 +87,13 @@ for(let shift=0;shift<SHIFTS.length;shift++)for(const recipeIndex of new Set(SHI
   });
 }
 
-test('programming requires presence and an explicit start, then pauses and resumes',()=>{
+test('CAD requires presence and an explicit start, then pauses and resumes',()=>{
   const game=fresh(1),order=game.selected;
-  assert.equal(game.interact('office'),false,'Cannot program remotely');advance(game,1);assert.equal(order.programRemaining,4);
-  game.setOfficePresence(true);advance(game,1);assert.equal(order.programRemaining,4,'Walking into office does not start work');
-  assert.equal(game.interact('office'),true);advance(game,1.25);assert.ok(Math.abs(order.programRemaining-2.75)<1e-6);
-  game.setOfficePresence(false);advance(game,2);assert.ok(Math.abs(order.programRemaining-2.75)<1e-6,'Leaving preserves progress');
-  game.setOfficePresence(true);assert.equal(game.interact('office'),true);advance(game,2.8);
+  assert.equal(game.interact('office'),false,'Cannot program remotely');advance(game,1);assert.equal(order.programRemaining,6);
+  game.setOfficePresence(true);advance(game,1);assert.equal(order.programRemaining,6,'Walking into office does not start work');
+  assert.equal(game.interact('office'),true);advance(game,1.25);assert.ok(Math.abs(order.programRemaining-4.75)<1e-6);
+  game.setOfficePresence(false);advance(game,2);assert.ok(Math.abs(order.programRemaining-4.75)<1e-6,'Leaving preserves progress');
+  game.setOfficePresence(true);assert.equal(game.interact('office'),true);advance(game,4.8);
   assert.equal(order.programmed,true);assert.equal(order.programRemaining,0);
   const programEvents=game.drain().filter(event=>event.type==='programmed');
   advance(game,1);assert.equal(game.drain().filter(event=>event.type==='programmed').length,0,'Completion cannot repeat');
@@ -103,26 +103,34 @@ test('programming requires presence and an explicit start, then pauses and resum
 test('office tracks the explicitly started RFQ; changing tickets cannot transfer work',()=>{
   const game=fresh(1);game.spawn();const [first,second]=game.orders;
   game.setOfficePresence(true);game.select(first.id);game.interact('office');advance(game,1);
-  game.select(second.id);assert.ok(Math.abs(first.programRemaining-3)<1e-6);assert.equal(second.programRemaining,4);
+  game.select(second.id);assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.equal(second.programRemaining,6);
   assert.equal(game.interact('office'),true);advance(game,1);
-  assert.ok(Math.abs(first.programRemaining-3)<1e-6);assert.ok(Math.abs(second.programRemaining-3)<1e-6);
-  game.select(first.id);game.interact('office');advance(game,3.05);
-  assert.equal(first.programmed,true);assert.equal(second.programmed,false);assert.ok(Math.abs(second.programRemaining-3)<1e-6);
+  assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.ok(Math.abs(second.programRemaining-5)<1e-6);
+  game.select(first.id);game.interact('office');advance(game,5.05);
+  assert.equal(first.programmed,true);assert.equal(second.programmed,false);assert.ok(Math.abs(second.programRemaining-5)<1e-6);
 });
 
-test('raw stock can be carried before programming but cannot start its first cut',()=>{
-  const game=fresh(1),id=game.selected.id;
-  assert.equal(game.interact('material'),true);const first=game.heldOrder.route[0];
-  assert.equal(game.interact(first),false);assert.equal(game.hand.orderId,id);assert.equal(game.heldOrder.index,0);
+for(const shift of [1,2])test('role '+(shift+1)+': CAD must finish before material pickup and never creates a physical part',()=>{
+  const game=fresh(shift),order=game.selected,id=order.id;
+  assert.equal(game.interact('material'),false);assert.equal(game.hand,null);assertOwnership(game);
+  game.setOfficePresence(true);assert.equal(game.interact('office'),true);advance(game,3);
+  assert.equal(game.interact('material'),false);assert.equal(order.programmed,false);
+  assert.equal(order.started,false);assert.equal(game.hand,null);assertOwnership(game);
+  advance(game,3.05);assert.equal(order.programmed,true);assert.equal(order.started,false);
+  assert.equal(game.hand,null);assert.equal(game.buffer,null);assertOwnership(game);
+  assert.equal(game.interact(order.route[0]),false,'CAD creates no machine-ready part at the office');
+  assert.equal(game.interact('ship'),false);assert.equal(game.interact('office'),false);
+  assert.equal(game.interact('material'),true);assert.equal(game.hand.orderId,id);assert.equal(order.index,0);
   assert.equal(game.interact('inspect'),false);assert.equal(game.interact('ship'),false);
-  program(game,id);assert.equal(game.hand.orderId,id);assert.equal(game.interact(first),true);assertOwnership(game);
+  for(const key of order.route.slice(0,-1))processHeldPart(game,key);
+  assert.equal(game.interact('ship'),true);assert.equal(game.shipped,1);assertOwnership(game);
 });
 
-test('recycling preserves partial and completed programs without extending the deadline',()=>{
+test('blocked material pickup preserves partial CAD and recycling preserves completed CAD',()=>{
   const game=fresh(1),order=game.selected;
   game.setOfficePresence(true);game.interact('office');advance(game,1.4);game.setOfficePresence(false);
   const remaining=order.remaining,programRemaining=order.programRemaining;
-  game.interact('material');game.interact('material');assert.equal(order.programRemaining,programRemaining);assert.equal(order.remaining,remaining);
+  assert.equal(game.interact('material'),false);assert.equal(game.hand,null);assert.equal(order.programRemaining,programRemaining);assert.equal(order.remaining,remaining);
   program(game);game.interact('material');processHeldPart(game,order.route[0]);game.interact('material');
   assert.equal(order.programmed,true);assert.equal(order.programRemaining,0);assert.equal(order.index,0);assertOwnership(game);
 });
@@ -179,7 +187,7 @@ test('recycling frees hands with an occupied buffer and ready machine',()=>{
 
 test('closing-time arrivals fall back to a short route and stop with too little time',()=>{
   const game=fresh(2);const compoundIndex=SHIFTS[2].recipes.indexOf(6);assert.ok(compoundIndex>=0);
-  game.spawnIndex=compoundIndex;game.time=40;assert.equal(game.spawn(),true);assert.equal(game.orders.at(-1).name,RECIPES[0].name);
+  game.spawnIndex=compoundIndex;game.time=43;assert.equal(game.spawn(),true);assert.equal(game.orders.at(-1).name,RECIPES[0].name);
   game.time=31.99;const count=game.orders.length,index=game.spawnIndex;assert.equal(game.spawn(),false);assert.equal(game.orders.length,count);assert.equal(game.spawnIndex,index);
 });
 
@@ -187,6 +195,19 @@ test('arrival capacity is four and blocked arrivals do not age before appearing'
   const game=fresh();while(game.orders.length<4)assert.equal(game.spawn(),true);const index=game.spawnIndex;
   assert.equal(game.spawn(),false);assert.equal(game.spawnIndex,index);game.nextArrival=0;game.tick(.05);game.expire(game.orders[0].id);advance(game,2.1);
   assert.equal(game.orders.length,4);assert.equal(game.spawnIndex,index+1);assert.ok(game.orders.at(-1).remaining>game.orders.at(-1).deadline-.2);assertOwnership(game);
+});
+
+test('higher-role total order caps count every arrival and prevent replacement work after expiry',()=>{
+  for(const [shift,maximum] of [[1,6],[2,8]]){
+    const game=fresh(shift);assert.equal(game.config.maxOrders,maximum);
+    while(game.spawnIndex<maximum){game.expire(game.selectedId);assert.equal(game.spawn(),true);}
+    game.expire(game.selectedId);const nextId=game.nextId;assert.equal(game.orders.length,0);
+    assert.equal(game.spawn(),false);game.nextArrival=0;advance(game,6);
+    assert.equal(game.spawnIndex,maximum);assert.equal(game.nextId,nextId);assert.equal(game.orders.length,0);
+  }
+  const configurable=fresh(0);configurable.config={...configurable.config,maxOrders:1};
+  configurable.expire(configurable.selectedId);assert.equal(configurable.spawn(),false,'The cap is configurable, not tied to role names');
+  assert.equal(SHIFTS[0].maxOrders,undefined,'Operator arrival rules stay unchanged');
 });
 
 test('phone requires office presence and explicit acceptance; decline preserves normal order and streak',()=>{
@@ -205,15 +226,48 @@ test('accepted rush uses a separate 45-second promise and fixed 100-point bonus 
   assert.equal(game.score,baseline.score+100,'Rush adds exactly 100, independent of the normal shipment formula');
   const score=game.score;assert.equal(game.interact('ship'),false);assert.equal(game.respondCall(true),false);advance(game,.2);
   assert.equal(game.score,score);assert.equal(game.rushesWon,1);assert.equal(game.rushesAccepted,1);assertOwnership(game);
+  assert.equal(game.rushesMissed,0);assert.equal(game.scoreDetails.rushPenalty,0);
 });
 
-test('missing a rush promise preserves normal deadline, order, score, and shipping streak',()=>{
+test('missing a rush promise charges 25 points while preserving the ordinary order and shipping streak',()=>{
   const game=acceptedCall(),id=game.call.orderId,order=game.order(id),remaining=order.remaining;
   game.combo=3;game.score=300;advance(game,45.05);
   assert.equal(game.order(id),order);assert.ok(Math.abs(order.remaining-(remaining-45.05))<1e-5);
-  assert.equal(game.combo,3);assert.equal(game.score,300);assert.equal(game.missed,0);assert.equal(game.rushesWon,0);
+  assert.equal(game.combo,3);assert.equal(game.score,275);assert.equal(game.missed,0);assert.equal(game.rushesWon,0);
+  assert.equal(game.rushesMissed,1);assert.equal(game.scoreDetails.rushPenalty,-25);
+  const expired=game.drain().filter(event=>event.type==='rushExpired');assert.deepEqual(expired,[{type:'rushExpired',orderId:id,reason:'timeout',penalty:25}]);
   finishOrder(game,id);const shipment=game.drain().filter(event=>event.type==='shipped').at(-1);
   assert.equal(shipment.rushBonus??0,0);assert.equal(game.shipped,1);assert.equal(game.rushesWon,0);
+});
+
+for(const reason of ['timeout','orderExpired','shiftEnded'])test('missed rush '+reason+' deducts its actual penalty exactly once and clamps at zero',()=>{
+  for(const balance of [0,7,25,80]){
+    const game=acceptedCall(),id=game.call.orderId;
+    game.score=balance;game.scoreDetails.calls=balance;game.drain();
+    if(reason==='timeout')game.call.remaining=.01;
+    if(reason==='orderExpired')game.order(id).remaining=.01;
+    if(reason==='shiftEnded')game.time=.01;
+    game.tick(.1);
+    const penalty=Math.min(25,balance);
+    assert.equal(game.score,balance-penalty);assert.equal(game.rushesMissed,1);
+    assert.equal(game.scoreDetails.rushPenalty,0-penalty);
+    assert.equal(Object.values(game.scoreDetails).reduce((sum,value)=>sum+value,0),game.score);
+    assert.deepEqual(game.drain().filter(event=>event.type==='rushExpired'),[{type:'rushExpired',orderId:id,reason,penalty}]);
+    const snapshot=game.snapshot();assert.equal(snapshot.rushesMissed,1);assert.equal(snapshot.scoreDetails.rushPenalty,0-penalty);
+    snapshot.scoreDetails.rushPenalty=-999;assert.equal(game.scoreDetails.rushPenalty,0-penalty,'Snapshot accounting cannot mutate the game');
+    game.expire(id);advance(game,1);game.missRush('timeout');
+    assert.equal(game.score,balance-penalty);assert.equal(game.rushesMissed,1);
+    assert.equal(game.drain().filter(event=>event.type==='rushExpired').length,0);
+  }
+});
+
+test('simultaneous order, rush, and shift deadlines record only one missed promise',()=>{
+  const game=acceptedCall(),id=game.call.orderId;game.drain();
+  game.order(id).remaining=.01;game.call.remaining=.01;game.time=.01;game.tick(.1);
+  assert.equal(game.mode,'results');assert.equal(game.score,0);assert.equal(game.rushesMissed,1);assert.equal(game.missed,1);
+  assert.equal(game.scoreDetails.rushPenalty,-25);
+  assert.deepEqual(game.drain().filter(event=>event.type==='rushExpired'),[{type:'rushExpired',orderId:id,reason:'orderExpired',penalty:25}]);
+  advance(game,1);assert.equal(game.rushesMissed,1);assert.equal(game.drain().length,0);
 });
 
 test('shipping an unrelated order cannot erase an accepted rush promise',()=>{
@@ -250,14 +304,14 @@ test('closing a shift reports unfinished work once and ends calls and programmin
 
 test('new shift clears prior machines, calls, programs, counters, and clocks',()=>{
   const game=acceptedCall();game.select(game.call.orderId);game.setOfficePresence(true);game.interact('office');advance(game,1);game.score=800;game.shipped=3;game.missed=2;game.combo=2;
-  game.reset(1);assert.equal(game.mode,'playing');assert.equal(game.shiftIndex,1);assert.equal(game.time,SHIFTS[1].duration);assert.equal(game.elapsed,0);assert.equal(game.nextArrival,12);
-  for(const key of ['score','shipped','missed','unfinished','combo','bestCombo','rushesAccepted','rushesWon','callsReceived','callsAnswered','callIndex'])assert.equal(game[key],0,key+' resets');
-  assert.equal(game.hand,null);assert.equal(game.buffer,null);assert.equal(game.orders.length,1);assert.equal(game.selected.programRemaining,4);assert.equal(game.office.orderId,null);assert.equal(game.office.present,false);assert.equal(game.call,null);
+  game.reset(1);assert.equal(game.mode,'playing');assert.equal(game.shiftIndex,1);assert.equal(game.time,SHIFTS[1].duration);assert.equal(game.elapsed,0);assert.equal(game.nextArrival,SHIFTS[1].firstArrival);
+  for(const key of ['score','shipped','missed','unfinished','combo','bestCombo','rushesAccepted','rushesWon','rushesMissed','callsReceived','callsAnswered','callIndex'])assert.equal(game[key],0,key+' resets');
+  assert.equal(game.hand,null);assert.equal(game.buffer,null);assert.equal(game.orders.length,1);assert.equal(game.selected.programRemaining,6);assert.equal(game.office.orderId,null);assert.equal(game.office.present,false);assert.equal(game.call,null);
   assertOwnership(game);program(game);finishOrder(game);assert.equal(game.shipped,1);
 });
 
 test('pass thresholds require role-specific shipment counts independently of bonus points',()=>{
-  for(const [shift,target] of [[0,3],[1,4],[2,6]]){
+  for(const [shift,target] of [[0,3],[1,4],[2,5]]){
     const game=fresh(shift);game.score=100000;game.shipped=target-1;assert.equal(game.passed(),false);assert.equal(game.stars(),0);
     game.shipped=target;assert.equal(game.passed(),true);assert.equal(game.stars(),1);
     for(let index=0;index<SHIFTS[shift].stars.length;index++){game.shipped=SHIFTS[shift].stars[index];assert.equal(game.stars(),index+1);}
@@ -265,19 +319,37 @@ test('pass thresholds require role-specific shipment counts independently of bon
 });
 
 
-test('scheduled calls interrupt congested shops but unavailable rush promises remain blocked',()=>{
-  const congested=fresh(2);program(congested);congested.interact('material');congested.interact('lathe');
-  congested.spawn();congested.spawn();ringScheduledCall(congested);assert.equal(congested.orders.at(-1).id,103);assert.equal(congested.call.state,'ringing');assert.equal(congested.call.rushAvailable,false);
-  const overdue=fresh(2);overdue.selected.remaining=52;overdue.spawn();overdue.spawn();ringScheduledCall(overdue);answerCall(overdue);assert.equal(overdue.call.rushAvailable,false);assert.equal(overdue.respondCall(true),false);assert.equal(overdue.rushesAccepted,0);
-  const closing=fresh(2);closing.time=48;closing.spawn();closing.spawn();ringScheduledCall(closing);answerCall(closing);assert.equal(closing.call.rushAvailable,false);assert.equal(closing.respondCall(true),false);
+test('Owner can accept a started order while its machine is still busy',()=>{
+  const game=fresh(2),order=game.selected;program(game);game.interact('material');game.interact('lathe');
+  ringScheduledCall(game);assert.equal(game.call.orderId,order.id);assert.equal(game.call.rushAvailable,true);
+  answerCall(game);assert.equal(game.stations.lathe.ready,false);assert.equal(order.started,true);
+  assert.equal(game.respondCall(true),true);assert.equal(game.call.state,'active');assert.equal(game.rushesAccepted,1);assertOwnership(game);
 });
 
-test('rush acceptance rechecks whether the invited order can still be promised',()=>{
-  const game=incomingCall(),id=game.call.orderId;game.orders[0].remaining=53.1;answerCall(game);
-  assert.equal(game.respondCall(true),false,'An older order is now too close to its deadline');
-  assert.equal(game.call,null);assert.equal(game.rushesAccepted,0);assert.ok(game.order(id));assert.equal(game.order(id).started,false);assertOwnership(game);
+test('Owner can accept a combined route in a congested shop with older deadlines approaching',()=>{
+  const game=fresh(2);program(game);game.interact('material');game.interact('lathe');game.spawn();game.spawn();
+  const order=game.orders.at(-1);assert.deepEqual(order.route,['lathe','mill','inspect','ship']);
+  ringScheduledCall(game);answerCall(game);game.orders[0].remaining=1;game.tick(.05);
+  assert.equal(game.call.rushAvailable,true);assert.equal(game.respondCall(true),true);
+  assert.equal(game.call.orderId,order.id);assert.equal(game.rushesAccepted,1);assertOwnership(game);
 });
 
+test('rush offers show the live ordinary deadline or closing window and stay acceptable until it ends',()=>{
+  for(const limiting of ['order','shift']){
+    const game=fresh(2),order=game.selected;
+    if(limiting==='order')order.remaining=30;else game.time=30;
+    ringScheduledCall(game);answerCall(game);
+    assert.ok(game.call.window>26&&game.call.window<27.01);
+    assert.equal(game.call.window,Math.min(45,order.remaining,game.time));
+    const previous=game.call.window;advance(game,1);
+    assert.ok(Math.abs(game.call.window-(previous-1))<1e-6);
+    if(limiting==='order')order.remaining=.2;else game.time=.2;
+    game.tick(.05);assert.equal(game.call.rushAvailable,true);
+    assert.equal(game.call.window,Math.min(45,order.remaining,game.time));
+    assert.equal(game.respondCall(true),true,'Even a tiny positive live window is an Owner decision');
+    assert.equal(game.call.remaining,game.call.window);assert.equal(game.rushesAccepted,1);
+  }
+});
 
 test('a ringing call blocks every handoff without changing carried work or machine ownership',()=>{
   const game=fresh(2),id=game.selectedId;program(game);game.interact('material');
@@ -316,7 +388,7 @@ test('unanswered ring or unresolved offer times out and restores ordinary handof
   for(const state of ['ringing','offer']){
     const game=incomingCall();if(state==='offer')answerCall(game);
     assert.equal(game.interact('material'),false);advance(game,22.1);assert.equal(game.call,null);
-    assert.equal(game.interact('material'),true);assert.equal(game.rushesAccepted,0);assert.equal(game.rushesWon,0);assertOwnership(game);
+    program(game);assert.equal(game.interact('material'),true);assert.equal(game.rushesAccepted,0);assert.equal(game.rushesWon,0);assert.equal(game.rushesMissed,0);assertOwnership(game);
   }
 });
 
@@ -325,7 +397,7 @@ test('accepting a rush preserves an interrupted partial program but clears its a
   const saved=older.programRemaining;game.spawn();game.spawn();ringScheduledCall(game);const rushId=game.call.orderId;answerCall(game);
   assert.equal(game.office.orderId,older.id);assert.equal(older.programRemaining,saved);assert.equal(game.respondCall(true),true);
   assert.equal(game.office.orderId,null);advance(game,1);assert.equal(older.programRemaining,saved);assert.equal(older.programmed,false);
-  game.select(rushId);assert.equal(game.interact('office'),true);advance(game,4.05);assert.equal(game.order(rushId).programmed,true);assert.equal(older.programRemaining,saved);
+  game.select(rushId);assert.equal(game.interact('office'),true);advance(game,6.05);assert.equal(game.order(rushId).programmed,true);assert.equal(older.programRemaining,saved);
 });
 
 test('a complete Owner shift has three predictable conversations without requiring rush acceptance',()=>{
@@ -361,11 +433,11 @@ test('a complete Owner shift has three predictable conversations without requiri
   assert.equal(game.snapshot().callsAnswered,3);assert.equal(game.nextCallAt,Infinity);
 });
 
-test('rush availability updates while the customer waits, but acceptance still rechecks capacity',()=>{
-  const game=fresh(2);program(game);game.interact('material');game.interact('lathe');game.spawn();game.spawn();ringScheduledCall(game);
-  assert.equal(game.call.rushAvailable,false);answerCall(game);
-  advance(game,3);assert.equal(game.call.rushAvailable,true,'Finishing cutting time can make the rush feasible');
-  game.orders[0].remaining=40;game.tick(.05);assert.equal(game.call.rushAvailable,false);assert.equal(game.respondCall(true),false);assert.equal(game.rushesAccepted,0);
+test('declining a difficult rush is an explicit choice and adds no missed-promise penalty',()=>{
+  const game=incomingCall(),id=game.call.orderId;answerCall(game);game.order(id).remaining=.2;game.tick(.05);
+  const before=game.score;assert.equal(game.call.rushAvailable,true);assert.equal(game.respondCall(false),true);
+  assert.equal(game.score,before);assert.equal(game.rushesAccepted,0);assert.equal(game.rushesMissed,0);
+  assert.equal(game.scoreDetails.rushPenalty,0);assert.ok(game.order(id));
 });
 
 test('pending calls never overwrite a rush and give ten seconds recovery after it ends',()=>{
@@ -381,4 +453,11 @@ test('Owner call schedule waits for live work and never affects the first two ro
   const game=fresh(2);game.orders=[];game.nextCallAt=0;advance(game,30);assert.equal(game.callsReceived,0);
   game.spawn();game.tick(.05);assert.equal(game.call.state,'ringing');assert.equal(game.callsReceived,1);
   const closing=fresh(2);closing.time=25;closing.nextCallAt=0;closing.tick(.05);assert.equal(closing.call,null,'No new call at closing');
+});
+
+
+test('customer offer exposes the promised bonus and missed-rush cost',()=>{
+  const game=new ShopGame();game.reset(2);game.nextCallAt=0;game.maybeCall();
+  assert.equal(game.call.bonus,100);assert.equal(game.call.penalty,25);
+  assert.equal(game.snapshot().call.penalty,25);
 });

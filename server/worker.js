@@ -15,10 +15,12 @@ export function validateResult(value,run,now=Date.now()){
   if(!run||run.ruleset!==RULESET||value.role!==run.role)return 'Start a new shift before posting.';
   if(now-run.started_at<(SHIFTS[run.role].duration-5)*1000)return 'Finish the full shift before posting.';
   if(now-run.started_at>86400000)return 'This score submission has expired. Play another shift.';
-  const ranges={score:[0,20000],shipped:[0,run.role===0?8:12],missed:[0,15],sourced:[0,1],calls:[0,run.role===2?3:0]};
+  const ranges={score:[0,20000],shipped:[0,SHIFTS[run.role].maxOrders??8],missed:[0,15],sourced:[0,1],calls:[0,run.role===2?3:0]};
   for(const [key,[min,max]] of Object.entries(ranges))if(!Number.isInteger(value[key])||value[key]<min||value[key]>max)return 'That result is outside this shift’s limits.';
   const support=value.sourced*60+value.calls*25;
-  if(value.score<support||value.score>value.shipped*1600+support)return 'That score does not match the completed work.';
+  // Each answered call can lose its 25 points if the accepted rush misses.
+  // Sourcing points remain earned even when every rush is missed.
+  if(value.score<value.sourced*60||value.score>value.shipped*1600+support)return 'That score does not match the completed work.';
   return null;
 }
 export default {
@@ -29,7 +31,9 @@ export default {
     if(request.method==='POST'&&request.headers.get('origin')!==url.origin)return fail('Use the game page to post.',403);
     try{
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
-        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
+        // Operator's workload and scoring are unchanged from v5. Preserve those
+        // comparable scores without mixing older Manager and Owner runs.
+        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,created_at FROM scores WHERE ruleset=? OR (ruleset=? AND role=0) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,'roles-v5-performance').all();
         return json({ruleset:RULESET,entries:(data.results||[]).map(({role,...row})=>({...row,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){

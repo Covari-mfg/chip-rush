@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ShopGame, SOURCE_JOBS } from '../dist/core.js';
+import { ShopGame, SOURCE_JOBS, PROGRAM_DURATION } from '../dist/core.js';
 
 function advance(game, seconds) {
   for (let left=seconds;left>1e-8;left-=.05) game.tick(Math.min(.05,left));
@@ -21,8 +21,9 @@ function ring(game) {
 }
 
 function ordinaryState(game) {
-  const {sourcing,sourced,sourcePoints,score,...state}=game.snapshot();
-  return {...state,ordinaryScore:score-sourcePoints,nextId:game.nextId,
+  const {sourcing,sourced,sourcePoints,score,scoreDetails,...state}=game.snapshot();
+  const {sourcing:sourceDetail,...ordinaryScoreDetails}=scoreDetails;
+  return {...state,scoreDetails:ordinaryScoreDetails,ordinaryScore:score-sourcePoints,nextId:game.nextId,
     spawnIndex:game.spawnIndex,nextArrival:game.nextArrival};
 }
 
@@ -77,35 +78,37 @@ test('new sourcing approval waits until the whole customer conversation is resol
   assert.equal(game.respondCall(false),true);assert.equal(game.requestSource(),true);
 });
 
-test('an interrupted approval preserves CAM progress while machines and deadlines keep running',()=>{
+test('an interrupted approval preserves CAD progress while machines and deadlines keep running',()=>{
   const game=offer(2),first=game.selected;
-  game.setOfficePresence(true);game.interact('office');advance(game,4.05);
-  game.interact('material');game.interact('lathe');game.spawn();
+  game.setOfficePresence(true);assert.equal(game.interact('office'),true);advance(game,PROGRAM_DURATION+.05);
+  assert.equal(first.programmed,true);
+  assert.equal(game.interact('material'),true);assert.equal(game.interact('lathe'),true);game.spawn();
   const second=game.orders[1];game.select(second.id);game.interact('office');advance(game,.5);
-  const camRemaining=second.programRemaining;
+  const cadRemaining=second.programRemaining;
   assert.equal(game.requestSource(),true);assert.equal(game.office.orderId,null);
   advance(game,.5);const approvalRemaining=game.sourcing.approvalRemaining;
   ring(game);const time=game.time,deadline=second.remaining;
   advance(game,1);assert.equal(game.sourcing.approvalRemaining,approvalRemaining);
   game.interact('phone');advance(game,3.05);assert.equal(game.call.state,'offer');
   advance(game,3);assert.equal(game.sourcing.approvalRemaining,approvalRemaining);
-  assert.equal(second.programRemaining,camRemaining);
+  assert.equal(second.programRemaining,cadRemaining);
   assert.equal(game.stations.lathe.ready,true);assert.equal(game.stations.lathe.part.orderId,first.id);
   assert.ok(game.time<time);assert.ok(second.remaining<deadline);
   game.respondCall(false);advance(game,approvalRemaining+.05);
-  assert.equal(game.sourcing.state,'sourcing');assert.equal(second.programRemaining,camRemaining);
+  assert.equal(game.sourcing.state,'sourcing');assert.equal(second.programRemaining,cadRemaining);
   assert.equal(game.interact('office'),true);advance(game,.5);
-  assert.ok(second.programRemaining<camRemaining,'CAM resumes on an explicit office interaction');
+  assert.ok(second.programRemaining<cadRemaining,'CAD resumes on an explicit office interaction');
 });
 
 test('partner delivery awards sixty points once without shipment, star, or streak credit',()=>{
-  const game=offer(2);game.shipped=5;game.combo=4;game.bestCombo=4;game.score=900;
+  const game=offer(2),shipped=game.config.passTarget-1;game.shipped=shipped;game.combo=4;game.bestCombo=4;game.score=900;
   game.setOfficePresence(true);game.requestSource();advance(game,2.05);
   game.setOfficePresence(false);advance(game,21);
   assert.equal(game.sourcing.state,'sourcing');assert.equal(game.score,900);
   advance(game,1.1);assert.equal(game.sourcing.state,'delivered');
   assert.equal(game.score,960);assert.equal(game.sourcePoints,60);assert.equal(game.sourced,1);
-  assert.equal(game.shipped,5);assert.equal(game.stars(),0);assert.equal(game.passed(),false);
+  assert.equal(game.scoreDetails.sourcing,60);
+  assert.equal(game.shipped,shipped);assert.equal(game.stars(),0);assert.equal(game.passed(),false);
   assert.equal(game.combo,4);assert.equal(game.bestCombo,4);
   assert.equal(game.requestSource(),false);assert.equal(game.declineSource(),false);
   advance(game,5);assert.equal(game.score,960);assert.equal(game.sourced,1);
@@ -119,6 +122,11 @@ test('delivery and declining leave regular arrivals, four-order capacity, and de
   assert.equal(placed.requestSource(),true);assert.equal(declined.declineSource(),true);
   advance(placed,24.1);advance(declined,24.1);
   assert.equal(placed.sourced,1);assert.equal(declined.sourced,0);
+  assert.equal(placed.scoreDetails.sourcing,60);assert.equal(declined.scoreDetails.sourcing,0);
+  assert.deepEqual(ordinaryState(placed),ordinaryState(declined));
+  // Manager's slower cadence reaches the fourth slot after the partner has
+  // delivered. Compare again then so the capacity assertion remains exercised.
+  advance(placed,placed.config.interval);advance(declined,declined.config.interval);
   assert.deepEqual(ordinaryState(placed),ordinaryState(declined));
   assert.equal(placed.orders.length,4);
 });

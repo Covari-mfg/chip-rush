@@ -1,5 +1,93 @@
 # CHIP RUSH verification
 
+## CAD and rush balance · 2026-09-27 (local source)
+
+- Manager and Owner now require one six-second CAD step at the office before Material. Every delivered advanced-role job earns 120 CAD points before the ordinary streak multiplier. CAD progress survives walking away and completed CAD survives recycling. Operator timing, scoring, recipes, and 3/4/5 stars remain unchanged.
+- Manager has at most six arrivals, with a 16-second second arrival, then 25-second spacing; stars are 4/5/6. Its sequence is spacer, plate, housing, spacer, plate, housing. Owner has at most eight arrivals, with a 12-second second arrival, then 18-second spacing; stars are 5/6/8. Its sequence is spacer, plate, housing, spacer, housing, plate, housing, plate. Both use the existing four-active-order cap and safe closing-time fallback.
+- All three Owner calls remain scheduled at 27, 77, and 127 seconds. Any live offer can be accepted, including started, combined-route, or congested work. The separate promise is at most 45 seconds, bounded by the ordinary deadline and closing time. Success adds 100 points; an accepted promise missed through timeout, ordinary expiration, or closing deducts 25 once, clamped at zero. Declining adds no missed-promise penalty.
+- **169 automated tests pass**, including 62 no-dash Operator timing profiles, full CAD → Material → machines → Inspection → Shipping traces, all rush failure exits, and legal Owner mastery under both decisions. `node qa/balance.mjs --expert --rush --assert` also passes.
+- **The tables below are deterministic simulations, not browser playthroughs or measured human success rates. Browser verification is recorded separately below.** The harness uses production A* paths, collision boundaries, 4.4 walking speed, six attended CAD seconds, real machine durations, three-second conversations, and legal straight-segment dashes with the production cooldown. No sourcing bonus is taken in these profiles. No publication was performed for these checks.
+
+### Reproducible outcomes
+
+Reaction values below are the added delay after an interaction. Flow overlaps CAD, machines, and downstream work; serial finishes one order at a time. Final idle means the empty end of a shift after every remaining order has resolved; unfinished work reports zero final idle.
+
+| Profile | Shipped / arrivals | Stars | Points | Missed / unfinished | Last shipment | Final idle |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Operator, serial, 3s, walk | 5/7 | 3 | 1642 | 0 / 2 | 148.50s | 0.00s |
+| Operator, serial, 0.5s, walk | 7/7 | 3 | 3533 | 0 / 0 | 141.44s | 8.56s |
+| Manager, serial, 0.5s, walk | 5/6 | 2 | 3252 | 0 / 1 | 152.44s | 0.00s |
+| Manager, flow, 0.5s, walk | 6/6 | 3 | 4376 | 0 / 0 | 160.24s | 19.76s |
+| Manager, flow, 1s, walk | 6/6 | 3 | 4023 | 0 / 0 | 171.55s | 8.45s |
+| Owner, flow, 0.5s, walk, decline | 5/8 | 1 | 3052 | 1 / 2 | 145.09s | 0.00s |
+| Owner, flow, 0.5s, walk, accept all | 6/8 | 2 | 3961 | 1 / 1 | 170.20s | 0.00s |
+| Owner, flow, 0.1s, dash, decline | 8/8 | 3 | 5903 | 0 / 0 | 168.91s | 11.09s |
+| Owner, flow, 0.1s, dash, accept all | 8/8 | 3 | 6154 | 0 / 0 | 173.08s | 6.92s |
+| Owner, flow, 0.3s, dash, decline | 8/8 | 3 | 5658 | 0 / 0 | 173.57s | 6.43s |
+| Owner, flow, 0.3s, dash, accept all | 8/8 | 3 | 5922 | 0 / 0 | 169.92s | 10.08s |
+
+| Owner profile | Calls answered / received | Rushes accepted | Won | Missed | Penalty points |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Owner, flow, 0.5s, walk, decline | 3/3 | 0 | 0 | 0 | 0 |
+| Owner, flow, 0.5s, walk, accept all | 3/3 | 3 | 2 | 1 | 25 |
+| Owner, flow, 0.1s, dash, decline | 3/3 | 0 | 0 | 0 | 0 |
+| Owner, flow, 0.1s, dash, accept all | 3/3 | 3 | 3 | 0 | 0 |
+| Owner, flow, 0.3s, dash, decline | 3/3 | 0 | 0 | 0 | 0 |
+| Owner, flow, 0.3s, dash, accept all | 3/3 | 3 | 2 | 1 | 25 |
+
+Ordinary Manager flow clears all six jobs with 0.5–1 second decisions and no dash, while serial 0.5-second work finishes five. Owner flow with ordinary 0.5-second walking decisions clears with either rush choice but does not reach three stars. Practiced 0.1- and 0.3-second dash profiles ship all eight under both choices; slower 0.75- and 1-second dash profiles remain below mastery. This supports an accessible introduction and a distinct Owner challenge without claiming a human learning curve.
+
+Under the same 0.1-second dash profile and declining every rush, score potential is Operator **3811**, Manager **4565**, Owner **5903**. Manager ships six versus Operator's seven but gains CAD and complex-route value. Owner also handles all three conversations. Bonuses are not required for its third star.
+
+### Browser verification of the revised workflow
+
+Completed shifts in the in-app browser using a local-only controller over the production game, renderer, movement, collisions, and station actions. Playback ran at 4× wall-clock speed through substeps no larger than 50 ms. It did not alter scores, rules, positions, machine durations, or order deadlines. No scores were posted. The controller and its controls remain outside the release folders.
+
+| Browser run | Controls | Shipped | Stars | Score | Missed / unfinished | Calls / rushes won |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Production Manager | 0.5s decisions, walking only | 6 | 3 | 4,360 | 0 / 0 | n/a |
+| Owner | 0.1s decisions, normal legal dashes | 8 | 3 | 6,220 | 0 / 0 | 3 / 3 |
+| Owner recovery | 0.5s decisions, walk; first offer read for 8s | 6 | 2 | 3,549 | 1 / 0 | 3 / 2 |
+
+- Every shipped order in both captured event logs completed CAD, then picked up material, then followed its cutting and inspection route before shipping. Manager's last shipment was 159.701s; Owner's was 169.791s.
+- Owner accepted rush #102 at 32.327s while #102 was still running in the mill; #105 at 82.251s while the lathe and inspection were occupied; and #108 at 135.278s while both CNC machines were occupied. All three acceptance calls succeeded and all three rushes shipped within their promises.
+- In the slower Owner recovery run, rush #105 timed out at 127.839s and deducted exactly 25 points, then shipped normally at 135.646s for 713 points. The player still cleared Owner with two stars; the results breakdown showed `Missed rushes -25`, with all three conversations answered. No browser warning/error logs were reported.
+- Observed the expanded five-/six-step cards wrapping legibly, the office/material guidance, both closing result screens, and a subsequent new shift. Screenshots and full event logs were saved locally, excluded from release source.
+- The rebuilt standalone HTML rendered and ran Operator through material pickup, lathe load, and completed machining. Its visible Material checkmark and next inspection step were correct; no warning/error logs were reported in that smoke check.
+- These automated input playthroughs prove attainable outcomes. They do not establish human completion rates or guarantee that every routing strategy earns three stars.
+
+### Per-order evidence
+
+Times are seconds into the shift. CAD is its completion timestamp; machine columns are actual loads, followed by their real processing and collection. An n/a machine entry means it is not on that order's route. The checks require exactly one CAD completion, Material pickup, every declared machine in order, Inspection, and Shipping for each delivered job.
+
+**Manager: ordinary 0.5-second concurrent walking, six shipments, 4376 points.**
+
+| Order | CAD complete | Material pickup | Lathe load | Mill load | Inspection load | Shipped |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 101 Pocket spacer | 8.34 | 9.86 | 11.06 | n/a | 27.39 | 34.70 |
+| 102 Mounting plate | 23.45 | 30.13 | n/a | 32.16 | 54.06 | 61.43 |
+| 103 Bearing housing | 50.15 | 56.80 | 57.99 | 69.27 | 83.34 | 88.73 |
+| 104 Pocket spacer | 77.94 | 79.47 | 80.66 | n/a | 93.09 | 107.16 |
+| 105 Mounting plate | 102.48 | 109.88 | n/a | 111.91 | 128.29 | 135.66 |
+| 106 Bearing housing | 124.38 | 131.03 | 132.22 | 143.50 | 154.85 | 160.24 |
+
+**Owner: practiced 0.1-second dash, accept every rush, eight shipments, 6154 points, three conversations and three rushes won.**
+
+| Order | CAD complete | Material pickup | Lathe load | Mill load | Inspection load | Shipped |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 101 Pocket spacer | 7.74 | 8.56 | 9.36 | n/a | 21.59 | 27.00 |
+| 102 Mounting plate | 19.05 | 23.63 | n/a | 24.96 | 41.16 | 47.23 |
+| 103 Bearing housing | 38.65 | 43.20 | 43.99 | 58.30 | 75.84 | 85.80 |
+| 104 Pocket spacer | 56.48 | 59.63 | 60.43 | n/a | 88.77 | 101.97 |
+| 105 Bearing housing | 73.33 | 90.80 | 91.30 | 104.22 | 115.78 | 121.28 |
+| 106 Mounting plate | 98.69 | 117.51 | n/a | 118.85 | 139.28 | 144.69 |
+| 107 Bearing housing | 112.19 | 113.01 | 113.81 | 156.75 | 168.39 | 173.08 |
+| 108 Mounting plate | 129.74 | 141.32 | n/a | 142.65 | 154.30 | 159.78 |
+
+## Historical verification
+
+Entries below describe their named older builds. Their ten-shipment targets, four-second programming, capacity-gated rushes, and earlier browser results do not describe the CAD/rush revision above.
+
 ## Release recheck for coworker review
 
 - Re-ran all 65 core, difficulty, and production-controller runtime tests: passed. All four frame profiles shipped ten, answered all three calls, missed zero, and won at least one rush. Full balance assertions passed with star targets unchanged.

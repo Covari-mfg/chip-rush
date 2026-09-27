@@ -13,7 +13,7 @@ function finishSelected(game) {
   const order=game.selected;
   if(!order.programmed) {
     game.setOfficePresence(true);assert.equal(game.interact('office'),true);
-    advance(game,4.05);assert.equal(order.programmed,true);game.setOfficePresence(false);
+    advance(game,6.05);assert.equal(order.programmed,true);game.setOfficePresence(false);
   }
   assert.equal(game.interact('material'),true);
   for(const station of order.route.slice(0,-1)) {
@@ -36,9 +36,9 @@ function answer(game) {
 }
 
 test('performance scoring has its own ruleset and a transparent additive breakdown',()=>{
-  assert.equal(RULESET,'roles-v5-performance');
+  assert.equal(RULESET,'roles-v6-cad-rush');
   assert.deepEqual(scoreShipment({value:120,remaining:10.25},1,{programming:true,rushBonus:100}),
-    {base:120,program:60,speed:41,streak:0,rush:100,total:321});
+    {base:120,program:120,speed:41,streak:0,rush:100,total:381});
 });
 
 test('shipping faster awards more points at quarter-second resolution',()=>{
@@ -64,23 +64,23 @@ test('recipe complexity earns the original part value at equal speed and streak'
     scoreShipment({...RECIPES[0],remaining:20},1).total);
 });
 
-test('CAM contributes sixty points before streak multiplication',()=>{
+test('CAD contributes 120 points before streak multiplication',()=>{
   const order={value:140,remaining:25};
   for(const combo of [1,2,5]) {
     const plain=scoreShipment(order,combo);
     const programmed=scoreShipment(order,combo,{programming:true});
-    assert.equal(plain.program,0);assert.equal(programmed.program,60);
-    assert.equal(programmed.total-plain.total,Math.round(60*(1+(combo-1)*.15)));
+    assert.equal(plain.program,0);assert.equal(programmed.program,120);
+    assert.equal(programmed.total-plain.total,Math.round(120*(1+(combo-1)*.15)));
   }
 });
 
 test('streak bonus stops at 1.6 times subtotal and rush remains a flat bonus',()=>{
   const order={value:120,remaining:10.25};
-  for(const [combo,subtotalWithStreak] of [[1,221],[2,254],[5,354],[20,354]]) {
+  for(const [combo,subtotalWithStreak] of [[1,281],[2,323],[5,450],[20,450]]) {
     const normal=scoreShipment(order,combo,{programming:true});
     const rush=scoreShipment(order,combo,{programming:true,rushBonus:100});
     assert.equal(normal.total,subtotalWithStreak);
-    assert.equal(normal.streak,subtotalWithStreak-221);
+    assert.equal(normal.streak,subtotalWithStreak-281);
     assert.equal(rush.rush,100);assert.equal(rush.total-normal.total,100);
     assert.equal(Object.entries(rush).filter(([key])=>key!=='total').reduce((sum,[,value])=>sum+value,0),rush.total);
   }
@@ -92,16 +92,16 @@ test('shipment calculation leaves the order and role timing untouched',()=>{
   assert.deepEqual(structuredClone(game),before);
 });
 
-test('programming earns points only when its finished part ships and cannot be paid twice',()=>{
+test('CAD earns points only when its finished part ships and cannot be paid twice',()=>{
   for(const role of [1,2]) {
     const game=fresh(role);
-    game.setOfficePresence(true);game.interact('office');advance(game,4.05);
+    game.setOfficePresence(true);game.interact('office');advance(game,6.05);
     assert.equal(game.score,0);assert.equal(game.scoreDetails.program,0);
     const shipment=finishSelected(game);
-    assert.equal(shipment.breakdown.program,60);assert.equal(game.scoreDetails.program,60);
+    assert.equal(shipment.breakdown.program,120);assert.equal(game.scoreDetails.program,120);
     assert.equal(game.score,shipment.breakdown.total);
     const points=game.score;assert.equal(game.interact('ship'),false);
-    assert.equal(game.score,points);assert.equal(game.scoreDetails.program,60);
+    assert.equal(game.score,points);assert.equal(game.scoreDetails.program,120);
   }
 });
 

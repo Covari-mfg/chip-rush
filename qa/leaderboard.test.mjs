@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import worker, { validateResult } from '../server/worker.js';
-import { RULESET, SHIFTS } from '../dist/core.js';
+import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
 
 const journal=JSON.parse(await readFile(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'));
 const migrations=await Promise.all(journal.entries.map(({tag})=>readFile(new URL('../drizzle/'+tag+'.sql',import.meta.url),'utf8')));
@@ -150,16 +150,37 @@ test('result caps reject noninteger counts, impossible role counts, and unearned
   }
   assert.equal(validateResult({...valid,score:9735,sourced:1},run,START+180000),null);
   assert.match(validateResult({...valid,score:9736,sourced:1},run,START+180000),/completed work/);
-  assert.match(validateResult({...valid,score:134,sourced:1},run,START+180000),/completed work/);
+  assert.match(validateResult({...valid,score:59,sourced:1},run,START+180000),/completed work/);
   assert.match(validateResult({...valid,score:1,shipped:0,calls:0},run,START+180000),/completed work/);
   assert.equal(validateResult({...valid,score:60,shipped:0,sourced:1,calls:0},run,START+180000),null,'A sourced job may earn points without an in-house shipment');
   assert.equal(validateResult({...valid,score:75,shipped:0,calls:3},run,START+180000),null,'Completed phone conversations earn their own points');
+  assert.equal(validateResult({...valid,score:0,shipped:0,calls:3},run,START+180000),null,'Missed rushes can offset every completed call');
+  assert.equal(validateResult({...valid,score:60,shipped:0,sourced:1,calls:3},run,START+180000),null,'Sourcing remains valid after all call points are lost to missed rushes');
   assert.match(validateResult({...valid,score:76,shipped:0,calls:3},run,START+180000),/completed work/);
   assert.equal(validateResult({...valid,score:6000},run,START+180000),null,'Real performance is not limited by a role ceiling');
   for(const role of [0,1]) {
     assert.ok(validateResult({...valid,role,calls:1},{...run,role},START+180000));
   }
   assert.ok(validateResult({...valid,role:0,shipped:9,calls:0},{...run,role:0},START+180000));
+  for(const role of [1,2]) {
+    assert.ok(validateResult({...valid,role,shipped:SHIFTS[role].maxOrders+1,calls:0},{...run,role},START+180000),'Shipment counts respect the current workload');
+  }
+});
+
+test('an actual Owner shift with answered but missed rushes posts its penalized result',async t=>{
+  const f=fixture(t),run=await f.start(2),game=new ShopGame();
+  game.reset(2);game.setOfficePresence(true);
+  while(game.mode==='playing') {
+    if(game.call?.state==='ringing')assert.equal(game.interact('phone'),true);
+    if(game.call?.state==='offer')assert.equal(game.respondCall(true),true);
+    game.tick(.1);
+  }
+  assert.ok(game.callsAnswered>0);assert.equal(game.rushesMissed,game.callsAnswered);
+  assert.equal(game.score,0);assert.equal(game.shipped,0);
+  const response=await f.post(run,{score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered});
+  assert.equal(response.status,200,await response.clone().text());
+  const {entries}=await (await f.send('/api/leaderboard')).json();
+  assert.equal(entries.length,1);assert.equal(entries[0].score,0);assert.equal(entries[0].calls,game.callsAnswered);
 });
 
 test('repeated posts are idempotent and cannot overwrite the first accepted result',async t=>{
@@ -171,9 +192,9 @@ test('repeated posts are idempotent and cannot overwrite the first accepted resu
   assert.equal(rows.length,1);assert.equal(rows[0].name,'First Player');assert.equal(rows[0].score,1000);
 });
 
-test('one board mixes all roles by earned score and excludes older rulesets',async t=>{
+test('one board mixes current roles by earned score and excludes incompatible older rulesets',async t=>{
   const f=fixture(t);
-  const results=[{role:0,name:'Alex',score:3000,shipped:5},{role:1,name:'Bea',score:2000,shipped:7},{role:2,name:'Charlie',score:2100,shipped:10},{role:2,name:'Dana',score:1500,shipped:6}];
+  const results=[{role:0,name:'Alex',score:3000,shipped:5},{role:1,name:'Bea',score:2000,shipped:SHIFTS[1].stars[2]},{role:2,name:'Charlie',score:2100,shipped:SHIFTS[2].stars[2]},{role:2,name:'Dana',score:1500,shipped:SHIFTS[2].passTarget}];
   for(const result of results) {
     const run=await f.start(result.role);assert.equal((await f.post(run,result)).status,200);
   }
@@ -189,12 +210,32 @@ test('one board mixes all roles by earned score and excludes older rulesets',asy
   }
 });
 
+test('v5 Operator records retain their original ranking while older advanced records stay stored',async t=>{
+  const f=fixture(t),insert=f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+  insert.run('old-operator','Returning Operator',0,'roles-v5-performance',3100,3100,5,0,0,0,START-2);
+  insert.run('old-manager','Previous Manager',1,'roles-v5-performance',9000,9000,9,0,1,0,START-1);
+  insert.run('old-owner','Previous Owner',2,'roles-v5-performance',10000,10000,10,0,1,3,START);
+  insert.run('older-operator','Previous Scoring',0,'roles-v4-covari',8000,8000,5,0,0,0,START);
+  const run=await f.start(2);assert.equal((await f.post(run,{name:'Current Owner',score:3000})).status,200);
+  const {ruleset,entries}=await (await f.send('/api/leaderboard')).json();
+  assert.equal(ruleset,RULESET);assert.deepEqual(entries.map(row=>row.name),['Returning Operator','Current Owner']);
+  assert.equal(entries[0].score,3100);assert.equal(entries[0].rawScore,3100);assert.equal(entries[0].stars,3);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,5,'Filtering the board must not delete historical results');
+  assert.equal(f.sqlite.prepare('SELECT ruleset FROM scores WHERE id=?').get('old-operator').ruleset,'roles-v5-performance','Compatibility must not rewrite historical rulesets');
+});
+
+test('an empty score database returns no fabricated leaderboard entries',async t=>{
+  const f=fixture(t),data=await (await f.send('/api/leaderboard')).json();
+  assert.deepEqual(data,{ruleset:RULESET,entries:[]});
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,0);
+});
+
 test('the unified board returns at most thirty entries in points, shipment, then creation order',async t=>{
   const f=fixture(t),insert=f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
   for(let i=0;i<32;i++)insert.run('entry-'+i,'Player '+i,2,RULESET,300+i,300+i,6,0,0,3,START+i);
-  insert.run('tie-a','Tie earlier',0,RULESET,650,650,8,0,0,0,START);
-  insert.run('tie-b','Tie later',1,RULESET,650,650,8,0,0,0,START+1);
-  insert.run('tie-c','Fewer shipped',2,RULESET,650,650,6,0,0,3,START-1);
+  insert.run('tie-a','Tie earlier',0,RULESET,650,650,6,0,0,0,START);
+  insert.run('tie-b','Tie later',1,RULESET,650,650,6,0,0,0,START+1);
+  insert.run('tie-c','Fewer shipped',2,RULESET,650,650,5,0,0,3,START-1);
   const {entries}=await (await f.send('/api/leaderboard')).json();
   assert.equal(entries.length,30);
   assert.deepEqual(entries.slice(0,4).map(row=>row.name),['Tie earlier','Tie later','Fewer shipped','Player 31']);

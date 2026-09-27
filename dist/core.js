@@ -1,9 +1,9 @@
-export const RULESET = 'roles-v5-performance';
-// Complexity and speed earn points on delivery. CAM is only paid when its
-// part ships, so restarting or reprogramming a job cannot farm points.
+export const RULESET = 'roles-v6-cad-rush';
+// Complexity, CAD, and speed earn points on delivery, so restarting a job
+// cannot farm points from unfinished work.
 export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
   const base=order.value;
-  const program=programming ? 60 : 0;
+  const program=programming ? 120 : 0;
   const speed=Math.round(Math.max(0,order.remaining)*4);
   const subtotal=base+program+speed;
   const multiplier=1+(Math.max(1,Math.min(5,combo))-1)*.15;
@@ -33,20 +33,20 @@ export const SOURCE_JOBS = [
   {name:'Sheet metal assembly',capability:'Sheet metal fabrication',technology:'sm'},
 ];
 // Clearing a role is the introduction; its third star is the mastery target.
-// Owner supplies enough work for ten shipments, but keeps the same six-order
-// promotion floor and deterministic recipe sequence. A little deadline slack
-// leaves room to recover; the three-star challenge is sustained throughput.
+// Higher roles add CAD and more complex routes, with a bounded workload that
+// leaves room to work the floor and answer customer calls.
 export const SHIFTS = [
   {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,firstArrival:18,interval:19,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
-  {name:'Production Manager',subtitle:'Program the work. Keep it moving.',brief:'Spend 4 seconds programming each order at the office, then ship 4 orders.',duration:180,interval:23,deadline:105,recipes:[0,1,0,1,6,0,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,6,7]},
-  {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 6 orders to clear. Ten shipments earns the exceptional three-star Owner shift.',duration:180,interval:15,deadline:105,recipes:[0,1,0,6,1,1,6,0,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:6,stars:[6,8,10]},
+  {name:'Production Manager',subtitle:'Complete the CAD. Keep work moving.',brief:'Complete 6 seconds of CAD at the office, collect material, and ship 4 orders.',duration:180,firstArrival:16,interval:25,deadline:105,maxOrders:6,recipes:[0,1,6,0,1,6],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,5,6]},
+  {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 5 orders to clear. Eight shipments earns the exceptional three-star Owner shift.',duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,recipes:[0,1,6,0,6,1,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:5,stars:[5,6,8]},
 ];
 
-const PROGRAM_DURATION = 4;
+export const PROGRAM_DURATION = 6;
 const CALL_INVITATION_DURATION = 22;
 const CALL_ANSWER_DURATION = 3;
 const RUSH_WINDOW = 45;
 const RUSH_BONUS = 100;
+const RUSH_PENALTY = 25;
 // Calls are part of the Owner workload, even when the shop has no spare rush
 // capacity. Fixed spacing makes retries learnable and prevents lucky quiet runs.
 const OWNER_CALL_TIMES = [27, 77, 127];
@@ -77,6 +77,7 @@ export class ShopGame {
     this.callsAnswered = 0;
     this.rushesAccepted = 0;
     this.rushesWon = 0;
+    this.rushesMissed = 0;
     this.nextId = 101;
     this.spawnIndex = 0;
     // Operator gets room to learn its first part; the later cadence leaves
@@ -87,7 +88,7 @@ export class ShopGame {
     this.sourced = 0;
     this.sourcePoints = 0;
     this.score = 0;
-    this.scoreDetails = {base:0,program:0,speed:0,streak:0,rush:0,calls:0,sourcing:0};
+    this.scoreDetails = {base:0,program:0,speed:0,streak:0,rush:0,rushPenalty:0,calls:0,sourcing:0};
     this.shipped = 0;
     this.missed = 0;
     this.unfinished = 0;
@@ -104,8 +105,7 @@ export class ShopGame {
   get selected() { return this.order(this.selectedId); }
   get heldOrder() { return this.hand ? this.order(this.hand.orderId) : null; }
 
-  // Allow stock collection before programming. The program belongs to the order,
-  // independently of its physical part, and survives recycling that part.
+  // CAD belongs to the order and survives recycling its physical part.
   setOfficePresence(present) { this.office.present = Boolean(present); }
 
   requiredTime(recipe, includeMachineWait = false) {
@@ -125,7 +125,7 @@ export class ShopGame {
   }
 
   spawn() {
-    if (this.orders.length >= 4) return false;
+    if (this.orders.length >= 4 || this.spawnIndex >= (this.config.maxOrders ?? Infinity)) return false;
     let recipe = RECIPES[this.config.recipes[this.spawnIndex % this.config.recipes.length]];
     if (this.time < this.requiredTime(recipe, true)) {
       recipe = [RECIPES[0], RECIPES[1]]
@@ -156,12 +156,12 @@ export class ShopGame {
     if (!order) return;
     this.call = {
       orderId:order.id,state:'ringing',ringRemaining:CALL_INVITATION_DURATION,answerRemaining:0,
-      remaining:RUSH_WINDOW,window:RUSH_WINDOW,bonus:RUSH_BONUS,rushAvailable:this.canRush(order),
+      remaining:this.rushWindow(order),window:this.rushWindow(order),bonus:RUSH_BONUS,penalty:RUSH_PENALTY,rushAvailable:this.canRush(order),
     };
     this.callIndex++;
     this.nextCallAt = OWNER_CALL_TIMES[this.callIndex] ?? Infinity;
     this.callsReceived++;
-    this.emit('call', {orderId:order.id,window:RUSH_WINDOW,bonus:RUSH_BONUS,number:this.callsReceived});
+    this.emit('call', {orderId:order.id,window:this.call.window,bonus:RUSH_BONUS,number:this.callsReceived});
   }
 
   clearCall() {
@@ -170,11 +170,22 @@ export class ShopGame {
   }
 
   canRush(order) {
-    if (!order || order.started || order.route.length !== 3) return false;
-    if (this.time < RUSH_WINDOW + 4 || order.remaining < RUSH_WINDOW + 4) return false;
-    if (this.requiredTime(order, true) > RUSH_WINDOW) return false;
-    // A bonus should not demand abandoning an older order about to expire.
-    return this.orders.every(other => other.id === order.id || other.remaining >= RUSH_WINDOW + 8);
+    return Boolean(order && order.remaining > 0 && this.time > 0);
+  }
+
+  rushWindow(order) {
+    return this.canRush(order) ? Math.min(RUSH_WINDOW, order.remaining, this.time) : 0;
+  }
+
+  missRush(reason) {
+    if (this.call?.state !== 'active') return;
+    const orderId = this.call.orderId;
+    const penalty = Math.min(RUSH_PENALTY, this.score);
+    this.score = Math.max(0, this.score - penalty);
+    this.scoreDetails.rushPenalty -= penalty;
+    this.rushesMissed++;
+    this.clearCall();
+    this.emit('rushExpired', {orderId,reason,penalty});
   }
 
   respondCall(accept) {
@@ -189,10 +200,11 @@ export class ShopGame {
       this.clearCall();
       return this.fail('That rush window has closed. The regular order is still good.');
     }
+    call.window = this.rushWindow(this.order(call.orderId));
     call.state = 'active';
     call.remaining = call.window;
     // Accepting changes the shop's priority. Keep the interrupted job's saved
-    // programming progress, but wait for an explicit target before resuming.
+    // CAD progress, but wait for an explicit target before resuming.
     this.office.orderId = null;
     this.rushesAccepted++;
     this.emit('rushAccepted', {orderId:call.orderId,window:call.window,bonus:call.bonus});
@@ -297,17 +309,16 @@ export class ShopGame {
     if (this.call) {
       if (this.call.state === 'active') {
         this.call.remaining = Math.max(0, this.call.remaining - dt);
-        if (this.call.remaining <= 0) {
-          const orderId = this.call.orderId;
-          this.clearCall();
-          this.emit('rushExpired', {orderId,reason:'timeout'});
-        }
+        if (this.time <= 0) this.missRush('shiftEnded');
+        else if (this.call.remaining <= 0) this.missRush('timeout');
       } else if (this.call.state === 'answering') {
         // Once answered, the conversation runs to completion. The UI keeps the
         // machinist at the desk; only pausing the whole game pauses this timer.
         this.call.answerRemaining = Math.max(0, this.call.answerRemaining - dt);
         if (this.call.answerRemaining <= 0) {
           this.call.state = 'offer';
+          this.call.window = this.rushWindow(this.order(this.call.orderId));
+          this.call.remaining = this.call.window;
           this.callsAnswered++;
           this.score+=25;
           this.scoreDetails.calls+=25;
@@ -317,7 +328,11 @@ export class ShopGame {
         this.call.ringRemaining = Math.max(0, this.call.ringRemaining - dt);
         if (this.call.ringRemaining <= 0) this.clearCall();
       }
-      if (this.call && this.call.state !== 'active') this.call.rushAvailable = this.canRush(this.order(this.call.orderId));
+      if (this.call && this.call.state !== 'active') {
+        this.call.rushAvailable = this.canRush(this.order(this.call.orderId));
+        this.call.window = this.rushWindow(this.order(this.call.orderId));
+        this.call.remaining = this.call.window;
+      }
     }
 
     if (this.elapsed >= this.nextArrival && this.time > 0) {
@@ -328,6 +343,7 @@ export class ShopGame {
     if (this.time <= 0) {
       this.unfinished = this.orders.length;
       this.office.orderId = null;
+      this.missRush('shiftEnded');
       this.clearCall();
       this.mode = 'results';
       this.emit('finish');
@@ -349,8 +365,8 @@ export class ShopGame {
     }
     if (this.office.orderId === id) this.office.orderId = null;
     if (this.call?.orderId === id) {
-      if (this.call.state === 'active') this.emit('rushExpired', {orderId:id,reason:'orderExpired'});
-      this.clearCall();
+      if (this.call.state === 'active') this.missRush('orderExpired');
+      else this.clearCall();
     }
     this.missed++;
     this.combo = 0;
@@ -368,12 +384,12 @@ export class ShopGame {
     if (key === 'source') return this.requestSource();
     if (key === 'office') {
       if (this.call?.state === 'ringing') return this.interact('phone');
-      if (!this.office.present) return this.fail('Walk to the office to program this job.');
+      if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
       if (this.sourcing?.state === 'approving') return true;
-      if (!this.config.programming) return this.fail('Your jobs are already programmed for this shift.');
+      if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
       const order = this.selected;
-      if (!order) return this.fail('Select an order to program.');
-      if (order.programmed) return this.fail(`#${order.id} is already programmed.`);
+      if (!order) return this.fail('Select an order for CAD.');
+      if (order.programmed) return this.fail(`#${order.id} already has completed CAD.`);
       this.office.orderId = order.id;
       this.emit('programming', {orderId:order.id,remaining:order.programRemaining});
       return true;
@@ -400,6 +416,7 @@ export class ShopGame {
       const order = this.selected;
       if (!order) return this.fail('No orders yet. Take a breath.');
       if (order.started) return this.fail(`#${order.id} is already on the floor. Select a new ticket.`);
+      if (!order.programmed) return this.fail(`#${order.id} needs CAD at the office before material pickup.`);
       this.hand = {orderId:order.id};
       order.started = true;
       order.location = 'hands';
@@ -465,7 +482,7 @@ export class ShopGame {
     }
     const order = this.heldOrder;
     if (!order) return this.fail(`Bring a part that needs ${OPS[key].name}.`);
-    if (!order.programmed) return this.fail(`#${order.id} needs programming at the office first.`);
+    if (!order.programmed) return this.fail(`#${order.id} needs CAD at the office first.`);
     if (order.route[order.index] !== key) return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
     station.part = this.hand;
     this.hand = null;
@@ -485,7 +502,8 @@ export class ShopGame {
       sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),
-      rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,
+      rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,rushesMissed:this.rushesMissed,
+      scoreDetails:{...this.scoreDetails},
       callsReceived:this.callsReceived,callsAnswered:this.callsAnswered,
       office:{...this.office},call:this.call ? {...this.call} : null,
       hand:this.hand ? {...this.hand} : null,buffer:this.buffer ? {...this.buffer} : null,
