@@ -8,6 +8,7 @@ qa/*.jpg
 __pycache__/
 
 node_modules/
+.wrangler/
 dist/client/
 dist/server/
 .local/

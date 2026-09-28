@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chip-rush",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-09-28",
+  "account_id": "cbd894fb313e30ea55b6686e925d127a",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "play.covari.io", "custom_domain": true }],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "chip-rush",
+    "database_id": "9c01e3f1-d4c7-4da8-83bc-ab75d9cdf4ed",
+    "migrations_dir": "drizzle"
+  }]
+}

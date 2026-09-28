@@ -349,3 +349,9 @@
 .station-label.stock-label{min-height:22px;padding:2px 6px;font-size:11px;gap:4px;line-height:16px}
 .stock-label .stock-pictogram{width:17px;height:17px}
 @media(max-width:759px){.station-label.stock-label{font-size:10px;min-height:19px;padding:1px 4px;gap:3px}.stock-label .stock-pictogram{width:14px;height:14px}}
+
+.result-covari-card{margin:22px 0 20px;padding:17px 18px;border:1px solid #5b9e91;border-radius:10px;background:linear-gradient(135deg,#183d43,#12303a)}
+.result-covari-card h3{margin:0 0 7px;font-size:16px;line-height:1.25;letter-spacing:-.2px}
+.result-covari-card p{margin:0 0 13px;color:#b8d0ca;font-size:12px;line-height:1.5}
+.result-covari-card a{display:inline-flex;align-items:center;color:var(--gold);font-size:12px;font-weight:800;text-decoration:none}
+.result-covari-card a:hover{text-decoration:underline}
