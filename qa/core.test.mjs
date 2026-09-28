@@ -26,8 +26,14 @@ function fixtureForRecipe(shift,recipeIndex) {
 function program(game,id=game.selectedId) {
   const order=game.order(id);if(order.programmed)return;
   game.select(id);game.setOfficePresence(true);
-  assert.equal(game.interact('office'),true);
-  advance(game,order.programRemaining+.05);
+  // CAD dispatch follows due order; keep working through the queue until the
+  // requested fixture is genuinely ready instead of using selection as a pin.
+  let guard=0;
+  while(!order.programmed){
+    assert.ok(guard++<game.orders.length+2,'CAD fixture did not reach target');
+    assert.equal(game.interact('office'),true);
+    advance(game,game.order(game.office.orderId)?.programRemaining+.05);
+  }
   assert.equal(order.programmed,true);game.setOfficePresence(false);
 }
 function processHeldPart(game,key) {
@@ -100,14 +106,15 @@ test('CAD requires presence and an explicit start, then pauses and resumes',()=>
   assert.equal(programEvents.length,1);
 });
 
-test('office tracks the explicitly started RFQ; changing tickets cannot transfer work',()=>{
+test('office dispatches due CAD and selection cannot transfer active work',()=>{
   const game=fresh(1);game.spawn();const [first,second]=game.orders;
-  game.setOfficePresence(true);game.select(first.id);game.interact('office');advance(game,1);
-  game.select(second.id);assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.equal(second.programRemaining,6);
-  assert.equal(game.interact('office'),true);advance(game,1);
-  assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.ok(Math.abs(second.programRemaining-5)<1e-6);
-  game.select(first.id);game.interact('office');advance(game,5.05);
-  assert.equal(first.programmed,true);assert.equal(second.programmed,false);assert.ok(Math.abs(second.programRemaining-5)<1e-6);
+  first.remaining=50;second.remaining=80;
+  game.setOfficePresence(true);game.select(second.id);assert.equal(game.interact('office'),true);advance(game,1);
+  assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.equal(second.programRemaining,6);
+  game.select(second.id);assert.equal(game.interact('office'),true);advance(game,1);
+  assert.ok(Math.abs(first.programRemaining-4)<1e-6);assert.equal(second.programRemaining,6);
+  advance(game,4.05);
+  assert.equal(first.programmed,true);assert.equal(second.programmed,false);assert.equal(second.programRemaining,6);
 });
 
 for(const shift of [1,2])test('role '+(shift+1)+': CAD must finish before material pickup and never creates a physical part',()=>{
@@ -442,7 +449,9 @@ test('accepting a rush preserves an interrupted partial program but clears its a
   const saved=older.programRemaining;game.spawn();game.spawn();ringScheduledCall(game);const rushId=game.call.orderId;answerCall(game);
   assert.equal(game.office.orderId,older.id);assert.equal(older.programRemaining,saved);assert.equal(game.respondCall(true),true);
   assert.equal(game.office.orderId,null);advance(game,1);assert.equal(older.programRemaining,saved);assert.equal(older.programmed,false);
-  game.select(rushId);assert.equal(game.interact('office'),true);advance(game,6.05);assert.equal(game.order(rushId).programmed,true);assert.equal(older.programRemaining,saved);
+  assert.equal(game.interact('office'),true);assert.equal(game.office.orderId,game.orders.find(order=>order.id!==older.id).id);
+  const resumed=game.order(game.office.orderId);advance(game,resumed.programRemaining+.05);assert.equal(resumed.programmed,true);
+  assert.equal(older.programmed,false);assert.equal(older.programRemaining,saved);
 });
 
 test('a complete Owner shift has three predictable conversations without requiring rush acceptance',()=>{

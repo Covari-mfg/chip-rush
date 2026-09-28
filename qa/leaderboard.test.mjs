@@ -212,17 +212,18 @@ test('one board mixes current roles by earned score and excludes incompatible ol
   }
 });
 
-test('v5 Operator records retain their original ranking while older advanced records stay stored',async t=>{
+test('new stock season excludes previous results while preserving their records',async t=>{
   const f=fixture(t),insert=f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
   insert.run('old-operator','Returning Operator',0,'roles-v5-performance',3100,3100,5,0,0,0,START-2);
   insert.run('old-manager','Previous Manager',1,'roles-v5-performance',9000,9000,9,0,1,0,START-1);
   insert.run('old-owner','Previous Owner',2,'roles-v5-performance',10000,10000,10,0,1,3,START);
   insert.run('older-operator','Previous Scoring',0,'roles-v4-covari',8000,8000,5,0,0,0,START);
+  insert.run('v6-owner','Previous Flow',2,'roles-v6-cad-rush',7000,7000,8,0,1,3,START);
   const run=await f.start(2);assert.equal((await f.post(run,{name:'Current Owner',score:3000})).status,200);
   const {ruleset,entries}=await (await f.send('/api/leaderboard')).json();
-  assert.equal(ruleset,RULESET);assert.deepEqual(entries.map(row=>row.name),['Returning Operator','Current Owner']);
-  assert.equal(entries[0].score,3100);assert.equal(entries[0].rawScore,3100);assert.equal(entries[0].stars,3);
-  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,5,'Filtering the board must not delete historical results');
+  assert.equal(ruleset,RULESET);assert.deepEqual(entries.map(row=>row.name),['Current Owner']);
+  assert.equal(entries[0].score,3000);assert.equal(entries[0].rawScore,3000);assert.equal(entries[0].stars,1);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,6,'Filtering the board must not delete historical results');
   assert.equal(f.sqlite.prepare('SELECT ruleset FROM scores WHERE id=?').get('old-operator').ruleset,'roles-v5-performance','Compatibility must not rewrite historical rulesets');
 });
 

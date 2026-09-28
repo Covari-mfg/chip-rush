@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { ShopGame, OPS, RECIPES, SOURCE_JOBS } from '../dist/core.js';
-import { orderWorkflow } from '../dist/workflow.js';
+import { ShopGame, OPS, RECIPES, SOURCE_JOBS, stockType } from '../dist/core.js';
+import { orderWorkflow, stockIcon } from '../dist/workflow.js';
 
 const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 function section(from,to) {
@@ -34,7 +34,7 @@ function setup() {
   const $=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
   const game=new ShopGame();game.reset(0);
   const context=vm.createContext({
-    game,OPS,orderWorkflow,$,sourceCard:$('source-card'),
+    game,OPS,stockType,stockIcon,orderWorkflow,$,sourceCard:$('source-card'),
     document:{activeElement:null,createElement:element},
     renderedTickets:'',renderedSelection:null,pendingSource:false,selectedByPlayer:false,
     sourceReveal:false,reduced:false,

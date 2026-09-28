@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ShopGame, SOURCE_JOBS, OPS} from '../dist/core.js';
+import {ShopGame, SOURCE_JOBS, OPS, stockType} from '../dist/core.js';
 
 function advance(game, seconds) { for (let left = seconds; left > 1e-8; left -= .05) game.tick(Math.min(.05, left)); }
 function ready(role = 1) {
@@ -11,8 +11,15 @@ function delivered(role = 1) { const game = ready(role); assert.equal(game.reque
 
 function shipOrdinary(game) {
   const order = game.orders.find(candidate => !candidate.started); game.select(order.id);
-  game.setOfficePresence(true);assert.equal(game.interact('office'),true);advance(game,6.05);game.setOfficePresence(false);
-  assert.equal(game.interact('material'), true);
+  game.setOfficePresence(true);
+  let guard=0;
+  while(!order.programmed){
+    assert.ok(guard++<game.orders.length+2);
+    assert.equal(game.interact('office'),true);
+    advance(game,game.order(game.office.orderId)?.programRemaining+.05);
+  }
+  game.setOfficePresence(false);
+  assert.equal(game.interact(`material-${stockType(order)}`), true);
   for (const station of order.route.slice(0, -1)) { assert.equal(game.interact(station), true); advance(game, OPS[station].duration + .05); assert.equal(game.interact(station), true); }
   assert.equal(game.interact('ship'), true);
 }

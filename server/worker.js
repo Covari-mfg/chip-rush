@@ -34,7 +34,7 @@ export default {
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
-        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,created_at FROM scores WHERE ruleset=? OR (ruleset=? AND role=0) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,'roles-v5-performance').all();
+        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
         return json({ruleset:RULESET,entries:(data.results||[]).map(({role,...row})=>({...row,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){

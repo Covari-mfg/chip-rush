@@ -1,4 +1,4 @@
-export const RULESET = 'roles-v6-cad-rush';
+export const RULESET = 'roles-v7-stock-outsourcing';
 // Complexity, CAD, and speed earn points on delivery, so restarting a job
 // cannot farm points from unfinished work.
 export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
@@ -27,6 +27,16 @@ export const RECIPES = [
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
 ];
+export const STOCK_TYPES = {
+  round: 'Round stock',
+  plate: 'Plate stock',
+  block: 'Block stock',
+};
+export function stockType(order) {
+  if (order?.kind === 'shaft') return 'round';
+  if (order?.kind === 'plate' || order?.kind === 'bracket') return 'plate';
+  return 'block';
+}
 export const SOURCE_JOBS = [
   {name:'Molded cover',capability:'Injection molding',technology:'im'},
   {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
@@ -108,6 +118,20 @@ export class ShopGame {
   }
   get selected() { return this.order(this.selectedId); }
   get heldOrder() { return this.hand ? this.order(this.hand.orderId) : null; }
+
+  nextMaterial(type) {
+    return this.orders
+      .filter(order => !order.started && order.programmed && stockType(order) === type)
+      .sort((a, b) => a.remaining - b.remaining || a.id - b.id)[0];
+  }
+
+  nextCAD() {
+    const current = this.office.orderId !== null ? this.order(this.office.orderId) : null;
+    if (current && !current.programmed && current.id !== 201) return current;
+    return this.orders
+      .filter(order => !order.programmed && order.id !== 201)
+      .sort((a, b) => a.remaining - b.remaining || a.id - b.id)[0];
+  }
 
   // CAD belongs to the order and survives recycling its physical part.
   setOfficePresence(present) { this.office.present = Boolean(present); }
@@ -407,10 +431,11 @@ export class ShopGame {
       if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
       if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
-      const order = this.selected;
-      if (!order) return this.fail('Select an order for CAD.');
+      const order = this.nextCAD();
+      if (!order) return this.fail('There is no CAD work waiting.');
       if (order.programmed) return this.fail(`#${order.id} already has completed CAD.`);
       this.office.orderId = order.id;
+      this.selectedId = order.id;
       this.emit('programming', {orderId:order.id,remaining:order.programRemaining});
       return true;
     }
@@ -422,7 +447,9 @@ export class ShopGame {
       this.emit('callAnswering', {orderId:this.call.orderId,duration:CALL_ANSWER_DURATION});
       return true;
     }
-    if (key === 'material') {
+    if (key === 'material' || key.startsWith('material-')) {
+      const type = key === 'material' ? null : key.slice('material-'.length);
+      if (type && !Object.prototype.hasOwnProperty.call(STOCK_TYPES, type)) return false;
       if (this.hand) {
         const returned = this.heldOrder;
         if (returned?.id === 201) return this.fail('Sourced parts cannot be recycled as raw material.');
@@ -434,7 +461,13 @@ export class ShopGame {
         this.emit('recycle', {orderId:returned.id});
         return true;
       }
-      const order = this.selected;
+      const order = type ? this.nextMaterial(type) : this.selected;
+      if (!order && type) {
+        const needsCad = this.orders.some(candidate => !candidate.started &&
+          stockType(candidate) === type && !candidate.programmed);
+        if (needsCad) return this.fail(`Complete CAD first for ${type} jobs.`);
+        return this.fail(`No ready ${type} jobs.`);
+      }
       if (!order) return this.fail('No orders yet. Take a breath.');
       if (order.id === 201) return this.fail('Receive the sourced part at Receiving.');
       if (order.started) return this.fail(`#${order.id} is already on the floor. Select a new ticket.`);
@@ -442,6 +475,7 @@ export class ShopGame {
       this.hand = {orderId:order.id};
       order.started = true;
       order.location = 'hands';
+      this.selectedId = order.id;
       this.emit('pickup', {station:key,orderId:order.id});
       return true;
     }

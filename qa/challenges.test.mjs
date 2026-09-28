@@ -36,13 +36,9 @@ test('challenge parsing rejects absent markers, old rules, and missing result fi
   }
 });
 
-test('v5 Operator links remain playable and regenerate with current rules while advanced links expire',()=>{
-  const operator=parseChallenge(query({rules:'roles-v5-performance',role:'0',score:'3000',shipped:'5'}));
-  assert.deepEqual(operator,{role:0,score:3000,shipped:5,stars:3});
-  const renewed=new URL(challengeURL(operator,'https://chip-rush.example/'));
-  assert.equal(renewed.searchParams.get('rules'),RULESET);assert.deepEqual(parseChallenge(renewed.search),operator);
-  for(const role of [1,2])assert.equal(parseChallenge(query({rules:'roles-v5-performance',role:String(role),score:'3000',shipped:'5'})),null);
-  assert.equal(parseChallenge(query({rules:'roles-v5-performance',role:'0',score:'3000',shipped:'9'})),null,'Legacy compatibility does not bypass Operator limits');
+test('previous seasons cannot challenge the changed stock workflow',()=>{
+  for(const rules of ['roles-v5-performance','roles-v6-cad-rush'])for(const role of [0,1,2])
+    assert.equal(parseChallenge(query({rules,role:String(role),score:'3000',shipped:'5'})),null);
 });
 
 test('challenge numeric fields reject signs, decimals, nonfinite values, markup, and overflow',()=>{

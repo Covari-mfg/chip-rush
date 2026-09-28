@@ -95,8 +95,8 @@ test('complete higher-role playthroughs follow CAD, material, machines, inspecti
     assert.equal(result.cadSeconds,result.shipped*6,'Each delivered job receives all six attended CAD seconds');
     assert.equal(result.scoreDetails.program,result.shipped*120,'CAD points are awarded with deliveries');
     for(const order of result.orders) {
-      const steps=order.steps.filter(step=>step.action==='programmed'||step.action==='load'||step.action==='shipped'||step.action==='pickup'&&step.station==='material')
-        .map(step=>step.action==='programmed'?'CAD':step.action==='shipped'?'ship':step.station);
+      const steps=order.steps.filter(step=>step.action==='programmed'||step.action==='load'||step.action==='shipped'||step.action==='pickup'&&step.station?.startsWith('material-'))
+        .map(step=>step.action==='programmed'?'CAD':step.action==='shipped'?'ship':step.station?.startsWith('material-')?'material':step.station);
       assert.deepEqual(steps,['CAD','material',...order.route],`${result.role} #${order.id} follows every required step`);
     }
   }
@@ -153,7 +153,7 @@ test('smoothed station routes preserve destinations and clear every collision bo
       previous=point;
     }
   }
-  assert.ok(navigation.route(navigation.accesses.ship,navigation.accesses.material).length<8, 'Open travel no longer retains every grid waypoint');
+  assert.ok(navigation.route(navigation.accesses.ship,navigation.accesses['material-round']).length<8, 'Open travel no longer retains every grid waypoint');
 });
 
 // Execute the production movement function, with only rendering and UI outputs

@@ -12,7 +12,7 @@ const modules=[['assets/models.js','Models'],['core.js','Core'],['audio.js','Aud
 const musicData=(await readFile(path.join(root,'dist/assets/music/country-bluegrass-104.mp3'))).toString('base64');
 let bundle=three;
 for(const [file,name] of modules){const content=(await read('dist/'+file)).replace('./assets/music/country-bluegrass-104.mp3',`data:audio/mpeg;base64,${musicData}`);const names=[...content.matchAll(/export (?:function|class|const) (\w+)/g)].map(m=>m[1]);const clean=content.replace(/^import .*?;\s*$/gm,'').replace(/export (?=function|class|const)/g,'');bundle+=`\nconst ${name}=(()=>{${clean}\nreturn {${names.join(',')}};})();`;}
-bundle+='\nconst {createWorkshop,createMachine,createCharacter,createPart}=Models;const {ShopGame,SHIFTS,OPS,PROGRAM_DURATION}=Core;const {ShopAudio}=Audio;const {RULESET}=Core;const {createSocial}=Social;const {technologyBadges,technologyIcon}=Technology;const {orderWorkflow}=Workflow;\n';
+bundle+='\nconst {createWorkshop,createMachine,createCharacter,createPart}=Models;const {ShopGame,SHIFTS,OPS,PROGRAM_DURATION,stockType,STOCK_TYPES}=Core;const {ShopAudio}=Audio;const {RULESET}=Core;const {createSocial}=Social;const {technologyBadges,technologyIcon}=Technology;const {orderWorkflow,stockIcon}=Workflow;\n';
 bundle+=(await read('dist/main.js')).replace(/^import .*?;\s*$/gm,'');
 const fontData=(await readFile(path.join(root,'dist/assets/fonts/instrument-sans-latin.woff2'))).toString('base64');
 const css=(await read('dist/style.css')).replace('./assets/fonts/instrument-sans-latin.woff2',`data:font/woff2;base64,${fontData}`);

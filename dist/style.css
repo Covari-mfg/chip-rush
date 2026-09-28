@@ -340,3 +340,12 @@
 #shop-sidebar .source-card.delivered #source-partner{min-height:16px;line-height:16px}
 #shop-sidebar .source-card.delivered #source-collect{min-height:24px;padding:3px 6px;line-height:14px}
 #shop-sidebar .source-card.delivered .route-step{line-height:12px;padding:2px 3px}
+/* Automatic stock workflow: informational cards and matching physical bins. */
+#shop-sidebar .order-ticket,#shop-sidebar .order-ticket:hover{cursor:default;border-color:transparent;transform:none}
+#shop-sidebar .order-ticket.carried-job{border-color:#45bfa4;box-shadow:0 0 0 1px #72e8cf55 inset}
+#shop-sidebar .order-ticket.passive-focus{border-color:#b7b397}
+.stock-icon{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:24px;height:26px;color:#315d59}
+.stock-pictogram{width:24px;height:24px;flex-shrink:0}
+.station-label.stock-label{min-height:22px;padding:2px 6px;font-size:11px;gap:4px;line-height:16px}
+.stock-label .stock-pictogram{width:17px;height:17px}
+@media(max-width:759px){.station-label.stock-label{font-size:10px;min-height:19px;padding:1px 4px;gap:3px}.stock-label .stock-pictogram{width:14px;height:14px}}

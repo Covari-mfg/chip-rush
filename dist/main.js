@@ -1,10 +1,10 @@
 import * as THREE from './vendor/three.module.js';
 import { createWorkshop, createMachine, createCharacter, createPart } from './assets/models.js';
-import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION } from './core.js';
+import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType } from './core.js';
 import { ShopAudio } from './audio.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
-import { orderWorkflow } from './workflow.js';
+import { orderWorkflow, stockIcon } from './workflow.js';
 
 const $=id=>document.getElementById(id);
 const game=new ShopGame(),audio=new ShopAudio();
@@ -13,7 +13,7 @@ const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keys=new Set();let touchVector={x:0,y:0},selectedShift=0,unlocked=0,bests=[0,0,0],grades=[0,0,0];
-const SAVE_KEY='chip-rush-roles-v6';
+const SAVE_KEY='chip-rush-roles-v7';
 let migrationNotice=false;
 function readRoleSave(key){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'&&!Array.isArray(value)?value:null;}catch{return null;}}
 function readUnlocked(value){return Math.max(0,Math.min(2,Math.trunc(Number(value))||0));}
@@ -23,19 +23,18 @@ if(roleSave){
   bests=bests.map((_,i)=>Math.max(0,Number(roleSave.bests?.[i])||0));
   grades=grades.map((_,i)=>Math.max(0,Math.min(3,Math.trunc(Number(roleSave.grades?.[i]))||0)));
 }else{
-  const oldScores=readRoleSave('chip-rush-roles-v5');
-  const previousRoles=oldScores||readRoleSave('chip-rush-roles-v4')||readRoleSave('chip-rush-roles-v3')||readRoleSave('chip-rush-roles-v2');
+  const previousRoles=['v6','v5','v4','v3','v2'].map(version=>readRoleSave('chip-rush-roles-'+version)).find(Boolean);
   if(previousRoles){
+    // Preserve access and historical saves; changed workflows start fresh records.
     unlocked=readUnlocked(previousRoles.unlocked);migrationNotice=true;
-    // Operator is unchanged. Keep its records and all unlocked roles. Old
-    // advanced-role results remain in the previous save under their own rules.
-    if(oldScores){bests[0]=Math.max(0,Number(oldScores.bests?.[0])||0);grades[0]=Math.max(0,Math.min(3,Math.trunc(Number(oldScores.grades?.[0]))||0));}
     save();
   }
 }
 const STATION_LAYOUT=[
   {id:'office',name:'OFFICE',x:-7.1,z:-4.65,height:2.2,w:2.6,d:1.3,access:{x:-7.8,z:-3.18},collidable:false},
-  {id:'material',name:'MATERIAL',x:-6.6,z:-.6,height:2.25,w:1.65,d:2.65,rotationY:Math.PI/2,access:{x:-5.145,z:-.6}},
+  {id:'material-round',name:'ROUND',x:-6.6,z:-1.5,height:1.15,w:1.65,d:.8,access:{x:-5.1,z:-1.5},stock:'round'},
+  {id:'material-plate',name:'PLATE',x:-6.6,z:-.55,height:1.15,w:1.65,d:.8,access:{x:-5.1,z:-.55},stock:'plate'},
+  {id:'material-block',name:'BLOCK',x:-6.6,z:.4,height:1.15,w:1.65,d:.8,access:{x:-5.1,z:.4},stock:'block'},
   {id:'lathe',name:'LATHE',x:-2.55,z:-3.4,height:3.306,w:3.078,d:2.052,scale:1.14},
   {id:'mill',name:'MILL',x:1.3,z:-3.4,height:3.534,w:3.648,d:2.109,scale:1.14},
   {id:'inspect',name:'INSPECT',x:5.8,z:-2.25,height:2.05,w:1.6,d:2.4,rotationY:-Math.PI/2,access:{x:4.32,z:-2.25}},
@@ -125,6 +124,22 @@ function createDeliveryVan(){
   for(const x of [-.4,.42]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.07,16),new THREE.MeshStandardMaterial({color:0x15333b,roughness:1}));wheel.rotation.x=Math.PI/2;wheel.position.set(x,.14,.32);g.add(wheel);const other=wheel.clone();other.position.z=-.32;g.add(other);}
   g.visible=false;g.userData.arrival=0;return g;
 }
+function createMaterialBin(type){
+  const g=new THREE.Group();g.name=`material-bin-${type}`;
+  const base=new THREE.Mesh(new THREE.BoxGeometry(1.62,.12,.76),new THREE.MeshStandardMaterial({color:0x214a4b,roughness:.85}));base.position.y=.06;g.add(base);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.42,.62,.58),new THREE.MeshStandardMaterial({color:type==='round'?0x276c69:type==='plate'?0x356684:0x70523f,roughness:.78}));body.position.y=.4;body.castShadow=true;g.add(body);
+  const lip=new THREE.Mesh(new THREE.BoxGeometry(1.5,.08,.65),new THREE.MeshStandardMaterial({color:0x9fd0c6,roughness:.65}));lip.position.y=.75;g.add(lip);
+  const metal=new THREE.MeshStandardMaterial({color:type==='round'?0x7cdeca:type==='plate'?0x8dc9f1:0xffbf7d,metalness:.35,roughness:.45});
+  for(let i=0;i<3;i++){
+    const geometry=type==='round'?new THREE.CylinderGeometry(.12,.12,1.05,16):type==='plate'?new THREE.BoxGeometry(1.08,.055,.42):new THREE.BoxGeometry(.32,.32,.35);
+    const stock=new THREE.Mesh(geometry,metal);
+    stock.position.set(type==='block'?(i-1)*.38:0,type==='plate'?.83+i*.07:type==='block'?.94:.9,type==='round'?(i-1)*.18:0);
+    if(type==='round')stock.rotation.z=Math.PI/2;
+    stock.castShadow=true;g.add(stock);
+  }
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(.72,.18,.025),new THREE.MeshStandardMaterial({color:0x102a32,roughness:.7}));sign.position.set(0,.55,.305);g.add(sign);
+  g.userData.workPoint=new THREE.Vector3(0,.8,0);g.userData.stock=type;return g;
+}
 
 function boot(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x102c38);scene.fog=new THREE.Fog(0x102c38,35,70);
@@ -141,8 +156,8 @@ function boot(){
   // Brand the supplier's vehicle and crate, not the incoming customer order.
   new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff});deliveryVan.userData.brandMark.material=material;stations.receiving.model.userData.brandMark.material=material;});
   for(const def of STATION_LAYOUT){
-    const model=def.id==='office'?world.userData.office:def.id==='receiving'?createReceivingDock():createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
-    const label=document.createElement('button');label.className='station-label';label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{goToStation(def.id);};$('station-labels').appendChild(label);
+    const model=def.id==='office'?world.userData.office:def.id==='receiving'?createReceivingDock():def.stock?createMaterialBin(def.stock):createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
+    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{goToStation(def.id);};$('station-labels').appendChild(label);
     const access=def.access||{x:def.x,z:def.z+def.d/2+.63};stations[def.id]={def,model,label,access};
     if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
   }
@@ -296,6 +311,7 @@ function animateShop(dt){
     deliveryVan.position.x=reduced?-3.15:t<1?THREE.MathUtils.lerp(-5,-3.15,t):t<2?-3.15:THREE.MathUtils.lerp(-3.15,-5,t-2);
     deliveryVan.visible=deliveryVan.userData.arrival>0&&!menuMode;
   }
+  if(stations['material-block'])stations['material-block'].model.visible=menuMode||game.shiftIndex>0;
   if(stations.receiving){stations.receiving.model.visible=!menuMode&&game.shiftIndex>0&&['sourcing','delivered'].includes(game.sourcing?.state);stations.receiving.model.userData.crate.visible=!!game.receiving;}
   for(const [id,s] of Object.entries(stations)){
     const state=game.stations[id],busy=!!state?.part&&!state.ready,ready=!!state?.ready;
@@ -320,7 +336,7 @@ function animateShop(dt){
   if(menuMode){character.position.set(.1,Math.sin(clockTime*2)*.018,2.5);character.rotation.y=-.4;playerRing.position.set(.1,.07,2.5);const u=character.userData;if(u.head)u.head.rotation.y=Math.sin(clockTime*.5)*.12;}
   targetRing.scale.setScalar(1+Math.sin(clockTime*6)*.09);updateParticles(dt);shake=Math.max(0,shake-dt*2);
 }
-function ticketState(o){if(!o.programmed)return game.office.orderId===o.id?`CAD ${game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)?'':'paused · '}${Math.ceil(o.programRemaining)}s`:'Complete CAD at the office, then collect material';if(o.location==='material')return 'Pick up material';if(o.location==='hands')return `In your hands · ${OPS[o.route[o.index]].name} next`;if(o.location==='buffer')return 'Parked on Hold bench';const s=game.stations[o.location];return s?.ready?`${OPS[o.location].name} ready · collect part`:`${OPS[o.location]?.name||'Machine'} working…`;}
+function ticketState(o){if(!o.programmed)return game.office.orderId===o.id?`CAD ${game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)?'':'paused · '}${Math.ceil(o.programRemaining)}s`:'Complete CAD at the office';if(o.location==='material')return `Collect ${stockType(o)} stock`;if(o.location==='hands')return `In your hands · ${OPS[o.route[o.index]].name} next`;if(o.location==='buffer')return 'Parked on Hold bench';const s=game.stations[o.location];return s?.ready?`${OPS[o.location].name} ready · collect part`:`${OPS[o.location]?.name||'Machine'} working…`;}
 function revealSelectedTicket(){
   const selected=$('ticket-'+game.selectedId);if(!selected)return;
   const rail=$('orders'),area=rail.getBoundingClientRect(),card=selected.getBoundingClientRect(),gap=5;
@@ -332,15 +348,15 @@ function revealSelectedTicket(){
 function updateTickets(force){
   const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${o.id===game.selectedId}:${game.stations[o.location]?.ready}:${o.programmed}:${game.office.orderId===o.id}:${game.office.present}:${game.call?.orderId===o.id?game.call.state:""}`).join('|');
   if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. Keep an eye on incoming orders.</div>';}
-    for(const o of game.orders){const el=document.createElement('button');el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(o.id===game.selectedId?' selected':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Select Order ${o.id}, ${o.name}`);el.setAttribute('aria-pressed',o.id===game.selectedId?'true':'false');const route=orderWorkflow(o,game.config.programming).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><div class="route">${route}</div><div class="ticket-status sr-only">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;el.onclick=()=>{game.select(o.id);processEvents();updateUI(true);};$('orders').appendChild(el);}
+    for(const o of game.orders){const el=document.createElement('article');const stock=stockType(o);const active=game.heldOrder?.id===o.id,focus=!game.hand&&(game.office.orderId??game.selectedId)===o.id;el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(active?' carried-job':focus?' passive-focus':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Order ${o.id}, ${o.name}`);const route=orderWorkflow(o,game.config.programming).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><div class="route">${route}</div><div class="ticket-status sr-only">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;$('orders').appendChild(el);}
     $('orders').appendChild(sourceCard);if(focused)$(focused)?.focus({preventScroll:true});
     $('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
     if(renderedSelection!==game.selectedId){renderedSelection=game.selectedId;revealSelectedTicket();}
   }
   for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=ticketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
 }
-function nextTarget(){if(['ringing','answering','offer'].includes(game.call?.state))return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(!game.hand&&game.selected&&!game.selected.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const o=game.selected;if(!o)return null;return o.location==='hands'?o.route[o.index]:o.location;}
-function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';if(game.call?.state==='ringing'&&id!=='office')return 'Customer waiting. Answer at the office.';const o=game.heldOrder,s=game.stations[id];if(id==='office')return !game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.selected?.programmed?'Select a job that needs CAD':`CAD #${game.selectedId} · stay at the desk`;if(id==='receiving')return game.receiving?(game.hand?'Free your hands to receive #201':'Collect Order #201'):'Delivery on the way';if(id==='material'&&o?.id===201)return 'Inspect and ship this customer part';if(id==='material')return game.hand?`Recycle #${game.hand.orderId} · restart route`:game.selected?.started?'Select an unstarted Order':game.selected&&!game.selected.programmed?'Complete CAD at the office first':`Collect billet #${game.selectedId||'—'}`;if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${OPS[id].name.toLowerCase()}`:`${OPS[id]?.name||id} station`;}
+function nextTarget(){if(['ringing','answering','offer'].includes(game.call?.state))return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const ready=Object.entries(game.stations).find(([id,s])=>s.ready);if(ready)return ready[0];if(game.nextCAD?.())return 'office';const candidates=['round','plate','block'].map(type=>game.nextMaterial?.(type)).filter(Boolean);const next=candidates.sort((a,b)=>a.remaining-b.remaining)[0];if(next)return `material-${stockType(next)}`;const o=game.selected;return o?.location==='material'?`material-${stockType(o)}`:o?.location==='hands'?o.route[o.index]:o?.location||null;}
+function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';if(game.call?.state==='ringing'&&id!=='office')return 'Customer waiting. Answer at the office.';const o=game.heldOrder,s=game.stations[id];if(id==='office')return !game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?'Free your hands to receive #201':'Collect Order #201'):'Delivery on the way';if(id.startsWith('material-')){const type=id.slice(9);const next=game.nextMaterial(type);return o?.id===201?'Inspect and ship this customer part':game.hand?`Recycle #${o.id} · restart route`:next?`Collect ${type} stock · #${next.id}`:game.orders.some(job=>stockType(job)===type&&!job.programmed)?'Complete CAD at the office first':`No ${type} job ready`;}if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${OPS[id].name.toLowerCase()}`:`${OPS[id]?.name||id} station`;}
 function updateUI(force=false){
   $('score').textContent=game.score.toLocaleString();
   const nextStar=game.config.stars.findIndex(target=>game.shipped<target);
@@ -402,7 +418,7 @@ function positionLabels(){
   const target=nextTarget();for(const [id,s] of Object.entries(stations)){
   const p=screenPoint(new THREE.Vector3(s.def.x,s.def.height+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
   const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,ready=id==='receiving'?!!game.receiving:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state);
-  const locked=id==='receiving'?!s.model.visible:id==='office'?!game.config.programming:!!OPS[id]&&id!=='ship'&&!game.config.unlocks.includes(id);
+  const locked=id==='receiving'?!s.model.visible:id==='office'?!game.config.programming:id.startsWith('material-')?id==='material-block'&&game.shiftIndex===0:!!OPS[id]&&id!=='ship'&&!game.config.unlocks.includes(id);
   s.label.hidden=id==='receiving'?locked:!menuMode&&locked;s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
   s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:busy?`${100*(1-st.remaining/OPS[id].duration)}%`:'0';s.label.style.opacity=menuMode?'.72':'';
@@ -440,9 +456,9 @@ function showBriefing(index){
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   const lessons=[
-    ['Select an order, then follow Material → Turn or Mill → QC → Ship.','Click a station to move and interact. Machines run while you work elsewhere.'],
-    ['Complete CAD at the office before collecting material. Follow each order’s route.','Stay for CAD; leaving pauses it. Machines keep running.'],
-    ['Complete CAD, then follow each order’s route. Some parts need both machines.','Answer 3 customer calls at the office (3 seconds each). Calls interrupt handoffs; machines keep running. Rushes are optional: +100 on time, −25 if missed.']
+    ['Collect ROUND or PLATE stock, then follow the order’s route.','Click a station to move and interact. Machines run while you work elsewhere.'],
+    ['The office prepares the next CAD job automatically. Then use its matching stock bin.','Stay for CAD; leaving pauses it. Machines keep running.'],
+    ['Use automatic CAD and matching stock bins, then follow each route.','Answer 3 customer calls at the office (3 seconds each). Calls interrupt handoffs; machines keep running. Rushes: +100 on time, −25 if missed.']
   ][index];
   $('briefing-text').textContent=lessons[0];$('briefing-tip').textContent=lessons[1];$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -484,12 +500,12 @@ function bindControls(){
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
     if(['Space','Enter'].includes(e.code)&&e.target.closest?.('button'))return;
-    const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab','KeyE','ShiftLeft','ShiftRight'];
+    const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyE','ShiftLeft','ShiftRight'];
     if(game.mode==='playing'&&!onPhone()&&controls.includes(e.code))e.preventDefault();if(e.repeat)return;
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
     if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
-    if(e.code==='KeyE'||e.code==='Space')interact();if(e.code==='Tab'){game.cycle();processEvents();updateUI(true);}
-    if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();if(/^Digit[1-4]$/.test(e.code)){const o=game.orders[Number(e.code.slice(-1))-1];if(o){game.select(o.id);processEvents();updateUI(true);}}
+    if(e.code==='KeyE'||e.code==='Space')interact();
+    if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();
   });
   addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
