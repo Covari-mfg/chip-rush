@@ -10,9 +10,9 @@ This package contains the playable game, its editable source, and the checks use
 
 Click a station to walk there and use it. Alternatively, move with WASD or the arrow keys and press E to interact. Shift dashes, Tab selects the next order, and Escape pauses. Machines keep working while you handle other jobs.
 
-The standalone file was built and syntax checked. Full browser playtests used the local server below; if opening the file directly gives trouble, use that route. The browser needs WebGL 2 and hardware acceleration.
+See the latest entry in qa/PLAYTEST.md for current build and browser verification. Browser playtests use the local server below; if opening the file directly gives trouble, use that route. The browser needs WebGL 2 and hardware acceleration.
 
-## Run locally and watch the Owner demonstration
+## Run locally
 
 With Python 3 installed, open a terminal in the extracted folder containing this document and run:
 
@@ -21,9 +21,8 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory dist
 ```
 
 - Play: <http://127.0.0.1:4173/>
-- Watch: <http://127.0.0.1:4173/?watch=owner>, then choose **Watch Owner run**.
 
-Keep the terminal open while playing; Ctrl+C stops the server. The watch mode runs an automated expert live at normal speed, using the same movement, machine times, and rules as the game. It does not save scores or unlocks. It demonstrates a legal route, not a human success rate.
+Keep the terminal open while playing; Ctrl+C stops the server.
 
 ## What to review
 
@@ -32,12 +31,12 @@ Stars depend on shipped orders, not score or rush bonuses.
 | Role | Shift | Clear / one star | Two stars | Three stars |
 | --- | --- | ---: | ---: | ---: |
 | Operator | 2½ minutes | 3 | 4 | 5 |
-| Production Manager | 3 minutes | 4 | 6 | 7 |
-| Owner | 3 minutes | 6 | 8 | 10 |
+| Production Manager | 3 minutes | 4 | 5 | 6 |
+| Owner | 3 minutes | 5 | 6 | 8 |
 
-Operator should feel welcoming. Manager adds four seconds of attended programming per order and rewards overlapping work. Owner three stars should be an exceptional achievement worth replaying for.
+Operator should feel welcoming. Manager adds six seconds of attended CAD per order and rewards overlapping work. Manager and Owner follow **CAD → Material → turn or mill (sometimes both) → Inspection → Shipping**. Material pickup requires completed CAD. Manager has at most six jobs, with a 16-second opening gap and 25-second later spacing. Owner has at most eight jobs, with a 12-second opening gap and 18-second later spacing. Both retain the four-active-order limit and closing-time safety check. Owner three stars should reward practiced scheduling and routing.
 
-Owner has three calls scheduled at 27, 77, and 127 seconds into the shift. Calls can queue behind an earlier call or rush. Ringing interrupts handoffs; answering requires three uninterrupted seconds while machines and deadlines keep running. Rush acceptance is checked for available capacity. Declining preserves the original promise without a score penalty.
+Owner has three calls scheduled at 27, 77, and 127 seconds into the shift. Calls can queue behind an earlier call or rush. Ringing interrupts handoffs; answering requires three uninterrupted seconds while machines and deadlines keep running. A live offer can always be accepted, even for a started or complex job while machines are busy. The separate rush window is at most 45 seconds and cannot outlast the ordinary deadline or closing time. Success earns 100 points. Missing an accepted promise costs 25 points once, clamped at zero. Declining preserves the original promise without a penalty. Both choices can still earn three stars.
 
 - **Fairness:** Are failures understandable, and does retrying reward learning? Record role, shipments, stars, and roughly how many attempts you needed.
 - **Controls and layout:** Can you see your carried part, the next operation, and ready machines? Does the shop stay readable in an ordinary window? Check sitting at the office and walking away.
@@ -49,12 +48,12 @@ Open the extracted folder containing this document and `README.md` as a project 
 
 Copy this prompt into a new task in that project:
 
-> Review this CHIP RUSH game. First read ARNOLDAS-START-HERE.md, README.md, and the latest section of qa/PLAYTEST.md. Run the baseline commands below, then play the game and the Owner demonstration. Start by reporting concrete issues and suggested improvements. Preserve the current work and keep changes focused. Keep star targets at Operator 3/4/5, Production Manager 4/6/7, and Owner 6/8/10, with three scheduled Owner calls. Do not lower targets or add hidden demonstration advantages to make tests pass. The demo must use ordinary movement, interactions, timings, and scoring. After any edits, rerun the relevant checks, playtest the affected flow, and rebuild the standalone file. Report exactly what was tested and any remaining limitations.
+> Review this CHIP RUSH game. First read ARNOLDAS-START-HERE.md, README.md, and the latest section of qa/PLAYTEST.md. Run the baseline commands below, then play the game. Start by reporting concrete issues and suggested improvements. Preserve the current work and keep changes focused. Keep star targets at Operator 3/4/5, Production Manager 4/5/6, and Owner 5/6/8, with six-second CAD before Material, at most six Manager jobs and eight Owner jobs, and three scheduled Owner calls. Preserve the player's choice to accept any live rush and the 25-point missed-promise penalty. Do not lower targets or change the rules to make tests pass. After any edits, rerun the relevant checks, playtest the affected flow, and rebuild the standalone file. Report exactly what was tested and any remaining limitations.
 
 Baseline checks:
 
 ```sh
-node --test qa/core.test.mjs qa/difficulty.test.mjs qa/demo.test.mjs
+node --test qa/core.test.mjs qa/difficulty.test.mjs
 node qa/balance.mjs --rush --ignore-calls --expert --assert
 ```
 
@@ -67,3 +66,9 @@ node scripts/build-offline.mjs
 See [README.md](README.md) for the source map and [qa/PLAYTEST.md](qa/PLAYTEST.md) for verification history. Sections below the latest version describe older builds.
 
 The package has no existing hosted Site ID or repository history. Opening it in your Codex does not connect your copy to Josh’s published test site.
+
+## Community update
+
+Run `node scripts/dev-server.mjs` with Node 24+ and open http://127.0.0.1:4174/ to test the complete game and a local persistent score board. No dependency install is needed to play locally. `pnpm install && pnpm build` creates the hosted Worker + assets. See README for the D1 schema, player-reported score validation boundary, friend links, and optional Covari sourcing job. `CHIP-RUSH.html` remains fully playable offline; the shared board needs the hosted API.
+
+Publication is coordinated separately from GitHub collaboration. The Covari bonus is offered in all three roles: select **Outsource with Covari**, then click the Office computer.

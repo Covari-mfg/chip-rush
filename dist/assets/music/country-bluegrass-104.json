@@ -1,0 +1,103 @@
+{
+  "title": "CHIP RUSH country / bluegrass production loop",
+  "bpm": 104,
+  "bars": 16,
+  "beatsPerBar": 4,
+  "sampleRate": 44100,
+  "channels": 2,
+  "loopStartSeconds": 0,
+  "loopEndSeconds": 36.92308390022676,
+  "loopStartFrame": 0,
+  "loopEndFrameExclusive": 1628308,
+  "actualBpmFromFrameCount": 103.99998034769835,
+  "progression": [
+    "G",
+    "C",
+    "G",
+    "D",
+    "G",
+    "C",
+    "D",
+    "G",
+    "G",
+    "C",
+    "G",
+    "D",
+    "G",
+    "C",
+    "D",
+    "G"
+  ],
+  "arrangement": "Accepted country/bluegrass melody, rhythm, string synthesis, panning and gains, at 104 BPM. Two eight-bar passes, with deterministic pick/brush noise variation.",
+  "mastering": "No intro fade or outro fade. Echo/release tails wrapped into the beginning. Full-loop RMS matched to -24 dBFS.",
+  "files": {
+    "wav": {
+      "file": "country-bluegrass-104.wav",
+      "bytes": 6513276,
+      "sha256": "2eb1723dfad91dfc50ce1bbd32e826a3b5ff041b064b9d6eda82d8ae44279b65",
+      "qa": {
+        "frames": 1628308,
+        "durationSeconds": 36.92308390022676,
+        "rmsDbfs": -24.0,
+        "peakDbfs": -9.499,
+        "clippedSamples": 0,
+        "meanDcOffset": 1.8604311091012495e-05,
+        "boundaryJumpAmplitude": 6.103515625e-05,
+        "boundaryJumpDbfs": -84.288,
+        "ordinaryAdjacentStep99Percentile": 0.009124755859375,
+        "last20msRmsDbfs": -58.15,
+        "first20msRmsDbfs": -23.265
+      }
+    },
+    "mp3": {
+      "file": "country-bluegrass-104.mp3",
+      "bytes": 739878,
+      "bitrate": 160000,
+      "sha256": "7a55303b9257845a6e4a1546ded8cdb69862391a5af18bdf743407ce22faca36",
+      "decodedQa": {
+        "frames": 1628308,
+        "durationSeconds": 36.92308390022676,
+        "rmsDbfs": -24.446,
+        "peakDbfs": -9.948,
+        "clippedSamples": 0,
+        "meanDcOffset": 2.0804066089519764e-06,
+        "boundaryJumpAmplitude": 0.000396728515625,
+        "boundaryJumpDbfs": -68.03,
+        "ordinaryAdjacentStep99Percentile": 0.0086669921875,
+        "last20msRmsDbfs": -58.596,
+        "first20msRmsDbfs": -23.712
+      },
+      "containerDurationSeconds": 36.923084,
+      "containerStartTimeSeconds": 0.025057,
+      "gaplessSideData": [
+        {
+          "side_data_type": "Skip Samples",
+          "skip_samples": 1105,
+          "discard_padding": 0,
+          "skip_reason": 0,
+          "discard_reason": 0
+        },
+        {
+          "side_data_type": "Skip Samples",
+          "skip_samples": 0,
+          "discard_padding": 667,
+          "skip_reason": 0,
+          "discard_reason": 0
+        }
+      ]
+    }
+  },
+  "browserPlayback": "Use decodeAudioData + AudioBufferSourceNode with loop=true, loopStart=0, loopEnd=36.92308390022676. Verify decoded duration. The MP3 includes Xing/LAME gapless metadata; FFmpeg decode returns exactly 1628308 PCM frames. If a browser decoder does not trim MP3 padding correctly, use the WAV fallback. Do not loop with an HTML ended-event callback.",
+  "provenance": "Original procedural composition and synthesized instruments created for CHIP RUSH / Covari. The shipped country-bluegrass-104.mp3 contains no external recordings, sampled audio, downloaded music, or quoted song melodies. This generator uses arithmetic synthesis and deterministic noise; no separate third-party sample or stock-music license was used.",
+  "qaBoundary": "Numerical and codec round-trip checks only; no subjective listening or browser playback test performed by this generator.",
+  "generator": "generate_country_music.py",
+  "dependencies": [
+    "Python 3.10+ and numpy",
+    "FFmpeg with libmp3lame and ffprobe"
+  ],
+  "toolVersions": {
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "ffmpeg": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers"
+  }
+}

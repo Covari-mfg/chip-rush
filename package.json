@@ -1,0 +1,17 @@
+{
+  "name": "chip-rush",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build-offline.mjs && node scripts/build-hosted.mjs",
+    "test": "node --test qa/*.test.mjs",
+    "db:generate": "drizzle-kit generate"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260924.1",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "^0.45.3",
+    "esbuild": "^0.28.2"
+  }
+}

@@ -1,7 +1,7 @@
 // Deterministic simulation, not a browser playtest. Uses normal core actions,
 // production A* collision paths, walking speed, and attended office time.
-// Default adds 0.5s after each station/program interaction. --reaction=1
-// explores a slower player; --rush additionally tries accepting a rush.
+// Default adds 0.5s after each station/CAD interaction. --reaction=1
+// explores a slower player; --rush additionally accepts every live rush offer.
 // Default answers and declines phone offers; --ignore-calls measures the cost
 // of letting mandatory interruptions time out. Each answered call costs 3s.
 // --trace prints the reproducible action log; --assert checks normal passes.
@@ -62,7 +62,7 @@ export class Driver {
     this.position = { ...navigation.spawn };
     this.at = null;
     this.travelSeconds = 0;
-    this.programSeconds = 0;
+    this.cadSeconds = 0;
     this.log = [];
     this.activeId = null;
   }
@@ -74,9 +74,14 @@ export class Driver {
       const dt = Math.min(DT, remaining);
       // updateMovement returns before advancing cooldown during a conversation.
       if (!['answering','offer'].includes(this.game.call?.state)) this.dashCooldown = Math.max(0, this.dashCooldown-dt);
+      const cadOrder=this.game.order(this.game.office.orderId),beforeCad=cadOrder?.programRemaining??0;
       this.game.tick(dt);
+      this.cadSeconds+=beforeCad-(cadOrder?.programRemaining??0);
       for (const event of this.game.drain()) {
-        if (['shipped','expired','rushWon','rushExpired'].includes(event.type)) this.event(event.type, event);
+        if (['arrival','programming','programmed','pickup','load','ready','shipped','expired','rushWon','rushExpired'].includes(event.type)) {
+          const order=this.game.order(event.orderId);
+          this.event(event.type,{...event,...(event.type==='arrival'&&order?{name:order.name,route:[...order.route]}:{})});
+        }
       }
     }
   }
@@ -148,10 +153,10 @@ export class Driver {
     this.walk('office');
     if (this.game.mode!=='playing'||!this.game.order(order.id)) return;
     if(['ringing','answering','offer'].includes(this.game.call?.state))return;
-    assert.equal(this.game.interact('office'),true,'Start attended program');
+    assert.equal(this.game.interact('office'),true,'Start attended CAD');
     const seconds=order.programRemaining+this.actionDelay;
-    this.event('program',{orderId:order.id,seconds});
-    const before=order.programRemaining;this.tick(seconds);this.programSeconds+=before-order.programRemaining;
+    this.event('cad',{orderId:order.id,seconds});
+    this.tick(seconds);
   }
   calls() {
     const call=this.game.call;
@@ -163,11 +168,11 @@ export class Driver {
     }
     if (this.game.call?.state==='answering') this.tick(this.game.call.answerRemaining+this.actionDelay);
     if (this.game.call?.state==='offer') {
-      const id=this.game.call.orderId,accept=this.phonePolicy==='accept'&&this.game.call.rushAvailable!==false;
+      const id=this.game.call.orderId,accept=this.phonePolicy==='accept';
       if(this.game.respondCall(accept))this.event(accept?'accept-rush':'decline-rush',{orderId:id});
       this.tick(this.actionDelay);
       // The player is already at the office and may keep holding a finished
-      // part while programming the accepted rush, avoiding a needless return.
+      // part while completing CAD for the accepted rush, avoiding a needless return.
       const rush=this.game.call?.state==='active'?this.game.order(this.game.call.orderId):null;
       if(rush&&!rush.programmed)this.program(rush);
     }
@@ -213,14 +218,20 @@ export class Driver {
         if(!order.programmed) this.program(order);else this.interact('material');
         continue;
       }
-      // Program the next queued job while a machine runs, if its saved program
-      // is unfinished. Programming pauses during the walk to/from the office.
+      // Complete the next queued job's CAD while a machine runs. CAD pauses
+      // during the walk to/from the office and must precede material pickup.
       const unprogrammed=this.game.orders.filter(o=>!o.started&&!o.programmed).sort((a,b)=>a.remaining-b.remaining)[0];
       if(unprogrammed) {this.program(unprogrammed);continue;}
       this.tick(.2);
     }
     assert.ok(guard<20000,'Driver must finish a shift');
-    return {role:this.game.config.name,strategy:this.strategy,phone:this.phonePolicy,rush:this.phonePolicy==='accept',reaction:this.actionDelay,movement:`click route + ${this.dash?'dash':'walk'}`,shipped:this.game.shipped,pass:this.game.passed(),stars:this.game.stars(),score:this.game.score,missed:this.game.missed,unfinished:this.game.unfinished,walkingSeconds:+this.travelSeconds.toFixed(1),programSeconds:+this.programSeconds.toFixed(1),dashes:this.dashes,lastShipmentAt:this.log.findLast(event=>event.action==='shipped')?.at??null,callsReceived:this.game.callsReceived,callsAnswered:this.game.callsAnswered,rushesAccepted:this.game.rushesAccepted,rushesWon:this.game.rushesWon,log:this.log};
+    const lastShipmentAt=this.log.findLast(event=>event.action==='shipped')?.at??null;
+    const lastResolvedAt=this.log.findLast(event=>['shipped','expired'].includes(event.action))?.at??0;
+    const orders=this.log.filter(event=>event.action==='arrival').map(arrival=>({
+      id:arrival.orderId,name:arrival.name,route:arrival.route,
+      steps:this.log.filter(event=>event.orderId===arrival.orderId&&['programmed','pickup','load','shipped','expired'].includes(event.action)).map(event=>({at:event.at,action:event.action,station:event.station??null})),
+    }));
+    return {role:this.game.config.name,strategy:this.strategy,phone:this.phonePolicy,rush:this.phonePolicy==='accept',reaction:this.actionDelay,movement:`click route + ${this.dash?'dash':'walk'}`,spawned:this.game.spawnIndex,shipped:this.game.shipped,pass:this.game.passed(),stars:this.game.stars(),score:this.game.score,missed:this.game.missed,unfinished:this.game.unfinished,walkingSeconds:+this.travelSeconds.toFixed(1),cadSeconds:+this.cadSeconds.toFixed(1),dashes:this.dashes,lastShipmentAt,finalIdleSeconds:this.game.unfinished===0?+(this.game.config.duration-lastResolvedAt).toFixed(2):0,callsReceived:this.game.callsReceived,callsAnswered:this.game.callsAnswered,rushesAccepted:this.game.rushesAccepted,rushesWon:this.game.rushesWon,rushesMissed:this.game.rushesMissed,rushPenaltyPoints:Math.max(0,-(this.game.scoreDetails.rushPenalty??0)),scoreDetails:{...this.game.scoreDetails},orders,log:this.log};
   }
 }
 
@@ -235,7 +246,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   if(process.argv.includes('--rush'))rows.push(simulateShift(2,{reaction,phonePolicy:'accept'}));
   if(process.argv.includes('--ignore-calls'))rows.push(simulateShift(2,{reaction,phonePolicy:'ignore'}));
   if(process.argv.includes('--expert'))for(const phonePolicy of ['decline','accept'])rows.push(simulateShift(2,{reaction:.1,dash:true,phonePolicy}));
-  console.table(rows.map(({log,...summary})=>summary));
+  console.table(rows.map(({log,orders,scoreDetails,...summary})=>summary));
   if(process.argv.includes('--trace'))for(const row of rows){console.log('\n'+row.role+' / '+row.strategy+' / rush '+row.rush);console.table(row.log);}
   if(process.argv.includes('--assert')) {
     assert.ok(rows.filter(row=>row.strategy==='flow'&&row.phone==='decline').every(row=>row.pass),'Every role must pass using reproducible normal actions');

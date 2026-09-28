@@ -23,14 +23,30 @@ test('Operator mastery permits deliberate, serial play without dash', () => {
   assert.equal(result.dashes,0);
 });
 
+test('Operator keeps its final order available across normal no-dash play styles', () => {
+  for (const strategy of ['serial','flow']) for (let tenth=0;tenth<=30;tenth++) {
+    const driver=new Driver(0,strategy,'decline',{reaction:tenth/10});
+    const result=driver.run(),label=`${strategy}, ${tenth/10}s handoff`;
+    assert.equal(driver.game.spawnIndex,7,label+' keeps the existing seven-order opportunity');
+    assert.equal(result.missed,0,label+' keeps generous order deadlines');
+    assert.equal(result.stars,3,label+' can still earn Operator mastery without dash');
+    if(result.unfinished===0)assert.ok(SHIFTS[0].duration-result.lastShipmentAt<20,label+' avoids the long empty ending');
+  }
+});
+
 test('Production Manager rewards overlapping work instead of serial processing', () => {
   const serial=simulateShift(1,{strategy:'serial',reaction:.5});
-  const flow=simulateShift(1,{strategy:'flow',reaction:.5});
   assert.ok(serial.pass);
   assert.ok(serial.stars<3, 'Completing each order in isolation must leave room for improvement');
-  assert.equal(flow.stars,3);
-  assert.equal(flow.missed,0);
-  assert.equal(flow.dashes,0);
+  for(const reaction of [.5,1]) {
+    const flow=simulateShift(1,{strategy:'flow',reaction});
+    assert.equal(flow.stars,3, `${reaction}s decisions can complete Manager with ordinary concurrent walking`);
+    assert.equal(flow.shipped,SHIFTS[1].maxOrders);
+    assert.equal(flow.missed,0);
+    assert.equal(flow.unfinished,0);
+    assert.equal(flow.dashes,0);
+    assert.ok(flow.finalIdleSeconds<25,'The reduced workload still extends through most of the shift');
+  }
 });
 
 test('ordinary concurrent play clears Owner without earning its top tier', () => {
@@ -42,15 +58,18 @@ test('ordinary concurrent play clears Owner without earning its top tier', () =>
   }
 });
 
-test('Owner three stars has a narrow legal route with either rush choice', () => {
-  for (const phonePolicy of ['decline','accept']) {
-    const result=simulateShift(2,{reaction:.1,dash:true,phonePolicy});
+test('Owner three stars is attainable with practiced legal routes and either rush choice', () => {
+  for (const reaction of [.1,.3]) for (const phonePolicy of ['decline','accept']) {
+    const result=simulateShift(2,{reaction,dash:true,phonePolicy});
     assert.equal(result.stars,3, phonePolicy+' must have an attainable mastery route');
+    assert.equal(result.shipped,SHIFTS[2].stars[2],'Mastery completes the configured shipment target');
+    assert.equal(result.spawned,SHIFTS[2].maxOrders,'The proof uses the bounded Owner workload');
     assert.equal(result.missed,0);
+    assert.equal(result.unfinished,0);
     assert.equal(result.callsReceived,3,'Owner mastery includes all three interruptions');
     assert.equal(result.callsAnswered,3,'Every mandatory conversation is completed');
     assert.ok(result.lastShipmentAt<=SHIFTS[2].duration);
-    assert.ok(SHIFTS[2].duration-result.lastShipmentAt<10, 'Expert execution should have little spare time');
+    assert.ok(result.finalIdleSeconds<15, 'Practiced execution still works through the final part of the shift');
     assert.ok(result.dashes>0);
     const dashes=result.log.filter(event=>event.action==='dash');
     for (const [index,dash] of dashes.entries()) {
@@ -58,14 +77,49 @@ test('Owner three stars has a narrow legal route with either rush choice', () =>
       if (index) assert.ok(dash.at-dashes[index-1].at>=1.29, 'No cooldown bypass, allowing 0.01s trace rounding');
     }
     if (phonePolicy==='decline') assert.equal(result.rushesAccepted,0, 'Three stars cannot require a rush bonus');
+    else assert.equal(result.rushesAccepted,result.callsAnswered,'Accept policy takes every offer, without a capacity gate');
   }
 });
 
-test('dash alone does not grant Owner three stars at slower execution', () => {
-  for (const reaction of [.3,.5]) {
-    const result=simulateShift(2,{reaction,dash:true});
+test('dash alone does not grant Owner three stars at deliberate execution', () => {
+  for (const reaction of [.75,1]) for(const phonePolicy of ['decline','accept']) {
+    const result=simulateShift(2,{reaction,dash:true,phonePolicy});
     assert.ok(result.pass);
     assert.ok(result.stars<3);
+  }
+});
+
+test('complete higher-role playthroughs follow CAD, material, machines, inspection, shipping', () => {
+  for(const role of [1,2]) {
+    const result=simulateShift(role,{reaction:role===1?.5:.1,dash:role===2});
+    assert.equal(result.cadSeconds,result.shipped*6,'Each delivered job receives all six attended CAD seconds');
+    assert.equal(result.scoreDetails.program,result.shipped*120,'CAD points are awarded with deliveries');
+    for(const order of result.orders) {
+      const steps=order.steps.filter(step=>step.action==='programmed'||step.action==='load'||step.action==='shipped'||step.action==='pickup'&&step.station==='material')
+        .map(step=>step.action==='programmed'?'CAD':step.action==='shipped'?'ship':step.station);
+      assert.deepEqual(steps,['CAD','material',...order.route],`${result.role} #${order.id} follows every required step`);
+    }
+  }
+});
+
+test('a missed accepted rush costs a small penalty without preventing an ordinary Owner clear', () => {
+  const result=simulateShift(2,{reaction:.5,phonePolicy:'accept'});
+  assert.ok(result.pass);
+  assert.equal(result.callsAnswered,3);
+  assert.equal(result.rushesAccepted,result.callsAnswered);
+  assert.ok(result.rushesMissed>0,'The playthrough exercises a real missed promise');
+  assert.equal(result.rushesAccepted,result.rushesWon+result.rushesMissed,'Every accepted promise resolves once');
+  assert.equal(result.rushPenaltyPoints,result.rushesMissed*25);
+  assert.equal(result.score,Object.values(result.scoreDetails).reduce((total,points)=>total+points,0));
+});
+
+test('higher-role score potential grows through CAD and complexity despite fewer orders', () => {
+  const results=SHIFTS.map((_,role)=>simulateShift(role,{reaction:.1,dash:true}));
+  assert.ok(results[1].shipped<results[0].shipped,'Manager has fewer deliveries than Operator');
+  assert.ok(results[1].score>results[0].score,'CAD and complex routes preserve Manager score upside');
+  assert.ok(results[2].score>results[1].score,'Owner throughput and calls preserve the highest score upside');
+  for(const role of [1,2]) {
+    assert.ok(results[role].orders.some(order=>order.route.includes('lathe')&&order.route.includes('mill')),'Higher roles include a real two-machine route');
   }
 });
 

@@ -6,3 +6,16 @@ qa/*.jpg
 /CHIP-RUSH-complete.zip
 .sites-runtime/
 __pycache__/
+
+node_modules/
+dist/client/
+dist/server/
+.local/
+dist/downloads/
+
+# Review-only controllers and visual fixtures stay outside release source.
+/local-review/
+/dist/demo.js
+/qa/demo.test.mjs
+/dist/*review*
+/dist/*sample*

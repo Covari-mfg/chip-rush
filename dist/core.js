@@ -1,3 +1,15 @@
+export const RULESET = 'roles-v6-cad-rush';
+// Complexity, CAD, and speed earn points on delivery, so restarting a job
+// cannot farm points from unfinished work.
+export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
+  const base=order.value;
+  const program=programming ? 120 : 0;
+  const speed=Math.round(Math.max(0,order.remaining)*4);
+  const subtotal=base+program+speed;
+  const multiplier=1+(Math.max(1,Math.min(5,combo))-1)*.15;
+  const streak=Math.round(subtotal*multiplier)-subtotal;
+  return {base,program,speed,streak,rush:rushBonus,total:subtotal+streak+rushBonus};
+}
 export const OPS = {
   lathe:{name:'Lathe',short:'TURN',duration:8,color:'#7cdeca'},
   mill:{name:'Mill',short:'MILL',duration:10,color:'#8dc9f1'},
@@ -15,21 +27,26 @@ export const RECIPES = [
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
 ];
+export const SOURCE_JOBS = [
+  {name:'Injection molding',capability:'Injection molding',technology:'im'},
+  {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
+  {name:'Sheet metal assembly',capability:'Sheet metal fabrication',technology:'sm'},
+];
 // Clearing a role is the introduction; its third star is the mastery target.
-// Owner supplies enough work for ten shipments, but keeps the same six-order
-// promotion floor and deterministic recipe sequence. A little deadline slack
-// leaves room to recover; the three-star challenge is sustained throughput.
+// Higher roles add CAD and more complex routes, with a bounded workload that
+// leaves room to work the floor and answer customer calls.
 export const SHIFTS = [
-  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,interval:21,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
-  {name:'Production Manager',subtitle:'Program the work. Keep it moving.',brief:'Spend 4 seconds programming each order at the office, then ship 4 orders.',duration:180,interval:23,deadline:105,recipes:[0,1,0,1,6,0,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,6,7]},
-  {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 6 orders to clear. Ten shipments earns the exceptional three-star Owner shift.',duration:180,interval:15,deadline:105,recipes:[0,1,0,6,1,1,6,0,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:6,stars:[6,8,10]},
+  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,firstArrival:18,interval:19,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
+  {name:'Production Manager',subtitle:'Complete the CAD. Keep work moving.',brief:'Complete 6 seconds of CAD at the office, collect material, and ship 4 orders.',duration:180,firstArrival:16,interval:25,deadline:105,maxOrders:6,recipes:[0,1,6,0,1,6],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,5,6]},
+  {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 5 orders to clear. Eight shipments earns the exceptional three-star Owner shift.',duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,recipes:[0,1,6,0,6,1,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:5,stars:[5,6,8]},
 ];
 
-const PROGRAM_DURATION = 4;
+export const PROGRAM_DURATION = 6;
 const CALL_INVITATION_DURATION = 22;
 const CALL_ANSWER_DURATION = 3;
 const RUSH_WINDOW = 45;
 const RUSH_BONUS = 100;
+const RUSH_PENALTY = 25;
 // Calls are part of the Owner workload, even when the shop has no spare rush
 // capacity. Fixed spacing makes retries learnable and prevents lucky quiet runs.
 const OWNER_CALL_TIMES = [27, 77, 127];
@@ -60,10 +77,18 @@ export class ShopGame {
     this.callsAnswered = 0;
     this.rushesAccepted = 0;
     this.rushesWon = 0;
+    this.rushesMissed = 0;
     this.nextId = 101;
     this.spawnIndex = 0;
-    this.nextArrival = 12;
+    // Operator gets room to learn its first part; the later cadence leaves
+    // enough time for the final order to pass the shared safe-arrival check.
+    this.nextArrival = this.config.firstArrival ?? 12;
+    this.sourcing = null;
+    this.sourceOffered = false;
+    this.sourced = 0;
+    this.sourcePoints = 0;
     this.score = 0;
+    this.scoreDetails = {base:0,program:0,speed:0,streak:0,rush:0,rushPenalty:0,calls:0,sourcing:0};
     this.shipped = 0;
     this.missed = 0;
     this.unfinished = 0;
@@ -80,8 +105,7 @@ export class ShopGame {
   get selected() { return this.order(this.selectedId); }
   get heldOrder() { return this.hand ? this.order(this.hand.orderId) : null; }
 
-  // Allow stock collection before programming. The program belongs to the order,
-  // independently of its physical part, and survives recycling that part.
+  // CAD belongs to the order and survives recycling its physical part.
   setOfficePresence(present) { this.office.present = Boolean(present); }
 
   requiredTime(recipe, includeMachineWait = false) {
@@ -101,7 +125,7 @@ export class ShopGame {
   }
 
   spawn() {
-    if (this.orders.length >= 4) return false;
+    if (this.orders.length >= 4 || this.spawnIndex >= (this.config.maxOrders ?? Infinity)) return false;
     let recipe = RECIPES[this.config.recipes[this.spawnIndex % this.config.recipes.length]];
     if (this.time < this.requiredTime(recipe, true)) {
       recipe = [RECIPES[0], RECIPES[1]]
@@ -132,12 +156,12 @@ export class ShopGame {
     if (!order) return;
     this.call = {
       orderId:order.id,state:'ringing',ringRemaining:CALL_INVITATION_DURATION,answerRemaining:0,
-      remaining:RUSH_WINDOW,window:RUSH_WINDOW,bonus:RUSH_BONUS,rushAvailable:this.canRush(order),
+      remaining:this.rushWindow(order),window:this.rushWindow(order),bonus:RUSH_BONUS,penalty:RUSH_PENALTY,rushAvailable:this.canRush(order),
     };
     this.callIndex++;
     this.nextCallAt = OWNER_CALL_TIMES[this.callIndex] ?? Infinity;
     this.callsReceived++;
-    this.emit('call', {orderId:order.id,window:RUSH_WINDOW,bonus:RUSH_BONUS,number:this.callsReceived});
+    this.emit('call', {orderId:order.id,window:this.call.window,bonus:RUSH_BONUS,number:this.callsReceived});
   }
 
   clearCall() {
@@ -146,11 +170,22 @@ export class ShopGame {
   }
 
   canRush(order) {
-    if (!order || order.started || order.route.length !== 3) return false;
-    if (this.time < RUSH_WINDOW + 4 || order.remaining < RUSH_WINDOW + 4) return false;
-    if (this.requiredTime(order, true) > RUSH_WINDOW) return false;
-    // A bonus should not demand abandoning an older order about to expire.
-    return this.orders.every(other => other.id === order.id || other.remaining >= RUSH_WINDOW + 8);
+    return Boolean(order && order.remaining > 0 && this.time > 0);
+  }
+
+  rushWindow(order) {
+    return this.canRush(order) ? Math.min(RUSH_WINDOW, order.remaining, this.time) : 0;
+  }
+
+  missRush(reason) {
+    if (this.call?.state !== 'active') return;
+    const orderId = this.call.orderId;
+    const penalty = Math.min(RUSH_PENALTY, this.score);
+    this.score = Math.max(0, this.score - penalty);
+    this.scoreDetails.rushPenalty -= penalty;
+    this.rushesMissed++;
+    this.clearCall();
+    this.emit('rushExpired', {orderId,reason,penalty});
   }
 
   respondCall(accept) {
@@ -165,14 +200,57 @@ export class ShopGame {
       this.clearCall();
       return this.fail('That rush window has closed. The regular order is still good.');
     }
+    call.window = this.rushWindow(this.order(call.orderId));
     call.state = 'active';
     call.remaining = call.window;
     // Accepting changes the shop's priority. Keep the interrupted job's saved
-    // programming progress, but wait for an explicit target before resuming.
+    // CAD progress, but wait for an explicit target before resuming.
     this.office.orderId = null;
     this.rushesAccepted++;
     this.emit('rushAccepted', {orderId:call.orderId,window:call.window,bonus:call.bonus});
     return true;
+  }
+
+  requestSource() {
+    if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
+    if(this.call && this.call.state !== 'active') return this.fail('Answer the customer call before placing this job.');
+    if(!this.office.present) return this.fail('Go to the office to source this job with Covari.');
+    this.office.orderId = null;
+    this.sourcing.state = 'approving';
+    this.emit('sourceApproving');
+    return true;
+  }
+
+  declineSource() {
+    if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
+    this.sourcing.state = 'declined';
+    this.emit('sourceDeclined');
+    return true;
+  }
+
+  tickSourcing(dt, phoneInterrupting) {
+    if(!this.sourceOffered && this.elapsed >= 35) {
+      this.sourceOffered = true;
+      // Only an actual offer advances the cosmetic rotation. Preserve this
+      // cursor through resets, so retries can show every outside capability.
+      this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
+      const job=SOURCE_JOBS[this.nextSourceKind];
+      this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
+      this.sourcing = {id:'C-201',...job,state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
+      this.emit('sourceOffer');
+    }
+    const job=this.sourcing;
+    if(!job)return;
+    if(job.state === 'offer') {
+      job.offerRemaining = Math.max(0,job.offerRemaining-dt);
+      if(job.offerRemaining<=0)job.state='declined';
+    } else if(job.state === 'approving' && this.office.present && !phoneInterrupting) {
+      job.approvalRemaining = Math.max(0,job.approvalRemaining-dt);
+      if(job.approvalRemaining<=0){job.state='sourcing';this.emit('sourcePlaced');}
+    } else if(job.state === 'sourcing') {
+      job.remaining = Math.max(0,job.remaining-dt);
+      if(job.remaining<=0){job.state='delivered';this.score+=job.points;this.sourcePoints+=job.points;this.scoreDetails.sourcing+=job.points;this.sourced++;this.emit('sourceDelivered',{points:job.points});}
+    }
   }
 
   select(id) {
@@ -195,7 +273,7 @@ export class ShopGame {
     this.elapsed += dt;
 
     const phoneInterrupting = this.call && this.call.state !== 'active';
-    if (!phoneInterrupting && this.office.present && this.office.orderId !== null) {
+    if (!phoneInterrupting && this.sourcing?.state !== 'approving' && this.office.present && this.office.orderId !== null) {
       const order = this.order(this.office.orderId);
       if (!order || order.programmed) this.office.orderId = null;
       else {
@@ -231,34 +309,41 @@ export class ShopGame {
     if (this.call) {
       if (this.call.state === 'active') {
         this.call.remaining = Math.max(0, this.call.remaining - dt);
-        if (this.call.remaining <= 0) {
-          const orderId = this.call.orderId;
-          this.clearCall();
-          this.emit('rushExpired', {orderId,reason:'timeout'});
-        }
+        if (this.time <= 0) this.missRush('shiftEnded');
+        else if (this.call.remaining <= 0) this.missRush('timeout');
       } else if (this.call.state === 'answering') {
         // Once answered, the conversation runs to completion. The UI keeps the
         // machinist at the desk; only pausing the whole game pauses this timer.
         this.call.answerRemaining = Math.max(0, this.call.answerRemaining - dt);
         if (this.call.answerRemaining <= 0) {
           this.call.state = 'offer';
+          this.call.window = this.rushWindow(this.order(this.call.orderId));
+          this.call.remaining = this.call.window;
           this.callsAnswered++;
-          this.emit('callAnswered', {orderId:this.call.orderId,window:this.call.window,bonus:this.call.bonus});
+          this.score+=25;
+          this.scoreDetails.calls+=25;
+          this.emit('callAnswered', {orderId:this.call.orderId,window:this.call.window,bonus:this.call.bonus,points:25});
         }
       } else {
         this.call.ringRemaining = Math.max(0, this.call.ringRemaining - dt);
         if (this.call.ringRemaining <= 0) this.clearCall();
       }
-      if (this.call && this.call.state !== 'active') this.call.rushAvailable = this.canRush(this.order(this.call.orderId));
+      if (this.call && this.call.state !== 'active') {
+        this.call.rushAvailable = this.canRush(this.order(this.call.orderId));
+        this.call.window = this.rushWindow(this.order(this.call.orderId));
+        this.call.remaining = this.call.window;
+      }
     }
 
     if (this.elapsed >= this.nextArrival && this.time > 0) {
       this.nextArrival = this.elapsed + (this.spawn() ? this.config.interval : 2);
     }
     this.maybeCall();
+    this.tickSourcing(dt, phoneInterrupting);
     if (this.time <= 0) {
       this.unfinished = this.orders.length;
       this.office.orderId = null;
+      this.missRush('shiftEnded');
       this.clearCall();
       this.mode = 'results';
       this.emit('finish');
@@ -280,8 +365,8 @@ export class ShopGame {
     }
     if (this.office.orderId === id) this.office.orderId = null;
     if (this.call?.orderId === id) {
-      if (this.call.state === 'active') this.emit('rushExpired', {orderId:id,reason:'orderExpired'});
-      this.clearCall();
+      if (this.call.state === 'active') this.missRush('orderExpired');
+      else this.clearCall();
     }
     this.missed++;
     this.combo = 0;
@@ -296,13 +381,15 @@ export class ShopGame {
     if (this.call?.state === 'ringing' && key !== 'office' && key !== 'phone') {
       return this.fail('The customer is calling. Answer the phone at the office first.');
     }
+    if (key === 'source') return this.requestSource();
     if (key === 'office') {
       if (this.call?.state === 'ringing') return this.interact('phone');
-      if (!this.office.present) return this.fail('Walk to the office to program this job.');
-      if (!this.config.programming) return this.fail('Your jobs are already programmed for this shift.');
+      if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
+      if (this.sourcing?.state === 'approving') return true;
+      if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
       const order = this.selected;
-      if (!order) return this.fail('Select an order to program.');
-      if (order.programmed) return this.fail(`#${order.id} is already programmed.`);
+      if (!order) return this.fail('Select an order for CAD.');
+      if (order.programmed) return this.fail(`#${order.id} already has completed CAD.`);
       this.office.orderId = order.id;
       this.emit('programming', {orderId:order.id,remaining:order.programRemaining});
       return true;
@@ -329,6 +416,7 @@ export class ShopGame {
       const order = this.selected;
       if (!order) return this.fail('No orders yet. Take a breath.');
       if (order.started) return this.fail(`#${order.id} is already on the floor. Select a new ticket.`);
+      if (!order.programmed) return this.fail(`#${order.id} needs CAD at the office before material pickup.`);
       this.hand = {orderId:order.id};
       order.started = true;
       order.location = 'hands';
@@ -359,9 +447,10 @@ export class ShopGame {
       if (order.route[order.index] !== 'ship') return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
       this.combo = Math.min(this.combo + 1, 5);
       this.bestCombo = Math.max(this.bestCombo, this.combo);
-      const multiplier = 1 + (this.combo - 1) * .15;
       const rushBonus = this.call?.orderId === order.id && this.call.state === 'active' ? this.call.bonus : 0;
-      const points = Math.round((order.value + Math.ceil(Math.max(0, order.remaining)) * 2) * multiplier) + rushBonus;
+      const breakdown=scoreShipment(order,this.combo,{programming:this.config.programming,rushBonus});
+      const points=breakdown.total;
+      for(const key of ['base','program','speed','streak','rush'])this.scoreDetails[key]+=breakdown[key];
       this.score += points;
       this.shipped++;
       if (rushBonus) {
@@ -373,7 +462,7 @@ export class ShopGame {
       this.hand = null;
       this.orders = this.orders.filter(candidate => candidate.id !== order.id);
       if (this.selectedId === order.id) this.selectedId = this.orders.find(candidate => !candidate.started)?.id ?? this.orders[0]?.id ?? null;
-      this.emit('shipped', {orderId:order.id,points,rushBonus,combo:this.combo,station:key});
+      this.emit('shipped', {orderId:order.id,points,rushBonus,breakdown,combo:this.combo,station:key});
       return true;
     }
 
@@ -393,7 +482,7 @@ export class ShopGame {
     }
     const order = this.heldOrder;
     if (!order) return this.fail(`Bring a part that needs ${OPS[key].name}.`);
-    if (!order.programmed) return this.fail(`#${order.id} needs programming at the office first.`);
+    if (!order.programmed) return this.fail(`#${order.id} needs CAD at the office first.`);
     if (order.route[order.index] !== key) return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
     station.part = this.hand;
     this.hand = null;
@@ -409,10 +498,12 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,ruleset:RULESET,
+      sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),
-      rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,
+      rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,rushesMissed:this.rushesMissed,
+      scoreDetails:{...this.scoreDetails},
       callsReceived:this.callsReceived,callsAnswered:this.callsAnswered,
       office:{...this.office},call:this.call ? {...this.call} : null,
       hand:this.hand ? {...this.hand} : null,buffer:this.buffer ? {...this.buffer} : null,

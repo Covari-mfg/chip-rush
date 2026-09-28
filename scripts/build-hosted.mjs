@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {cp,mkdir,readdir,rm} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const dist=path.join(root,'dist');
+await rm(path.join(dist,'client'),{recursive:true,force:true});
+await mkdir(path.join(dist,'client'),{recursive:true});
+for(const file of await readdir(dist))if(!['client','server','.openai'].includes(file))await cp(path.join(dist,file),path.join(dist,'client',file),{recursive:true});
+await build({entryPoints:[path.join(root,'server/worker.js')],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:path.join(dist,'server/index.js')});
+console.log('Built the game assets and community leaderboard Worker.');
