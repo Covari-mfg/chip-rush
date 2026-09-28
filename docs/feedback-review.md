@@ -74,7 +74,7 @@ Verification: 177 automated tests passed, including exchanges through Lathe, Mil
 
 Removed outsourcing from Operator. Manager and Owner can receive one ordinary-looking outside-capability customer ticket after two normal shipments and 35 elapsed seconds, provided at least 45 seconds remain. The choice is “Outsource with Covari · Earn 300” or “Say no.” Declining or ignoring it has no penalty. Accepting requires one click, with no office visit or interruption to ongoing CAD.
 
-Covari delivers after 22 seconds to a dedicated receiving pad. A short branded van animation and arrival cue announce the crate without moving the camera. The player collects it, uses the existing QC station, and ships it for exactly 300 points. Delivery alone earns nothing. This separate optional job does not consume regular ticket capacity or change shipment/star/streak targets. Source parts support existing bench and station exchanges. Pausing freezes delivery; shift end and restart clear unfulfilled source work.
+Covari delivers after 22 seconds to a dedicated receiving pad. The crate appears on the receiving pad with a short sound and particle cue. The player collects it, uses the existing QC station, and ships it for exactly 300 points. Delivery alone earns nothing. This separate optional job does not consume regular ticket capacity or change shipment/star/streak targets. Source parts support existing bench and station exchanges. Pausing freezes delivery; shift end and restart clear unfulfilled source work.
 
 Validation: 174 automated tests passed, including 19 sourcing tests, score validation, and challenge bounds; the existing movement-aware balance assertions passed. A real Manager browser playtest shipped two normal jobs, accepted customer Order #201 away from the office, received it with score unchanged at 1,017, inspected and shipped it, and finished that transaction at 1,317 with two ordinary shipments. No browser errors or warnings. A temporary delivery-layout fixture verified the 24px action remains inside the 124px card, no inner overflow, and a clean receiving label; fixture files were removed. Standalone rebuilt and syntax/whitespace checks passed.
 
@@ -112,3 +112,15 @@ Changes are prepared as separate review commits in one PR. GitHub source changes
 
 
 Final checks: 180 automated tests passed. Movement-aware normal/expert balance assertions passed; eight Owner shipments remain attainable with either rush choice. Offline and hosted builds, standalone JavaScript syntax and whitespace checks passed. The live browser completed an Operator stock → lathe → QC → shipping cycle with no ticket selection. Advanced-role browser observation showed all three bins, prepared CAD, two ordinary shipments and the optional Covari offer; no console warnings/errors were recorded. This is not a complete human playthrough of every role or proof of player enjoyment.
+
+
+## Delivery presentation follow-up
+
+Removed the delivery truck after user review: appearing inside the shop felt distracting and out of place. The branded crate now arrives directly on the receiving pad, with the existing short sound/particle cue and ready label. Delivery timing, collection, QC and shipping remain the same. Rebuilt standalone; focused sourcing tests and JavaScript syntax checks passed.
+
+
+## Permanent receiving bench
+
+Replaced the appearing floor pad with a fixed, collidable receiving bench at the front edge of the shop. Its tabletop, legs, shelf and back rail are always part of the scene; only the supplier crate appears on arrival. The receiving action is available in advanced roles. The player approaches from the aisle, and the arrival cue follows the new bench position. This supersedes the temporary receiving-pad presentation.
+
+Verification: 34 sourcing and movement/difficulty tests passed, including collision-safe routes to the new access point and Owner mastery targets. Browser verified the bench is present before any offer or delivery, with no console warnings/errors. Standalone build, syntax and whitespace checks passed.
