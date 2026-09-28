@@ -43,7 +43,7 @@ const STATION_LAYOUT=[
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
 ];
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,deliveryVan;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
@@ -116,14 +116,6 @@ function createReceivingDock(){
   const mark=new THREE.Mesh(new THREE.BoxGeometry(.18,.12,.012),new THREE.MeshStandardMaterial({color:0x17333b,roughness:.7}));mark.position.set(0,.43,.267);crateGroup.add(mark);g.userData.brandMark=mark;
   g.userData.workPoint=new THREE.Vector3(0,.62,0);g.userData.crate=crateGroup;return g;
 }
-function createDeliveryVan(){
-  const g=new THREE.Group();g.name='covari-delivery-van';
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1.25,.48,.62),new THREE.MeshStandardMaterial({color:0xe7f0e4,roughness:.72}));body.position.y=.38;body.castShadow=true;g.add(body);
-  const cab=new THREE.Mesh(new THREE.BoxGeometry(.42,.36,.58),new THREE.MeshStandardMaterial({color:0x1dbcae,roughness:.65}));cab.position.set(.42,.76,0);cab.castShadow=true;g.add(cab);
-  const mark=new THREE.Mesh(new THREE.BoxGeometry(.2,.12,.012),new THREE.MeshStandardMaterial({color:0x102a32,roughness:.6}));mark.position.set(-.18,.5,.316);g.add(mark);g.userData.brandMark=mark;
-  for(const x of [-.4,.42]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.07,16),new THREE.MeshStandardMaterial({color:0x15333b,roughness:1}));wheel.rotation.x=Math.PI/2;wheel.position.set(x,.14,.32);g.add(wheel);const other=wheel.clone();other.position.z=-.32;g.add(other);}
-  g.visible=false;g.userData.arrival=0;return g;
-}
 function createMaterialBin(type){
   const g=new THREE.Group();g.name=`material-bin-${type}`;
   const base=new THREE.Mesh(new THREE.BoxGeometry(1.62,.12,.76),new THREE.MeshStandardMaterial({color:0x214a4b,roughness:.85}));base.position.y=.06;g.add(base);
@@ -151,10 +143,9 @@ function boot(){
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);
   world=createWorkshop();scene.add(world);
-  deliveryVan=createDeliveryVan();deliveryVan.position.set(-4.2,.0,1.8);scene.add(deliveryVan);
   const officeArt=world.userData.office.userData;officeArt.normalScreenMaterial=officeArt.monitorScreen.material;
-  // Brand the supplier's vehicle and crate, not the incoming customer order.
-  new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff});deliveryVan.userData.brandMark.material=material;stations.receiving.model.userData.brandMark.material=material;});
+  // Brand the delivered crate with its supplier.
+  new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff});stations.receiving.model.userData.brandMark.material=material;});
   for(const def of STATION_LAYOUT){
     const model=def.id==='office'?world.userData.office:def.id==='receiving'?createReceivingDock():def.stock?createMaterialBin(def.stock):createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
     const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span>${def.name}</span><span class="station-time"></span><i class="station-progress"></i>`;label.onclick=()=>{goToStation(def.id);};$('station-labels').appendChild(label);
@@ -221,7 +212,7 @@ function updateParticles(dt){for(let i=particles.length-1;i>=0;i--){const p=part
 function processEvents(){for(const ev of game.drain()){
   audio.event(ev.type);
   if(ev.type==='hint')toast(ev.message);
-  if(ev.type==='sourceDelivered'){audio.event('ready');spawnParticles(-2.3,1.05,1.8,0x72e8cf,12);if(deliveryVan){deliveryVan.visible=true;deliveryVan.userData.arrival=3;deliveryVan.position.x=reduced?-3.15:-5;}}
+  if(ev.type==='sourceDelivered'){audio.event('ready');spawnParticles(-2.3,1.05,1.8,0x72e8cf,12);}
   if(ev.type==='sourceFulfilled'){audio.event('shipped');floatText(`+${ev.points} · ORDER FULFILLED`,'ship',true);spawnParticles(6,1.2,1.2,0x72e8cf,18);}
   if(ev.type==='programmed'){floatText('CAD READY ✓','office',true);}
   if(ev.type==='call'){nextPhoneRing=clockTime+2.2;}
@@ -305,12 +296,6 @@ function animateOfficeSeat(dt){
 }
 function animateShop(dt){
   const active=game.mode==='playing';
-  if(deliveryVan?.userData.arrival>0){
-    deliveryVan.userData.arrival=Math.max(0,deliveryVan.userData.arrival-dt);
-    const t=3-deliveryVan.userData.arrival;
-    deliveryVan.position.x=reduced?-3.15:t<1?THREE.MathUtils.lerp(-5,-3.15,t):t<2?-3.15:THREE.MathUtils.lerp(-3.15,-5,t-2);
-    deliveryVan.visible=deliveryVan.userData.arrival>0&&!menuMode;
-  }
   if(stations['material-block'])stations['material-block'].model.visible=menuMode||game.shiftIndex>0;
   if(stations.receiving){stations.receiving.model.visible=!menuMode&&game.shiftIndex>0&&['sourcing','delivered'].includes(game.sourcing?.state);stations.receiving.model.userData.crate.visible=!!game.receiving;}
   for(const [id,s] of Object.entries(stations)){
@@ -436,7 +421,7 @@ function frame(now){
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous role to unlock':''}`);b.innerHTML=`<span class="num">0${i+1}</span><span><b>${s.name}</b><small>${i>unlocked?'Clear the previous role to unlock':s.subtitle}</small></span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});$('migration-note').hidden=!migrationNotice;}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
 function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){if(deliveryVan){deliveryVan.visible=false;deliveryVan.userData.arrival=0;}audio.init();game.reset(index);social.start(index);selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){audio.init();game.reset(index);social.start(index);selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`ROLE 0${index+1} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);$('scene').focus();}
 function pause(){if(game.mode!=='playing')return;game.mode='paused';audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused')return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
