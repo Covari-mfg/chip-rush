@@ -131,7 +131,7 @@ The optional WebMCP enhancement exposes a read-only shop snapshot and a start-wa
 
 The supplied workshop reference informed the teal/cream palette, miniature cutaway perspective, and layout details. It is not bundled or used as a flat background. All game art, interface, logic, and synthesized sound were made for this project. Three.js is used under its MIT license; see `dist/vendor/THREE-LICENSE.txt`. Renderer API reference: https://threejs.org/docs/.
 
-Development currently stays local and in GitHub for collaboration. Do not publish or deploy unless explicitly requested.
+The public release is deployed from a reviewed `main` commit using the steps above. Local previews and portable ZIPs remain separate from the public leaderboard.
 
 ## Release and local review boundary
 
