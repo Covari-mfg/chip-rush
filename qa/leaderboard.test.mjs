@@ -148,14 +148,16 @@ test('result caps reject noninteger counts, impossible role counts, and unearned
   for(const [key,value] of [['score',20001],['shipped',13],['missed',16],['sourced',2],['calls',4]]) {
     assert.ok(validateResult({...valid,[key]:value},run,START+180000));
   }
-  assert.equal(validateResult({...valid,score:9735,sourced:1},run,START+180000),null);
-  assert.match(validateResult({...valid,score:9736,sourced:1},run,START+180000),/completed work/);
-  assert.match(validateResult({...valid,score:59,sourced:1},run,START+180000),/completed work/);
+  assert.equal(validateResult({...valid,score:9975,sourced:1},run,START+180000),null);
+  assert.match(validateResult({...valid,score:9976,sourced:1},run,START+180000),/completed work/);
+  assert.match(validateResult({...valid,score:299,sourced:1},run,START+180000),/completed work/);
   assert.match(validateResult({...valid,score:1,shipped:0,calls:0},run,START+180000),/completed work/);
-  assert.equal(validateResult({...valid,score:60,shipped:0,sourced:1,calls:0},run,START+180000),null,'A sourced job may earn points without an in-house shipment');
+  assert.match(validateResult({...valid,score:300,shipped:0,sourced:1,calls:0},run,START+180000),/completed work/,'Outsourcing only appears after two in-house shipments');
+  assert.equal(validateResult({...valid,score:300,shipped:2,sourced:1,calls:0},run,START+180000),null);
+  assert.ok(validateResult({...valid,role:0,score:300,sourced:1,calls:0},{...run,role:0},START+180000),'Operator cannot claim sourcing');
   assert.equal(validateResult({...valid,score:75,shipped:0,calls:3},run,START+180000),null,'Completed phone conversations earn their own points');
   assert.equal(validateResult({...valid,score:0,shipped:0,calls:3},run,START+180000),null,'Missed rushes can offset every completed call');
-  assert.equal(validateResult({...valid,score:60,shipped:0,sourced:1,calls:3},run,START+180000),null,'Sourcing remains valid after all call points are lost to missed rushes');
+  assert.equal(validateResult({...valid,score:300,shipped:2,sourced:1,calls:3},run,START+180000),null,'Sourcing remains valid after all call points are lost to missed rushes');
   assert.match(validateResult({...valid,score:76,shipped:0,calls:3},run,START+180000),/completed work/);
   assert.equal(validateResult({...valid,score:6000},run,START+180000),null,'Real performance is not limited by a role ceiling');
   for(const role of [0,1]) {

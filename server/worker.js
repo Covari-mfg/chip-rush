@@ -15,12 +15,13 @@ export function validateResult(value,run,now=Date.now()){
   if(!run||run.ruleset!==RULESET||value.role!==run.role)return 'Start a new shift before posting.';
   if(now-run.started_at<(SHIFTS[run.role].duration-5)*1000)return 'Finish the full shift before posting.';
   if(now-run.started_at>86400000)return 'This score submission has expired. Play another shift.';
-  const ranges={score:[0,20000],shipped:[0,SHIFTS[run.role].maxOrders??8],missed:[0,15],sourced:[0,1],calls:[0,run.role===2?3:0]};
+  const ranges={score:[0,20000],shipped:[0,SHIFTS[run.role].maxOrders??8],missed:[0,15],sourced:[0,run.role===0?0:1],calls:[0,run.role===2?3:0]};
   for(const [key,[min,max]] of Object.entries(ranges))if(!Number.isInteger(value[key])||value[key]<min||value[key]>max)return 'That result is outside this shift’s limits.';
-  const support=value.sourced*60+value.calls*25;
+  if(value.sourced&&value.shipped<2)return 'That score does not match the completed work.';
+  const support=value.sourced*300+value.calls*25;
   // Each answered call can lose its 25 points if the accepted rush misses.
   // Sourcing points remain earned even when every rush is missed.
-  if(value.score<value.sourced*60||value.score>value.shipped*1600+support)return 'That score does not match the completed work.';
+  if(value.score<value.sourced*300||value.score>value.shipped*1600+support)return 'That score does not match the completed work.';
   return null;
 }
 export default {

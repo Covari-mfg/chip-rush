@@ -81,13 +81,13 @@ test('repeated cuts show one badge per machine and keep inspection or finishing 
 test('each actual Covari offer maps its capability to the corresponding technology badge',()=>{
   const expected=[['Injection molding','im'],['Wire EDM','edm'],['Sheet metal fabrication','sm']];
   assert.deepEqual(SOURCE_JOBS.map(job=>[job.capability,job.technology]),expected);
-  for(let role=0;role<3;role++) {
-    const f=setup();f.game.reset(role);f.game.nextCallAt=Infinity;
+  for(let role=1;role<3;role++) {
+    const f=setup();f.game.reset(role);f.game.nextCallAt=Infinity;f.game.shipped=2;
     for(let tick=0;tick<701;tick++)f.game.tick(.05);
     assert.equal(f.game.sourcing.state,'offer');f.context.updateSourceUI();
     assert.deepEqual(f.badgeCalls.map(call=>call.keys),[[expected[role][1]]]);
     assert.equal(f.$('source-title').textContent,SOURCE_JOBS[role].name);
-    assert.ok(f.$('source-detail').textContent.includes(expected[role][0]));
+    assert.equal(f.$('source-capability').textContent,'Outside shop capability');
     assert.equal(f.$('source-technology').innerHTML,f.badgeCalls[0].markup);
   }
 });
@@ -95,10 +95,10 @@ test('each actual Covari offer maps its capability to the corresponding technolo
 test('source badge rendering is cached across countdowns and workflow states, then replaced for the next technology',()=>{
   const f=setup(),badge=f.$('source-technology');
   f.context.updateSourceUI();assert.equal(f.badgeCalls.length,0);
-  f.game.sourcing={...SOURCE_JOBS[0],state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
+  f.game.sourcing={id:201,...SOURCE_JOBS[0],route:['inspect','ship'],index:0,location:'supplier',state:'offer',offerRemaining:30,remaining:22,points:300};
   f.context.updateSourceUI();assert.equal(f.badgeCalls.length,1);
   const firstMarkup=badge.innerHTML;
-  for(const state of ['offer','approving','sourcing','delivered']) {
+  for(const state of ['offer','sourcing','delivered']) {
     f.game.sourcing.state=state;
     f.game.sourcing.offerRemaining-=1;f.game.sourcing.remaining-=1;
     f.context.updateSourceUI();

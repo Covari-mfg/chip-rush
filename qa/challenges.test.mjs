@@ -80,9 +80,10 @@ test('valid zero and maximum counts parse without silently changing the challeng
 
 test('challenge links cannot claim points unsupported by shipments, sourcing, and customer calls',()=>{
   assert.equal(parseChallenge(query({score:'9000',shipped:'0'})),null);
-  assert.equal(parseChallenge(query({score:'3336',shipped:'2'})),null);
+  assert.equal(parseChallenge(query({score:'3576',shipped:'2'})),null);
   assert.deepEqual(parseChallenge(query({score:'60',shipped:'0'})),{role:2,score:60,shipped:0,stars:0});
-  assert.deepEqual(parseChallenge(query({score:'3335',shipped:'2'})),{role:2,score:3335,shipped:2,stars:0});
-  assert.deepEqual(parseChallenge(query({score:'135',shipped:'0'})),{role:2,score:135,shipped:0,stars:0});
+  assert.deepEqual(parseChallenge(query({score:'3575',shipped:'2'})),{role:2,score:3575,shipped:2,stars:0});
+  assert.equal(parseChallenge(query({score:'135',shipped:'0'})),null,'Outsourcing requires two ordinary shipments first');
+  assert.equal(parseChallenge(query({role:'0',score:'3201',shipped:'2'})),null,'Operator has no outsourcing bonus');
   assert.equal(parseChallenge(query({role:'1',score:'61',shipped:'0'})),null,'Only Owner earns customer-call points');
 });

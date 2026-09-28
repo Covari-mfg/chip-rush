@@ -17,7 +17,7 @@ bundle+=(await read('dist/main.js')).replace(/^import .*?;\s*$/gm,'');
 const fontData=(await readFile(path.join(root,'dist/assets/fonts/instrument-sans-latin.woff2'))).toString('base64');
 const css=(await read('dist/style.css')).replace('./assets/fonts/instrument-sans-latin.woff2',`data:font/woff2;base64,${fontData}`);
 const logoData=(await readFile(path.join(root,'dist/assets/covari-logo.png'))).toString('base64');
-const html=(await read('dist/index.html')).replace('src="./assets/covari-logo.png"',()=>`src="data:image/png;base64,${logoData}"`).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
+const html=(await read('dist/index.html')).replaceAll('src="./assets/covari-logo.png"',()=>`src="data:image/png;base64,${logoData}"`).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
 if(/(?:src|href)="\.\//.test(html.replace('href="./"','')))throw new Error('Unexpected external asset reference in standalone game.');
 await writeFile(path.join(root,'dist/CHIP-RUSH.html'),html);
 await writeFile(path.join(root,'qa/offline-syntax.js'),bundle);

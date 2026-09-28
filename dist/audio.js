@@ -1,5 +1,5 @@
 // Original 104 BPM country/bluegrass loop and locally synthesized shop cues.
-// Audio starts only after the player clocks in; the standalone build embeds the track.
+// Audio unlocks on a home-screen gesture or clock-in; standalone embeds the track.
 const MUSIC_URL='./assets/music/country-bluegrass-104.mp3';
 const MUSIC_LOOP_SECONDS=1628308/44100;
 const MUSIC_LEVEL=.65; // With the .24 master: about 16 dB below the audition.
