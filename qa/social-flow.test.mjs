@@ -6,15 +6,15 @@ import { RULESET, SHIFTS } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 
 const source=await readFile(new URL('../dist/social.js',import.meta.url),'utf8');
-const executable=source.replace(/^import .*;\n/,'').replaceAll('export function ','function ')
-  +'\nthis.createSocial=createSocial;';
+const executable=source.replace(/^import .*;\n/gm,'').replaceAll('export function ','function ')
+  +'\nconst RULESET=globalThis.RULESET;const createGameAnalytics=()=>({track(){}});\nthis.createSocial=createSocial;';
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const response=(value,ok=true)=>({ok,json:async()=>value});
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 
 // Only the DOM surface and external services are stubbed. All event handlers,
 // snapshots, sharing logic, and asynchronous generation guards are production.
-function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher}={}) {
+function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,analytics}={}) {
   const nodes=new Map(),requests=[],copies=[],shares=[],acceptedChallenges=[];let nextRun=0;
   const element=()=>({hidden:true,disabled:false,value:'',textContent:'',children:[],open:false,selected:false,
     append(...children){this.children.push(...children);},replaceChildren(...children){this.children=[...children];},
@@ -33,11 +33,22 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher}=
   const context=vm.createContext({RULESET,SHIFTS,URL,URLSearchParams,AbortSignal,
     document:{getElementById:$,createElement:element},location:new URL(url),navigator,fetch});
   vm.runInContext(executable,context);
-  const social=context.createSocial({onChallenge(role){acceptedChallenges.push(role);}});
+  const social=context.createSocial({onChallenge(role){acceptedChallenges.push(role);},analytics});
   const finish=(extra={})=>social.finish({role:2,score:4173,shipped:SHIFTS[2].stars[2],missed:0,sourced:1,calls:3,...extra});
   const submit=()=>$('post-form').onsubmit({preventDefault(){}});
   return {$,social,finish,submit,requests,copies,shares,acceptedChallenges};
 }
+
+test('social lifecycle analytics emits one start and one completion per shift',async()=>{
+  const events=[];const f=setup({analytics:{track(...args){events.push(args);}}});
+  f.social.start(2);f.finish();f.finish();f.social.start(1);f.finish({role:1,score:2700,shipped:5,sourced:0,calls:0});
+  assert.equal(JSON.stringify(events),JSON.stringify([
+    ['chip_rush.shift_started',{role:2}],
+    ['chip_rush.shift_completed',{role:2,score:4173,shipped:SHIFTS[2].stars[2],sourced:1}],
+    ['chip_rush.shift_started',{role:1}],
+    ['chip_rush.shift_completed',{role:1,score:2700,shipped:5,sourced:0}],
+  ]));
+});
 
 test('canceling native share retains a usable manual challenge link and copy control',async()=>{
   const f=setup({nativeShare:async()=>{const error=new Error('Canceled');error.name='AbortError';throw error;}});

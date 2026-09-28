@@ -1,4 +1,5 @@
 import { RULESET, SHIFTS } from './core.js';
+import { createGameAnalytics } from './analytics.js';
 
 export function parseChallenge(search) {
   const p=new URLSearchParams(search);
@@ -15,13 +16,13 @@ export function challengeURL(result,base) {
   for(const [key,value] of Object.entries({challenge:1,rules:RULESET,role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
   return url.href;
 }
-export function createSocial({onChallenge}) {
+export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   const $=id=>document.getElementById(id),challenge=parseChallenge(location.search);
   const online=location.protocol!=='file:';
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
-  let run=null,result=null,generation=0,posted=false,boardGeneration=0;
+  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0;
   const api=async(path,data)=>{
     if(!online)throw new Error('The shared board is available in the hosted game.');
     const response=await fetch('/api/'+path,{method:data?'POST':'GET',headers:data?{'content-type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(12000)});
@@ -75,12 +76,16 @@ export function createSocial({onChallenge}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role){const token=++generation;result=null;run=null;posted=false;api('runs',{role,ruleset:RULESET}).then(value=>{if(token===generation)run=value.id;}).catch(()=>{});},
+    start(role){const token=++generation;result=null;run=null;posted=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset:RULESET}).then(value=>{if(token===generation)run=value.id;}).catch(()=>{});},
     finish(value){
+      if(generation>0&&finishedGeneration===generation)return;
+      finishedGeneration=generation;
       result=Object.freeze({...value,stars:SHIFTS[value.role].stars.filter(n=>value.shipped>=n).length});
+      analytics.track('chip_rush.shift_completed',{role:value.role,score:value.score,shipped:value.shipped,sourced:value.sourced});
       $('social-results').hidden=false;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;
       $('friend-result').hidden=!challenge;
       if(challenge){$('friend-result').textContent=value.score>challenge.score?'Challenge won. Your friend has a new score to chase.':value.score===challenge.score?'A tie! One more shift to take the lead?':`${(challenge.score-value.score).toLocaleString()} points to catch your friend. One more shift?`;}
     },
+    track(event,values){analytics.track(`chip_rush.${event}`,values);},
   };
 }

@@ -2,7 +2,7 @@
 
 A complete single-player 3D machine-shop game. Original procedural assets, short shifts, timed CNC operations, multiple orders, a carried part, and a shipping streak.
 
-[Play the current hosted build](https://chip-rush-shop.parker-joshua179.chatgpt.site/) or use the source in this repository. The hosted build is maintained separately; GitHub changes do not automatically update it. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose improvements.
+[Play CHIP RUSH](https://play.covari.io/) or use the source in this repository. The public game runs from this repository; source changes appear there after a reviewed release. See [CONTRIBUTING.md](CONTRIBUTING.md) to propose improvements.
 
 ## Play without installing anything
 
@@ -76,7 +76,24 @@ node scripts/dev-server.mjs
 
 Open http://127.0.0.1:4174/. The local board lives in `.local/board.sqlite`, uses the same Worker routes, and applies the checked-in Drizzle migrations once. It is separate from the public board. `PORT=4175` can select another local port.
 
-For the hosted build, install with `pnpm install`, then run `pnpm build`. Output is `dist/client/` for public assets and `dist/server/index.js` for a Cloudflare-compatible Worker. The generic `.openai/hosting.json` declares the logical D1 binding `DB`; Sites applies `drizzle/` migrations on publication. No runtime secrets are required. Keep the configured Site identity in the separate publishing checkout.
+For the hosted build, install with `pnpm install --frozen-lockfile`, then run `pnpm build`. Output is `dist/client/` for public assets and `dist/server/index.js` for the Cloudflare Worker. `wrangler.jsonc` binds the dedicated `chip-rush` D1 database as `DB` and routes the Worker to `play.covari.io`. No runtime secrets are required. The portable `.openai/hosting.json` is for other hosting providers and is not the production configuration.
+
+### Release to play.covari.io
+
+Release a reviewed `main` commit with an authorized Covari Cloudflare login:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm test
+pnpm build
+pnpm deploy:dry-run
+pnpm db:migrate:remote
+pnpm deploy
+```
+
+The D1 migrations are additive and apply only to the dedicated game database. Do not seed fictional scores. Verify the homepage, `/api/leaderboard`, an actual completed shift, and the results link after deployment. The source in GitHub, a merged commit, and the public deployment are separate states; verify the public site before announcing an update.
+
+On the public domain, the game sends anonymous shift-start, shift-completion, and Covari-link-click events to Covari's PostHog project. It sends no leaderboard name or email in those events and sends nothing from local or offline copies. The results link carries a campaign parameter so a later inquiry on `covari.io` can be attributed to the game. Those campaign-level counts do not prove that an individual visitor who played submitted an inquiry.
 
 The self-contained `dist/CHIP-RUSH.html` still opens offline with all 3D assets. A plain static server can also serve `dist/`. Gameplay and challenge sharing work there; public score posting requires the hosted API. The portable ZIP includes source, migrations, checks and setup instructions, without the original Site identity or any local database.
 
