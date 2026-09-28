@@ -1,6 +1,6 @@
 # Feedback review — September 28, 2026
 
-Reviewed all eight open issues (#2–#9), merged PR #1, and the local game based on `cb8d306`. PR #1 has no review comments. The observations describe real player friction; the proposed mechanical solutions still need testing. No issues are closed by this local review.
+Reviewed all eight open issues (#2–#9), merged PR #1, and the local game based on `cb8d306`. PR #1 has no review comments. The observations describe real player friction; the proposed mechanical solutions still need testing. The sections below record the successive local review batches. The final integration status is recorded at the end.
 
 ## Suggested order
 
@@ -83,3 +83,32 @@ This remains a local gameplay prototype. Before publication, revisit score-seaso
 ## Inspection decision — September 28, 2026
 
 User decided to skip attended inspection as not sufficiently relevant. Closed issue #7 as not planned. QC remains a four-second unattended step, including for outsourced parts. No gameplay code changed.
+
+
+## Stock dispatch and PR integration — September 28, 2026 (#4)
+
+Replaced required ticket selection with physical Round and Plate bins, plus Block stock in advanced roles. A bin dispatches the earliest-due programmed, unstarted matching ordinary job; ties use the lower order number. Each part remains tied to its customer order and machining route. Office interaction resumes its unfinished drawing or prepares the earliest-due unprepared job. Tickets are informational, with stock pictograms and automatic carried-job emphasis. Tab and number keys no longer select tickets.
+
+Bin recycling, Hold bench swaps, ready-machine exchanges, unattended QC, Owner calls, role targets and operation durations remain in place. Operator has no outsourcing or Block bin. This deliberately limits automatic choice to jobs of the stock type the player physically chooses; it does not add inventory, fixturing or future-level systems.
+
+The movement-aware driver now uses the actual stock bins and automatic CAD, with no ticket-selection calls. This checks the changed physical route as well as core assignment logic.
+
+### Score compatibility
+
+New ruleset `roles-v7-stock-outsourcing` and local save `chip-rush-roles-v7`. Every previous season retains its stored records. Role unlocks migrate; personal scores/stars start fresh. The board filters to the current ruleset, and old challenge links are ignored. This prevents comparing scores earned under different dispatch, movement and outsourcing opportunities.
+
+### Issue disposition
+
+- #2: simplified start/briefing/gameplay copy, informational top tickets, removed Hands panel.
+- #3: Play the Game stays outside the role picker’s scroll area.
+- #4: automatic dispatch through physical stock bins and automatic CAD priority.
+- #5: optional advanced-role customer order, Covari as supplier, physical receipt/QC/shipping and 300-point reward.
+- #6: Hold bench swaps and compatible ready-machine exchanges.
+- #7: closed as not planned at the user’s request; inspection remains unattended.
+- #8: persistent Interact and Dash controls.
+- #9: front-aligned camera and wider usable floor framing, plus corner scoreboard.
+
+Changes are prepared as separate review commits in one PR. GitHub source changes do not deploy the separately maintained hosted game.
+
+
+Final checks: 180 automated tests passed. Movement-aware normal/expert balance assertions passed; eight Owner shipments remain attainable with either rush choice. Offline and hosted builds, standalone JavaScript syntax and whitespace checks passed. The live browser completed an Operator stock → lathe → QC → shipping cycle with no ticket selection. Advanced-role browser observation showed all three bins, prepared CAD, two ordinary shipments and the optional Covari offer; no console warnings/errors were recorded. This is not a complete human playthrough of every role or proof of player enjoyment.

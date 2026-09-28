@@ -8,7 +8,7 @@ This package contains the playable game, its editable source, and the checks use
 2. Open `dist/CHIP-RUSH.html` in a current browser. This is the self-contained version; it needs no account, installation, or internet connection.
 3. Start with Operator. Clearing a role unlocks the next one.
 
-Click a station to walk there and use it. Alternatively, move with WASD or the arrow keys and press E to interact. Shift dashes, Tab selects the next order, and Escape pauses. Machines keep working while you handle other jobs.
+Click a station to walk there and use it. Alternatively, move with WASD or the arrow keys and press E to interact. Shift dashes and Escape pauses. The top order rail is a read-only dispatch view; you do not need to select a ticket. Machines keep working while you handle other jobs.
 
 See the latest entry in qa/PLAYTEST.md for current build and browser verification. Browser playtests use the local server below; if opening the file directly gives trouble, use that route. The browser needs WebGL 2 and hardware acceleration.
 
@@ -34,7 +34,9 @@ Stars depend on shipped orders, not score or rush bonuses.
 | Production Manager | 3 minutes | 4 | 5 | 6 |
 | Owner | 3 minutes | 5 | 6 | 8 |
 
-Operator should feel welcoming. Manager adds six seconds of attended CAD per order and rewards overlapping work. Manager and Owner follow **CAD → Material → turn or mill (sometimes both) → Inspection → Shipping**. Material pickup requires completed CAD. Manager has at most six jobs, with a 16-second opening gap and 25-second later spacing. Owner has at most eight jobs, with a 12-second opening gap and 18-second later spacing. Both retain the four-active-order limit and closing-time safety check. Owner three stars should reward practiced scheduling and routing.
+Operator should feel welcoming. Every role follows **matching stock bin → turn or mill (sometimes both) → Inspection → Shipping**; Manager and Owner add six seconds of attended CAD before stock and reward overlapping work. The office automatically starts the earliest-due unprogrammed order and resumes a partial CAD job. After CAD is ready, walk to ROUND, PLATE, or BLOCK stock; each bin automatically gives you the earliest-due matching order. Material pickup requires completed CAD in roles that use programming. Manager has at most six jobs, with a 16-second opening gap and 25-second later spacing. Owner has at most eight jobs, with a 12-second opening gap and 18-second later spacing. Both retain the four-active-order limit and closing-time safety check. Owner three stars should reward practiced scheduling and routing.
+
+The Hold bench is a working part of the flow: use it to park a carried part, collect another, or swap the carried and parked parts in one interaction. Ready machine outputs also swap with a compatible carried part, preserving both jobs’ progress.
 
 Owner has three calls scheduled at 27, 77, and 127 seconds into the shift. Calls can queue behind an earlier call or rush. Ringing interrupts handoffs; answering requires three uninterrupted seconds while machines and deadlines keep running. A live offer can always be accepted, even for a started or complex job while machines are busy. The separate rush window is at most 45 seconds and cannot outlast the ordinary deadline or closing time. Success earns 100 points. Missing an accepted promise costs 25 points once, clamped at zero. Declining preserves the original promise without a penalty. Both choices can still earn three stars.
 
@@ -69,6 +71,6 @@ The package has no existing hosted Site ID or repository history. Opening it in 
 
 ## Community update
 
-Run `node scripts/dev-server.mjs` with Node 24+ and open http://127.0.0.1:4174/ to test the complete game and a local persistent score board. No dependency install is needed to play locally. `pnpm install && pnpm build` creates the hosted Worker + assets. See README for the D1 schema, player-reported score validation boundary, friend links, and optional Covari sourcing job. `CHIP-RUSH.html` remains fully playable offline; the shared board needs the hosted API.
+Run `node scripts/dev-server.mjs` with Node 24+ and open http://127.0.0.1:4174/ to test the complete game and a local persistent score board. No dependency install is needed to play locally. `pnpm install && pnpm build` creates the hosted Worker + assets. See README for the D1 schema, player-reported score validation boundary, and friend links. `CHIP-RUSH.html` remains fully playable offline; the shared board needs the hosted API.
 
-Publication is coordinated separately from GitHub collaboration. The Covari bonus is offered in all three roles: select **Outsource with Covari**, then click the Office computer.
+Publication is coordinated separately from GitHub collaboration. The optional Covari flow is available only in Manager and Owner after two normal shipments: select **Outsource with Covari**, receive the delivery, run QC, then ship for 300 points.
