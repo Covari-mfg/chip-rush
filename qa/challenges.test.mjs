@@ -36,13 +36,9 @@ test('challenge parsing rejects absent markers, old rules, and missing result fi
   }
 });
 
-test('v5 Operator links remain playable and regenerate with current rules while advanced links expire',()=>{
-  const operator=parseChallenge(query({rules:'roles-v5-performance',role:'0',score:'3000',shipped:'5'}));
-  assert.deepEqual(operator,{role:0,score:3000,shipped:5,stars:3});
-  const renewed=new URL(challengeURL(operator,'https://chip-rush.example/'));
-  assert.equal(renewed.searchParams.get('rules'),RULESET);assert.deepEqual(parseChallenge(renewed.search),operator);
-  for(const role of [1,2])assert.equal(parseChallenge(query({rules:'roles-v5-performance',role:String(role),score:'3000',shipped:'5'})),null);
-  assert.equal(parseChallenge(query({rules:'roles-v5-performance',role:'0',score:'3000',shipped:'9'})),null,'Legacy compatibility does not bypass Operator limits');
+test('previous seasons cannot challenge the changed stock workflow',()=>{
+  for(const rules of ['roles-v5-performance','roles-v6-cad-rush'])for(const role of [0,1,2])
+    assert.equal(parseChallenge(query({rules,role:String(role),score:'3000',shipped:'5'})),null);
 });
 
 test('challenge numeric fields reject signs, decimals, nonfinite values, markup, and overflow',()=>{
@@ -80,9 +76,10 @@ test('valid zero and maximum counts parse without silently changing the challeng
 
 test('challenge links cannot claim points unsupported by shipments, sourcing, and customer calls',()=>{
   assert.equal(parseChallenge(query({score:'9000',shipped:'0'})),null);
-  assert.equal(parseChallenge(query({score:'3336',shipped:'2'})),null);
+  assert.equal(parseChallenge(query({score:'3576',shipped:'2'})),null);
   assert.deepEqual(parseChallenge(query({score:'60',shipped:'0'})),{role:2,score:60,shipped:0,stars:0});
-  assert.deepEqual(parseChallenge(query({score:'3335',shipped:'2'})),{role:2,score:3335,shipped:2,stars:0});
-  assert.deepEqual(parseChallenge(query({score:'135',shipped:'0'})),{role:2,score:135,shipped:0,stars:0});
+  assert.deepEqual(parseChallenge(query({score:'3575',shipped:'2'})),{role:2,score:3575,shipped:2,stars:0});
+  assert.equal(parseChallenge(query({score:'135',shipped:'0'})),null,'Outsourcing requires two ordinary shipments first');
+  assert.equal(parseChallenge(query({role:'0',score:'3201',shipped:'2'})),null,'Operator has no outsourcing bonus');
   assert.equal(parseChallenge(query({role:'1',score:'61',shipped:'0'})),null,'Only Owner earns customer-call points');
 });

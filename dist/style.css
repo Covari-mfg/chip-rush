@@ -149,6 +149,26 @@
 
 .score-breakdown{font-size:12px;line-height:1.6;color:var(--muted);margin:10px 0;}
 
+/* Customer owned outsourcing ticket: same rail language as ordinary work, with a quiet delivery cue. */
+.source-card{font-family:inherit;background:#f5f0db;color:var(--ink);border:2px solid transparent;border-radius:6px;padding:11px 12px;gap:7px;box-shadow:0 5px 14px #00172142;min-height:136px;position:relative}
+.source-ticket-top{display:flex;justify-content:space-between;gap:8px;font:700 10px ui-monospace,monospace;color:#647772}
+.source-due{color:#3a6262}
+.source-heading{display:flex;align-items:center;gap:8px;min-width:0}
+.source-heading strong{font-size:16px;letter-spacing:-.3px;min-width:0;flex:1}
+.source-capability-icon{width:26px;height:26px;display:grid;place-items:center;border-radius:6px;background:#d7e8df;color:#155c51;font-weight:900;font-size:16px;flex:none}
+.source-card>small{color:#466b62;font-size:10px;letter-spacing:.5px;font-weight:800}
+.source-card>span#source-detail{font-size:12px;color:#5e7470;line-height:1.25}
+.source-actions{display:flex!important;gap:6px;margin-top:2px}
+.source-card button{border:1px solid #2a7773;border-radius:5px;background:#1dbcae;color:#102a32;font-size:12px;font-weight:800;padding:8px 9px;min-height:35px}
+.source-card #source-accept{flex:1;white-space:normal;line-height:1.12}
+.source-card #source-decline{background:transparent;color:#466b62;flex:none}
+.source-card.delivered{border-color:#45a88d;background:#f7f2dd}
+.source-card.chosen{box-shadow:0 0 0 2px #185754,0 5px 18px #00172170}
+.source-card.delivered>.source-ticket-top,.source-card.delivered>.source-actions{display:flex!important}
+.source-card .source-capability-icon{display:none}
+.source-card #source-accept::before{content:'C';display:inline-grid;place-items:center;width:18px;height:18px;margin-right:6px;border-radius:4px;background:#102a32;color:#1dbcae;font-size:11px;font-weight:900;vertical-align:-4px}
+@media(max-width:759px){#shop-sidebar #orders .source-card{width:236px;min-height:148px;padding:10px}.source-card button{font-size:11px;padding:7px}.source-heading strong{font-size:15px}}
+
 /* Match the Covari website wordmark with its locally bundled brand typeface. */
 @font-face{font-family:"Covari Instrument Sans";font-style:normal;font-weight:400 700;font-display:swap;src:url("./assets/fonts/instrument-sans-latin.woff2") format("woff2")}
 .source-card{font-family:"Covari Instrument Sans",Arial,sans-serif;overflow:hidden}
@@ -183,3 +203,149 @@
 @media(max-width:680px){.home-board{position:static;width:100%;max-height:none;margin-top:22px;padding:16px}.board-dialog{padding:20px;max-height:calc(100dvh - 28px)}.board-heading h2{font-size:29px}.score-list li,.board-dialog .score-list li{grid-template-columns:24px minmax(0,1fr) auto;gap:10px}.score-list .score-points{font-size:18px}}
 
 .post-result-summary{font-size:16px;font-weight:700;color:var(--gold);margin:0 0 14px}
+
+/* Keep role selection scrollable while its play action stays in view. */
+.welcome-panel{display:flex;flex-direction:column;overflow:visible;gap:16px}
+.welcome-panel .role-setup{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:3px}
+.welcome-panel h1{font-size:32px;line-height:1.12;letter-spacing:-1px;margin:0 0 20px}
+.welcome-panel .shift-picker{margin-bottom:0}
+.welcome-panel #start-button{flex-shrink:0;margin:0 3px;width:calc(100% - 6px)}
+.welcome-panel .migration-note{margin:13px 0 0}
+@media(max-width:680px){
+  .welcome-panel{margin-bottom:18px;gap:12px}
+  .welcome-panel h1{font-size:27px;margin-bottom:14px}
+}
+@media(max-height:510px){
+  .welcome-panel{gap:10px}
+  .welcome-panel h1{font-size:25px;margin-bottom:12px}
+}
+
+/* Keep action names and keyboard shortcuts visible beside the carried part. */
+#shop-sidebar #game-footer{flex-shrink:0}
+.action-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;pointer-events:auto}
+.action-controls button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px;border:1px solid #729f9380;border-radius:7px;background:#183c47;color:var(--paper);font-family:inherit;font-size:14px;font-weight:700;touch-action:manipulation}
+.action-controls button:hover{background:#285963}
+.action-controls kbd{font-size:12px;color:var(--gold);min-width:24px}
+#shop-sidebar .interaction-hint{background:none;padding:0 2px;font-size:13px;color:#b4c9c6}
+#touch-interact,#touch-dash{font-size:13px}
+#touch-dash{width:56px;height:56px;right:78px}
+@media(max-width:759px){#shop-sidebar #game-footer{flex-direction:column;align-items:stretch}}
+@media(pointer:coarse){.action-controls{display:none}}
+
+/* Top-row job queue: keep the floor clear between orders and hand controls. */
+@media(min-width:760px){
+  body.playing .topbar{height:62px;padding:10px 18px;background:none;pointer-events:none}
+  body.playing .topbar .brand,body.playing .shift-heading,body.playing .rfq-label{display:none}
+  body.playing .top-actions{pointer-events:auto}
+  body.playing #live-hud{top:auto;bottom:96px;left:16px;right:auto;width:230px}
+  body.playing .status-row{justify-content:flex-end}
+  body.playing .scoreboard{gap:14px}
+  body.playing .scoreboard>span{flex-direction:column;align-items:flex-start;gap:3px}
+  body.playing .scoreboard small{font-size:8px}
+  body.playing .scoreboard b{font-size:20px}
+  #shop-sidebar{display:contents}
+  #shop-sidebar .order-list-heading{display:none}
+  #shop-sidebar #orders{position:absolute;top:8px;left:16px;right:116px;width:auto;height:170px;min-height:0;display:flex;flex-direction:row;align-items:stretch;gap:10px;overflow-x:auto;overflow-y:hidden;padding:3px 3px 9px;scrollbar-gutter:auto;z-index:12}
+  #shop-sidebar #orders .order-ticket,#shop-sidebar #orders .order-ticket.long-route{width:clamp(218px,calc((100vw - 168px)/4),278px);min-height:0;flex:0 0 auto;padding:7px 10px}
+  #shop-sidebar .ticket-heading{margin-bottom:2px}
+  #shop-sidebar .order-ticket h3{font-size:16px;margin:2px 0}
+  #shop-sidebar .ticket-select{display:none}
+  #shop-sidebar .order-ticket.selected .ticket-top>span:first-child::before{content:'✓ ';color:#196b56}
+  #shop-sidebar .ticket-top,#shop-sidebar .route-step,#shop-sidebar .route-arrow,#shop-sidebar .ticket-status,#shop-sidebar .rush-status{font-size:11px}
+  #shop-sidebar .route{gap:3px;margin:3px 0}
+  #shop-sidebar .route-step{padding:2px 3px}
+  #shop-sidebar .ticket-status{margin-top:3px;line-height:1.25}
+  #shop-sidebar .rush-status{margin-top:2px}
+  #orders .source-card{width:286px;overflow-y:auto;padding:9px 11px;gap:5px}
+  #shop-sidebar #game-footer{position:absolute;left:16px;right:16px;bottom:12px;width:auto;display:flex;flex-direction:row;align-items:stretch;gap:12px;z-index:12}
+  #shop-sidebar .carry-panel{order:0;flex:0 0 250px;width:auto;padding:9px 12px}
+  #shop-sidebar .office-panel{order:1;flex:1;width:auto;min-width:0;flex-direction:row;padding:9px 12px}
+  #shop-sidebar .office-actions{max-width:240px;flex-shrink:0}
+  #shop-sidebar .interaction-hint{order:2;flex:1;align-self:center;width:auto}
+  #shop-sidebar .office-panel:not([hidden])~.interaction-hint{display:none}
+  #shop-sidebar .action-controls{order:3;flex:0 0 240px;width:auto;align-self:center;margin-left:auto}
+  #coach{left:50%;right:auto;bottom:100px;transform:translateX(-50%);max-width:480px}
+  #toast,body.has-office #toast{left:50%;bottom:110px;max-width:540px}
+  body.has-office #touch-controls{left:16px;bottom:110px}
+}
+@media(min-width:760px) and (max-width:1050px){
+  #shop-sidebar .carry-panel{flex-basis:210px}
+  #shop-sidebar .action-controls{flex-basis:210px}
+  #shop-sidebar .office-panel{flex-direction:column;align-items:stretch;gap:5px}
+  #shop-sidebar .office-actions{max-width:none}
+}
+
+/* Keep detailed state available to assistive technology without a prose HUD. */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
+#shop-sidebar .carry-panel{min-height:54px}
+#shop-sidebar #orders .order-ticket,#shop-sidebar #orders .order-ticket.long-route{min-height:0}
+#shop-sidebar .order-ticket.selected .ticket-top>span:first-child::before{content:'✓ ';color:#196b56}
+#shop-sidebar .source-card .covari-brand{background:none;color:var(--paper);margin:0;padding:0;border:0;gap:5px}
+#shop-sidebar .source-card .covari-mark{width:18px;height:18px}
+#shop-sidebar .source-card .covari-mark img{width:40px;height:40px}
+#shop-sidebar .source-card .covari-brand>span:last-child{font-size:16px;letter-spacing:0}
+#shop-sidebar .source-card>small{display:none}
+#shop-sidebar .source-card>span{font-size:12px;line-height:1.2}
+#shop-sidebar .source-card button{padding:6px 8px;min-height:30px;font-size:12px}
+@media(min-width:760px){
+  #shop-sidebar #orders{height:136px}
+  #shop-sidebar .carry-panel{flex-basis:230px}
+  body.playing #live-hud{bottom:80px}
+}
+@media(max-width:759px){
+  #shop-sidebar #orders{top:108px;height:148px}
+  #shop-sidebar .order-ticket h3{font-size:16px}
+  #shop-sidebar .source-card{gap:4px;padding:8px 10px}
+}
+#shop-sidebar #orders .source-card{padding:6px 9px;gap:3px}
+#shop-sidebar .source-card .source-heading>strong{font-size:14px}
+#shop-sidebar .source-card .technology-badge{height:24px}
+#shop-sidebar .source-card .technology-icon{width:18px;height:18px}
+
+/* The held job follows its part; empty hands need no panel. */
+#carried-job{position:absolute;z-index:13;pointer-events:none;transform:translate(-50%,-100%);padding:3px 6px;border-radius:5px;background:#102e37e8;border:1px solid #ffda7b99;color:var(--gold);font-size:12px;font-weight:800;line-height:1.2;white-space:nowrap}
+
+/* Give every HUD metric the same label and value baselines. */
+.scoreboard small,#shipment-progress small{font-size:8px;line-height:12px}
+.scoreboard b{line-height:24px}
+
+@media(min-width:760px){
+  body.playing #live-hud{left:18px;bottom:12px;width:auto}
+  body.playing .status-row{height:auto;justify-content:flex-start}
+  #shop-sidebar #game-footer{left:240px}
+}
+
+/* Customer ticket with the supplier identified only on the chosen solution. */
+#shop-sidebar #orders .source-card{width:286px;min-height:0;overflow:visible;padding:7px 10px;gap:4px;font-family:inherit;border:2px solid #ded9c4;background:var(--paper);color:var(--ink)}
+#shop-sidebar .source-card>small{display:block;font-size:10px;line-height:12px;letter-spacing:0;color:#946034}
+#shop-sidebar .source-card>.source-ticket-top{display:flex;justify-content:space-between;font-size:10px;line-height:12px}
+#shop-sidebar .source-card>.source-heading{display:flex;gap:7px;min-height:24px}
+#shop-sidebar .source-card .source-heading>strong{font-size:15px;font-weight:800;line-height:18px}
+#shop-sidebar .source-card .technology-badge{color:#536c66;background:#dde6dc;border-color:#c2d2c5}
+#shop-sidebar .source-card #source-partner{display:flex;align-items:center;gap:4px;color:#547169;font-size:11px;line-height:16px;min-height:18px}
+#shop-sidebar .source-card .source-logo{display:inline-block;position:relative;width:17px;height:17px;overflow:hidden;flex:0 0 17px;border-radius:3px}
+#shop-sidebar .source-card .source-logo img{position:absolute;width:37px;height:37px;max-width:none;left:50%;top:50%;transform:translate(-50%,-50%)}
+#shop-sidebar .source-card .source-actions{display:flex;gap:6px;margin-top:auto}
+#shop-sidebar .source-card button{font-family:inherit;font-size:11px;font-weight:700;line-height:14px;padding:5px 7px;min-height:30px}
+#shop-sidebar .source-card #source-accept{display:flex;align-items:center;justify-content:center;gap:5px;font-family:inherit;font-size:11px;line-height:14px;min-width:0;padding:4px 6px}
+#shop-sidebar .source-card #source-accept::before{content:none}
+#shop-sidebar .source-card #source-accept b{font-weight:900}
+#shop-sidebar .source-card #source-collect{flex:1;background:#e0ece1;color:#205a50;border-color:#87b6a8}
+#shop-sidebar .source-card .route{display:flex;gap:3px;align-items:center;margin:1px 0}
+#shop-sidebar .source-card .route-step{font-size:10px;padding:2px 4px}
+#shop-sidebar .source-card.chosen{border-color:#60b6a1;box-shadow:0 4px 12px #00172135}
+@media(max-width:759px){#shop-sidebar #orders .source-card{width:270px;padding:6px 9px;gap:3px}}
+
+#shop-sidebar #orders .source-card.delivered{opacity:1;gap:2px;padding-top:6px;padding-bottom:6px}
+#shop-sidebar .source-card.delivered #source-partner{min-height:16px;line-height:16px}
+#shop-sidebar .source-card.delivered #source-collect{min-height:24px;padding:3px 6px;line-height:14px}
+#shop-sidebar .source-card.delivered .route-step{line-height:12px;padding:2px 3px}
+/* Automatic stock workflow: informational cards and matching physical bins. */
+#shop-sidebar .order-ticket,#shop-sidebar .order-ticket:hover{cursor:default;border-color:transparent;transform:none}
+#shop-sidebar .order-ticket.carried-job{border-color:#45bfa4;box-shadow:0 0 0 1px #72e8cf55 inset}
+#shop-sidebar .order-ticket.passive-focus{border-color:#b7b397}
+.stock-icon{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:24px;height:26px;color:#315d59}
+.stock-pictogram{width:24px;height:24px;flex-shrink:0}
+.station-label.stock-label{min-height:22px;padding:2px 6px;font-size:11px;gap:4px;line-height:16px}
+.stock-label .stock-pictogram{width:17px;height:17px}
+@media(max-width:759px){.station-label.stock-label{font-size:10px;min-height:19px;padding:1px 4px;gap:3px}.stock-label .stock-pictogram{width:14px;height:14px}}

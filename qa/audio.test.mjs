@@ -18,7 +18,7 @@ function setup({delayed=false,fail=false,noTimeout=false}={}){
   }
   const context=vm.createContext({window:{AudioContext:Context},AbortSignal:noTimeout?{}:AbortSignal,fetch:async()=>{fetches++;if(fail&&fetches===1)throw new Error('offline');return {ok:true,arrayBuffer:async()=>new ArrayBuffer(0)};}});
   vm.runInContext(code,context);const audio=new context.ShopAudio();
-  return {audio,sources,oscillators,get fetches(){return fetches;},decode(){resolveDecode({duration:1628308/44100});}};
+  return {audio,sources,oscillators,context,get fetches(){return fetches;},decode(){resolveDecode({duration:1628308/44100});}};
 }
 test('no autoplay; one loop loads and plays beneath existing cues',async()=>{
   const f=setup();assert.equal(f.audio.ctx,null);assert.equal(f.fetches,0);
@@ -52,4 +52,30 @@ test('a failed track load leaves cues working and retries on the next gesture',a
 
 test('older browsers without AbortSignal.timeout can still start music',async()=>{
   const f=setup({noTimeout:true});assert.doesNotThrow(()=>f.audio.init());f.audio.update(true);await settle();assert.equal(f.sources.length,1);
+});
+
+const mainCode=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
+function homeMusic(f){
+  const game={mode:'menu',call:null},document={hidden:false};
+  Object.assign(f.context,{game,document,audio:f.audio});
+  for(const name of ['updateMusic','unlockHomeMusic']){
+    const definition=mainCode.match(new RegExp('function '+name+'\\(\\)\\{[^\\n]+\\}'))?.[0];
+    assert.ok(definition,`${name} exists`);vm.runInContext(definition,f.context);
+  }
+  return {game,document,update:()=>f.context.updateMusic(),gesture:()=>f.context.unlockHomeMusic()};
+}
+test('home music waits for a gesture, continues into play, and resumes on return home',async()=>{
+  const f=setup(),home=homeMusic(f);
+  home.update();await settle();assert.equal(f.fetches,0);assert.equal(f.audio.ctx,null);
+  home.gesture();await settle();assert.equal(f.sources.length,1);
+  home.game.mode='playing';home.update();assert.equal(f.sources.length,1);
+  home.game.mode='paused';home.update();assert.equal(f.audio.musicSource,null);
+  home.game.mode='menu';home.update();assert.equal(f.sources.length,2);assert.equal(f.fetches,1);
+});
+test('hiding the home page during loading prevents playback until visible again',async()=>{
+  const f=setup({delayed:true}),home=homeMusic(f);
+  home.gesture();await settle();home.document.hidden=true;home.update();f.decode();await settle();
+  assert.equal(f.sources.length,0);
+  home.document.hidden=false;home.update();assert.equal(f.sources.length,1);
+  home.document.hidden=true;home.update();assert.equal(f.audio.musicSource,null);
 });

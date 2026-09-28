@@ -1,4 +1,4 @@
-export const RULESET = 'roles-v6-cad-rush';
+export const RULESET = 'roles-v7-stock-outsourcing';
 // Complexity, CAD, and speed earn points on delivery, so restarting a job
 // cannot farm points from unfinished work.
 export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
@@ -27,10 +27,20 @@ export const RECIPES = [
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
 ];
+export const STOCK_TYPES = {
+  round: 'Round stock',
+  plate: 'Plate stock',
+  block: 'Block stock',
+};
+export function stockType(order) {
+  if (order?.kind === 'shaft') return 'round';
+  if (order?.kind === 'plate' || order?.kind === 'bracket') return 'plate';
+  return 'block';
+}
 export const SOURCE_JOBS = [
-  {name:'Injection molding',capability:'Injection molding',technology:'im'},
+  {name:'Molded cover',capability:'Injection molding',technology:'im'},
   {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
-  {name:'Sheet metal assembly',capability:'Sheet metal fabrication',technology:'sm'},
+  {name:'Sheet-metal bracket',capability:'Sheet metal fabrication',technology:'sm'},
 ];
 // Clearing a role is the introduction; its third star is the mastery target.
 // Higher roles add CAD and more complex routes, with a bounded workload that
@@ -84,6 +94,7 @@ export class ShopGame {
     // enough time for the final order to pass the shared safe-arrival check.
     this.nextArrival = this.config.firstArrival ?? 12;
     this.sourcing = null;
+    this.receiving = null;
     this.sourceOffered = false;
     this.sourced = 0;
     this.sourcePoints = 0;
@@ -101,9 +112,26 @@ export class ShopGame {
 
   emit(type, data = {}) { this.events.push({type,...data}); }
   drain() { const events = this.events; this.events = []; return events; }
-  order(id) { return this.orders.find(order => order.id === id); }
+  order(id) {
+    if (id === 201 && this.sourcing && ['sourcing','delivered'].includes(this.sourcing.state)) return this.sourcing;
+    return this.orders.find(order => order.id === id);
+  }
   get selected() { return this.order(this.selectedId); }
   get heldOrder() { return this.hand ? this.order(this.hand.orderId) : null; }
+
+  nextMaterial(type) {
+    return this.orders
+      .filter(order => !order.started && order.programmed && stockType(order) === type)
+      .sort((a, b) => a.remaining - b.remaining || a.id - b.id)[0];
+  }
+
+  nextCAD() {
+    const current = this.office.orderId !== null ? this.order(this.office.orderId) : null;
+    if (current && !current.programmed && current.id !== 201) return current;
+    return this.orders
+      .filter(order => !order.programmed && order.id !== 201)
+      .sort((a, b) => a.remaining - b.remaining || a.id - b.id)[0];
+  }
 
   // CAD belongs to the order and survives recycling its physical part.
   setOfficePresence(present) { this.office.present = Boolean(present); }
@@ -213,11 +241,10 @@ export class ShopGame {
 
   requestSource() {
     if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
-    if(this.call && this.call.state !== 'active') return this.fail('Answer the customer call before placing this job.');
-    if(!this.office.present) return this.fail('Go to the office to source this job with Covari.');
-    this.office.orderId = null;
-    this.sourcing.state = 'approving';
-    this.emit('sourceApproving');
+    if(this.call && this.call.state !== 'active') return this.fail('Finish the customer call before sourcing this job.');
+    this.sourcing.state = 'sourcing';
+    this.sourcing.location = 'supplier';
+    this.emit('sourcePlaced', {orderId:201});
     return true;
   }
 
@@ -228,33 +255,30 @@ export class ShopGame {
     return true;
   }
 
-  tickSourcing(dt, phoneInterrupting) {
-    if(!this.sourceOffered && this.elapsed >= 35) {
+  tickSourcing(dt) {
+    if(!this.sourceOffered && this.shiftIndex > 0 && this.shipped >= 2 && this.elapsed >= 35 && this.time >= 45) {
       this.sourceOffered = true;
       // Only an actual offer advances the cosmetic rotation. Preserve this
       // cursor through resets, so retries can show every outside capability.
       this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
       const job=SOURCE_JOBS[this.nextSourceKind];
       this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
-      this.sourcing = {id:'C-201',...job,state:'offer',offerRemaining:30,approvalRemaining:2,remaining:22,points:60};
-      this.emit('sourceOffer');
+      this.sourcing = {id:201,...job,kind:'block',route:['inspect','ship'],index:0,programmed:true,programRemaining:0,started:false,location:'supplier',value:300,color:0xffab8c,state:'offer',offerRemaining:30,remaining:22,points:300};
+      this.emit('sourceOffer', {orderId:201});
     }
     const job=this.sourcing;
     if(!job)return;
     if(job.state === 'offer') {
       job.offerRemaining = Math.max(0,job.offerRemaining-dt);
       if(job.offerRemaining<=0)job.state='declined';
-    } else if(job.state === 'approving' && this.office.present && !phoneInterrupting) {
-      job.approvalRemaining = Math.max(0,job.approvalRemaining-dt);
-      if(job.approvalRemaining<=0){job.state='sourcing';this.emit('sourcePlaced');}
     } else if(job.state === 'sourcing') {
       job.remaining = Math.max(0,job.remaining-dt);
-      if(job.remaining<=0){job.state='delivered';this.score+=job.points;this.sourcePoints+=job.points;this.scoreDetails.sourcing+=job.points;this.sourced++;this.emit('sourceDelivered',{points:job.points});}
+      if(job.remaining<=0){job.state='delivered';job.started=true;job.location='receiving';this.receiving={orderId:201};this.emit('sourceDelivered',{orderId:201});}
     }
   }
 
   select(id) {
-    if (this.order(id)) {
+    if (this.orders.some(order => order.id === id) || (id === 201 && this.sourcing?.state === 'delivered')) {
       this.selectedId = id;
       this.emit('select', {orderId:id});
     }
@@ -273,7 +297,7 @@ export class ShopGame {
     this.elapsed += dt;
 
     const phoneInterrupting = this.call && this.call.state !== 'active';
-    if (!phoneInterrupting && this.sourcing?.state !== 'approving' && this.office.present && this.office.orderId !== null) {
+    if (!phoneInterrupting && this.office.present && this.office.orderId !== null) {
       const order = this.order(this.office.orderId);
       if (!order || order.programmed) this.office.orderId = null;
       else {
@@ -339,12 +363,23 @@ export class ShopGame {
       this.nextArrival = this.elapsed + (this.spawn() ? this.config.interval : 2);
     }
     this.maybeCall();
-    this.tickSourcing(dt, phoneInterrupting);
+    this.tickSourcing(dt);
     if (this.time <= 0) {
       this.unfinished = this.orders.length;
       this.office.orderId = null;
       this.missRush('shiftEnded');
       this.clearCall();
+      this.receiving = null;
+      if (this.hand?.orderId === 201) this.hand = null;
+      if (this.buffer?.orderId === 201) this.buffer = null;
+      for (const station of Object.values(this.stations)) {
+        if (station.part?.orderId === 201) { station.part = null; station.remaining = 0; station.ready = false; }
+      }
+      if (this.sourcing && !['fulfilled','declined'].includes(this.sourcing.state)) {
+        this.sourcing.state = 'declined';
+        this.sourcing.started = false;
+        this.sourcing.location = 'closed';
+      }
       this.mode = 'results';
       this.emit('finish');
     }
@@ -382,15 +417,25 @@ export class ShopGame {
       return this.fail('The customer is calling. Answer the phone at the office first.');
     }
     if (key === 'source') return this.requestSource();
+    if (key === 'receiving') {
+      if (!this.receiving || this.sourcing?.state !== 'delivered') return this.fail('There is no supplier delivery to receive.');
+      if (this.hand) return this.fail('Your hands are full. Clear them before receiving the supplier crate.');
+      this.hand = {orderId:201};
+      this.receiving = null;
+      this.sourcing.location = 'hands';
+      this.emit('pickup', {station:key,orderId:201});
+      return true;
+    }
     if (key === 'office') {
       if (this.call?.state === 'ringing') return this.interact('phone');
       if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
       if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
-      const order = this.selected;
-      if (!order) return this.fail('Select an order for CAD.');
+      const order = this.nextCAD();
+      if (!order) return this.fail('There is no CAD work waiting.');
       if (order.programmed) return this.fail(`#${order.id} already has completed CAD.`);
       this.office.orderId = order.id;
+      this.selectedId = order.id;
       this.emit('programming', {orderId:order.id,remaining:order.programRemaining});
       return true;
     }
@@ -402,9 +447,12 @@ export class ShopGame {
       this.emit('callAnswering', {orderId:this.call.orderId,duration:CALL_ANSWER_DURATION});
       return true;
     }
-    if (key === 'material') {
+    if (key === 'material' || key.startsWith('material-')) {
+      const type = key === 'material' ? null : key.slice('material-'.length);
+      if (type && !Object.prototype.hasOwnProperty.call(STOCK_TYPES, type)) return false;
       if (this.hand) {
         const returned = this.heldOrder;
+        if (returned?.id === 201) return this.fail('Sourced parts cannot be recycled as raw material.');
         returned.started = false;
         returned.index = 0;
         returned.location = 'material';
@@ -413,18 +461,34 @@ export class ShopGame {
         this.emit('recycle', {orderId:returned.id});
         return true;
       }
-      const order = this.selected;
+      const order = type ? this.nextMaterial(type) : this.selected;
+      if (!order && type) {
+        const needsCad = this.orders.some(candidate => !candidate.started &&
+          stockType(candidate) === type && !candidate.programmed);
+        if (needsCad) return this.fail(`Complete CAD first for ${type} jobs.`);
+        return this.fail(`No ready ${type} jobs.`);
+      }
       if (!order) return this.fail('No orders yet. Take a breath.');
+      if (order.id === 201) return this.fail('Receive the sourced part at Receiving.');
       if (order.started) return this.fail(`#${order.id} is already on the floor. Select a new ticket.`);
       if (!order.programmed) return this.fail(`#${order.id} needs CAD at the office before material pickup.`);
       this.hand = {orderId:order.id};
       order.started = true;
       order.location = 'hands';
+      this.selectedId = order.id;
       this.emit('pickup', {station:key,orderId:order.id});
       return true;
     }
     if (key === 'buffer') {
-      if (this.hand && this.buffer) return this.fail('Hold bench is occupied. Collect its part first.');
+      if (this.hand && this.buffer) {
+        const parked = this.buffer;
+        this.buffer = this.hand;
+        this.hand = parked;
+        this.order(this.buffer.orderId).location = 'buffer';
+        this.order(this.hand.orderId).location = 'hands';
+        this.emit('pickup', {station:key,orderId:this.hand.orderId});
+        return true;
+      }
       if (this.hand) {
         this.buffer = this.hand;
         this.hand = null;
@@ -445,6 +509,18 @@ export class ShopGame {
       const order = this.heldOrder;
       if (!order) return this.fail('Bring a finished part to Shipping.');
       if (order.route[order.index] !== 'ship') return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
+      if (order.id === 201) {
+        this.score += 300;
+        this.sourcePoints += 300;
+        this.scoreDetails.sourcing += 300;
+        this.sourced++;
+        order.started = false;
+        order.location = 'shipped';
+        order.state = 'fulfilled';
+        this.hand = null;
+        this.emit('sourceFulfilled', {points:300,orderId:201,station:key});
+        return true;
+      }
       this.combo = Math.min(this.combo + 1, 5);
       this.bestCombo = Math.max(this.bestCombo, this.combo);
       const rushBonus = this.call?.orderId === order.id && this.call.state === 'active' ? this.call.bonus : 0;
@@ -471,7 +547,20 @@ export class ShopGame {
     if (!this.config.unlocks.includes(key)) return this.fail(`${OPS[key].name} is not needed in this shift.`);
     if (station.part) {
       if (!station.ready) return this.fail(`${OPS[key].name} is working. Handle another order.`);
-      if (this.hand) return this.fail('Free your hands before collecting this part.');
+      if (this.hand) {
+        const order = this.heldOrder;
+        if (!order.programmed) return this.fail(`#${order.id} needs CAD at the office first.`);
+        if (order.route[order.index] !== key) return this.fail(`#${order.id} needs ${OPS[order.route[order.index]].name} next.`);
+        const completed = station.part;
+        station.part = this.hand;
+        station.remaining = OPS[key].duration;
+        station.ready = false;
+        this.hand = completed;
+        this.order(completed.orderId).location = 'hands';
+        order.location = key;
+        this.emit('load', {station:key,orderId:order.id,collectedOrderId:completed.orderId});
+        return true;
+      }
       this.hand = station.part;
       station.part = null;
       station.ready = false;
@@ -499,13 +588,14 @@ export class ShopGame {
   snapshot() {
     return {
       mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,ruleset:RULESET,
-      sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing}:null,
+      sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing,route:[...this.sourcing.route]}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),
       rushesAccepted:this.rushesAccepted,rushesWon:this.rushesWon,rushesMissed:this.rushesMissed,
       scoreDetails:{...this.scoreDetails},
       callsReceived:this.callsReceived,callsAnswered:this.callsAnswered,
       office:{...this.office},call:this.call ? {...this.call} : null,
+      receiving:this.receiving ? {...this.receiving} : null,
       hand:this.hand ? {...this.hand} : null,buffer:this.buffer ? {...this.buffer} : null,
       orders:this.orders.map(order => ({...order,route:[...order.route]})),
       stations:JSON.parse(JSON.stringify(this.stations)),

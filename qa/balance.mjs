@@ -13,7 +13,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
-import { ShopGame, SHIFTS } from '../dist/core.js';
+import { ShopGame, SHIFTS, stockType } from '../dist/core.js';
 
 const source = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
 const section = (from, to) => {
@@ -149,9 +149,9 @@ export class Driver {
     return ok;
   }
   program(order) {
-    this.game.select(order.id);
     this.walk('office');
-    if (this.game.mode!=='playing'||!this.game.order(order.id)) return;
+    order=this.game.nextCAD();
+    if (this.game.mode!=='playing'||!order) return;
     if(['ringing','answering','offer'].includes(this.game.call?.state))return;
     assert.equal(this.game.interact('office'),true,'Start attended CAD');
     const seconds=order.programRemaining+this.actionDelay;
@@ -193,16 +193,15 @@ export class Driver {
         let order=this.game.order(this.activeId);
         if(!order) {order=this.game.orders[0];this.activeId=order?.id;}
         if(!order) {this.tick(.2);continue;}
-        this.game.select(order.id);
         if(!order.programmed) {this.program(order);continue;}
-        if(!order.started) {this.interact('material');continue;}
+        if(!order.started) {this.interact('material-'+stockType(order));this.activeId=this.game.hand?.orderId??order.id;continue;}
         const machine=this.game.stations[order.location];
         if(machine?.ready) {this.interact(order.location);continue;}
         this.tick(.2);continue;
       }
       const rush=this.game.call?.state==='active'?this.game.order(this.game.call.orderId):null;
       if(rush&&!rush.started&&!this.game.stations[rush.route[0]]?.part){
-        this.game.select(rush.id);if(!rush.programmed)this.program(rush);else this.interact('material');continue;
+        if(!rush.programmed)this.program(rush);else this.interact('material-'+stockType(rush));continue;
       }
       const priority=order=>this.game.call?.state==='active'&&this.game.call.orderId===order.id ? -1000 : order.remaining;
       const ready=Object.entries(this.game.stations).filter(([,s])=>s.ready).map(([station,s])=>({station,order:this.game.order(s.part.orderId)})).filter(({order})=>{
@@ -214,8 +213,8 @@ export class Driver {
       const fresh=this.game.orders.filter(o=>!o.started&&!this.game.stations[o.route[0]]?.part);
       fresh.sort((a,b)=>priority(a)-priority(b));
       if(fresh.length) {
-        const order=fresh[0];this.game.select(order.id);
-        if(!order.programmed) this.program(order);else this.interact('material');
+        const order=fresh[0];
+        if(!order.programmed) this.program(order);else this.interact('material-'+stockType(order));
         continue;
       }
       // Complete the next queued job's CAD while a machine runs. CAD pauses

@@ -26,8 +26,14 @@ function fixtureForRecipe(shift,recipeIndex) {
 function program(game,id=game.selectedId) {
   const order=game.order(id);if(order.programmed)return;
   game.select(id);game.setOfficePresence(true);
-  assert.equal(game.interact('office'),true);
-  advance(game,order.programRemaining+.05);
+  // CAD dispatch follows due order; keep working through the queue until the
+  // requested fixture is genuinely ready instead of using selection as a pin.
+  let guard=0;
+  while(!order.programmed){
+    assert.ok(guard++<game.orders.length+2,'CAD fixture did not reach target');
+    assert.equal(game.interact('office'),true);
+    advance(game,game.order(game.office.orderId)?.programRemaining+.05);
+  }
   assert.equal(order.programmed,true);game.setOfficePresence(false);
 }
 function processHeldPart(game,key) {
@@ -100,14 +106,15 @@ test('CAD requires presence and an explicit start, then pauses and resumes',()=>
   assert.equal(programEvents.length,1);
 });
 
-test('office tracks the explicitly started RFQ; changing tickets cannot transfer work',()=>{
+test('office dispatches due CAD and selection cannot transfer active work',()=>{
   const game=fresh(1);game.spawn();const [first,second]=game.orders;
-  game.setOfficePresence(true);game.select(first.id);game.interact('office');advance(game,1);
-  game.select(second.id);assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.equal(second.programRemaining,6);
-  assert.equal(game.interact('office'),true);advance(game,1);
-  assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.ok(Math.abs(second.programRemaining-5)<1e-6);
-  game.select(first.id);game.interact('office');advance(game,5.05);
-  assert.equal(first.programmed,true);assert.equal(second.programmed,false);assert.ok(Math.abs(second.programRemaining-5)<1e-6);
+  first.remaining=50;second.remaining=80;
+  game.setOfficePresence(true);game.select(second.id);assert.equal(game.interact('office'),true);advance(game,1);
+  assert.ok(Math.abs(first.programRemaining-5)<1e-6);assert.equal(second.programRemaining,6);
+  game.select(second.id);assert.equal(game.interact('office'),true);advance(game,1);
+  assert.ok(Math.abs(first.programRemaining-4)<1e-6);assert.equal(second.programRemaining,6);
+  advance(game,4.05);
+  assert.equal(first.programmed,true);assert.equal(second.programmed,false);assert.equal(second.programRemaining,6);
 });
 
 for(const shift of [1,2])test('role '+(shift+1)+': CAD must finish before material pickup and never creates a physical part',()=>{
@@ -146,8 +153,9 @@ test('wrong operation, locked station, and repeat collection preserve the part',
 test('selection never relabels a carried or buffered part',()=>{
   const game=fresh();game.spawn();const [first,second]=game.orders;
   game.select(first.id);game.interact('material');game.select(second.id);assert.equal(game.hand.orderId,first.id);
-  game.interact('buffer');game.interact('material');assert.equal(game.hand.orderId,second.id);assert.equal(game.interact('buffer'),false);
-  game.interact(second.route[0]);game.interact('buffer');assert.equal(game.hand.orderId,first.id);assert.equal(game.stations[second.route[0]].part.orderId,second.id);assertOwnership(game);
+  game.interact('buffer');game.interact('material');assert.equal(game.hand.orderId,second.id);assert.equal(game.interact('buffer'),true);
+  assert.equal(game.hand.orderId,first.id);assert.equal(game.buffer.orderId,second.id);
+  game.interact(first.route[0]);game.interact('buffer');assert.equal(game.hand.orderId,second.id);assert.equal(game.stations[first.route[0]].part.orderId,first.id);assertOwnership(game);
 });
 
 test('pause freezes shift, deadlines, machines, programming, and arrivals',()=>{
@@ -177,12 +185,56 @@ for(let stages=0;stages<=RECIPES[6].route.length;stages++)test('recycle recovers
   assert.equal(game.interact('material'),true);assert.equal(game.hand.orderId,id);assertOwnership(game);
 });
 
-test('recycling frees hands with an occupied buffer and ready machine',()=>{
+test('hold bench swaps carried work while preserving route progress',()=>{
   const game=fresh();game.spawn();game.spawn();const [first,second,third]=game.orders;
   game.select(first.id);game.interact('material');game.interact('lathe');advance(game,OPS.lathe.duration+.05);
   game.select(second.id);game.interact('material');game.interact('buffer');game.select(third.id);game.interact('material');
-  assert.equal(game.interact('lathe'),false);assert.equal(game.interact('buffer'),false);assert.equal(game.interact('material'),true);assert.equal(game.interact('lathe'),true);
-  assert.equal(game.hand.orderId,first.id);assert.equal(game.buffer.orderId,second.id);assert.equal(game.order(third.id).started,false);assertOwnership(game);
+  assert.equal(game.interact('lathe'),true);assert.equal(game.hand.orderId,first.id);assert.equal(game.stations.lathe.part.orderId,third.id);
+  assert.equal(game.interact('buffer'),true);assert.equal(game.hand.orderId,second.id);assert.equal(game.buffer.orderId,first.id);
+  assert.equal(game.interact('material'),true);assert.equal(game.hand,null);assert.equal(game.buffer.orderId,first.id);assert.equal(game.stations.lathe.part.orderId,third.id);assertOwnership(game);
+});
+
+test('hold bench roundtrip preserves a partially processed part',()=>{
+  const game=fresh();game.spawn();const [first,second]=game.orders;
+  game.select(first.id);game.interact('material');game.interact('lathe');advance(game,OPS.lathe.duration+.05);assert.equal(first.index,1);
+  game.interact('lathe');game.interact('buffer');assert.equal(game.buffer.orderId,first.id);assert.equal(first.location,'buffer');
+  game.select(second.id);game.interact('material');const deadlines=game.orders.map(order=>order.remaining);
+  assert.equal(game.interact('buffer'),true);assert.equal(game.hand.orderId,first.id);assert.equal(game.buffer.orderId,second.id);
+  assert.equal(first.index,1);assert.equal(second.index,0);assert.deepEqual(game.orders.map(order=>order.remaining),deadlines);
+  assert.equal(game.interact('buffer'),true);assert.equal(game.hand.orderId,second.id);assert.equal(game.buffer.orderId,first.id);assert.equal(first.index,1);assert.equal(second.index,0);assertOwnership(game);
+});
+
+for (const [station, pair] of [['lathe',[0,2]],['mill',[1,3]],['inspect',[0,1]]]) test('ready '+station+' exchange preserves output progress and resets incoming cycle',()=>{
+  const game=fresh();while(game.orders.length<=Math.max(...pair))assert.equal(game.spawn(),true);
+  const outgoing=game.orders[pair[0]],incoming=game.orders[pair[1]];
+  const prepare=(order)=>{program(game,order.id);game.select(order.id);assert.equal(game.interact('material'),true);for(const key of order.route.slice(0,order.route.indexOf(station)))processHeldPart(game,key);};
+  prepare(outgoing);assert.equal(game.interact(station),true);advance(game,OPS[station].duration+.05);assert.equal(outgoing.index,outgoing.route.indexOf(station)+1);assert.equal(game.stations[station].ready,true);
+  prepare(incoming);const before={score:game.score,time:game.time,elapsed:game.elapsed,deadlines:game.orders.map(order=>order.remaining)};game.drain();
+  const incomingIndex=incoming.route.indexOf(station),outgoingIndex=outgoing.index;
+  assert.equal(game.interact(station),true);assert.equal(game.hand.orderId,outgoing.id);assert.equal(outgoing.index,outgoingIndex);assert.equal(outgoing.location,'hands');
+  assert.equal(game.stations[station].part.orderId,incoming.id);assert.equal(game.stations[station].ready,false);assert.equal(game.stations[station].remaining,OPS[station].duration);
+  assert.equal(incoming.index,incomingIndex);assert.equal(incoming.location,station);assert.deepEqual({score:game.score,time:game.time,elapsed:game.elapsed,deadlines:game.orders.map(order=>order.remaining)},before);
+  assert.deepEqual(game.drain(),[{type:'load',station,orderId:incoming.id,collectedOrderId:outgoing.id}]);
+  advance(game,OPS[station].duration+.05);assert.equal(game.stations[station].ready,true);assert.equal(incoming.index,incomingIndex+1);assert.equal(outgoing.index,outgoingIndex);
+  assert.equal(game.interact('buffer'),true);assert.equal(game.buffer.orderId,outgoing.id);assert.equal(game.interact(station),true);assert.equal(game.hand.orderId,incoming.id);assert.equal(incoming.location,'hands');assertOwnership(game);
+});
+
+test('paused and ringing calls reject machine exchange without mutation',()=>{
+  const game=fresh(2);game.spawn();game.spawn();const [outgoing,,incoming]=game.orders;
+  program(game,outgoing.id);game.select(outgoing.id);game.interact('material');game.interact('lathe');advance(game,OPS.lathe.duration+.05);
+  program(game,incoming.id);game.select(incoming.id);game.interact('material');
+  assert.equal(game.stations.lathe.ready,true);assert.equal(game.hand.orderId,incoming.id);
+  game.mode='paused';const beforePaused=game.snapshot();assert.equal(game.interact('lathe'),false);assert.deepEqual(game.snapshot(),beforePaused);game.mode='playing';
+  ringScheduledCall(game);const beforeCall=game.snapshot();assert.equal(game.interact('lathe'),false);assert.deepEqual(game.snapshot(),beforeCall);assertOwnership(game);
+});
+
+test('machine exchange rejects busy or wrong-operation handoffs without mutation',()=>{
+  const game=fresh();game.spawn();const [first,second]=game.orders;
+  game.select(first.id);game.interact('material');game.interact('lathe');
+  game.select(second.id);game.interact('material');
+  const beforeBusy=game.snapshot();assert.equal(game.interact('lathe'),false);assert.deepEqual(game.snapshot(),beforeBusy);
+  advance(game,OPS.lathe.duration+.05);assert.equal(game.stations.lathe.ready,true);
+  const beforeWrong=game.snapshot();assert.equal(game.interact('lathe'),false);assert.deepEqual(game.snapshot(),beforeWrong);assertOwnership(game);
 });
 
 test('closing-time arrivals fall back to a short route and stop with too little time',()=>{
@@ -397,7 +449,9 @@ test('accepting a rush preserves an interrupted partial program but clears its a
   const saved=older.programRemaining;game.spawn();game.spawn();ringScheduledCall(game);const rushId=game.call.orderId;answerCall(game);
   assert.equal(game.office.orderId,older.id);assert.equal(older.programRemaining,saved);assert.equal(game.respondCall(true),true);
   assert.equal(game.office.orderId,null);advance(game,1);assert.equal(older.programRemaining,saved);assert.equal(older.programmed,false);
-  game.select(rushId);assert.equal(game.interact('office'),true);advance(game,6.05);assert.equal(game.order(rushId).programmed,true);assert.equal(older.programRemaining,saved);
+  assert.equal(game.interact('office'),true);assert.equal(game.office.orderId,game.orders.find(order=>order.id!==older.id).id);
+  const resumed=game.order(game.office.orderId);advance(game,resumed.programRemaining+.05);assert.equal(resumed.programmed,true);
+  assert.equal(older.programmed,false);assert.equal(older.programRemaining,saved);
 });
 
 test('a complete Owner shift has three predictable conversations without requiring rush acceptance',()=>{

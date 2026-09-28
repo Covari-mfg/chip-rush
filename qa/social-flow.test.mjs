@@ -134,15 +134,12 @@ test('friend challenges compare actual total points across roles without hiding 
   f.finish({role:2,score:2501});assert.match(f.$('friend-result').textContent,/Challenge won/);
 });
 
-test('the challenge banner preserves v5 Operator links and ignores incompatible advanced links',()=>{
-  for(const role of [0,1,2]) {
-    const params=new URLSearchParams({challenge:'1',rules:'roles-v5-performance',role:String(role),score:'2500',shipped:'5'});
+test('the challenge banner ignores incompatible previous seasons in all roles',()=>{
+  for(const rules of ['roles-v5-performance','roles-v6-cad-rush'])for(const role of [0,1,2]) {
+    const params=new URLSearchParams({challenge:'1',rules,role:String(role),score:'2500',shipped:'5'});
     const f=setup({url:'https://chip-rush.example/?'+params});
-    assert.equal(f.$('friend-challenge').hidden,role!==0);
-    if(role===0) {
-      assert.equal(f.$('friend-target').textContent,'3 ★ · 5 shipped · 2,500 points');
-      f.$('accept-challenge').onclick();assert.deepEqual(f.acceptedChallenges,[0]);
-    }
+    assert.equal(f.$('friend-challenge').hidden,true);
+    assert.deepEqual(f.acceptedChallenges,[]);
   }
 });
 

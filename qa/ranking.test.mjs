@@ -36,7 +36,7 @@ function answer(game) {
 }
 
 test('performance scoring has its own ruleset and a transparent additive breakdown',()=>{
-  assert.equal(RULESET,'roles-v6-cad-rush');
+  assert.equal(RULESET,'roles-v7-stock-outsourcing');
   assert.deepEqual(scoreShipment({value:120,remaining:10.25},1,{programming:true,rushBonus:100}),
     {base:120,program:120,speed:41,streak:0,rush:100,total:381});
 });
