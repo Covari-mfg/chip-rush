@@ -117,3 +117,10 @@ Final checks: 180 automated tests passed. Movement-aware normal/expert balance a
 ## Delivery presentation follow-up
 
 Removed the delivery truck after user review: appearing inside the shop felt distracting and out of place. The branded crate now arrives directly on the receiving pad, with the existing short sound/particle cue and ready label. Delivery timing, collection, QC and shipping remain the same. Rebuilt standalone; focused sourcing tests and JavaScript syntax checks passed.
+
+
+## Permanent receiving bench
+
+Replaced the appearing floor pad with a fixed, collidable receiving bench at the front edge of the shop. Its tabletop, legs, shelf and back rail are always part of the scene; only the supplier crate appears on arrival. The receiving action is available in advanced roles. The player approaches from the aisle, and the arrival cue follows the new bench position. This supersedes the temporary receiving-pad presentation.
+
+Verification: 34 sourcing and movement/difficulty tests passed, including collision-safe routes to the new access point and Owner mastery targets. Browser verified the bench is present before any offer or delivery, with no console warnings/errors. Standalone build, syntax and whitespace checks passed.
