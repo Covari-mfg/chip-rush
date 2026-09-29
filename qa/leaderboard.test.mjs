@@ -86,7 +86,7 @@ test('only same-origin POSTs are accepted, including run creation',async t=>{
 
 test('run creation rejects invalid roles and stale rulesets',async t=>{
   const f=fixture(t);
-  for(const role of [-1,3,.5,'2',null]) {
+  for(const role of [-1,SHIFTS.length,.5,'2',null]) {
     assert.equal((await f.send('/api/runs',{method:'POST',data:{role,ruleset:RULESET}})).status,400);
   }
   assert.equal((await f.send('/api/runs',{method:'POST',data:{role:2,ruleset:'old-rules'}})).status,400);
@@ -118,7 +118,7 @@ test('display-name validation rejects markup, control content, and length violat
 });
 
 test('result validation enforces full-shift eligibility, one-day expiry, and ruleset/role identity',()=>{
-  for(const role of [0,1,2]) {
+  for(const role of SHIFTS.keys()) {
     const run={role,ruleset:RULESET,started_at:START};
     const value={role,score:1000,shipped:SHIFTS[role].passTarget,missed:0,sourced:0,calls:role===2?3:0};
     const eligibleAt=START+(SHIFTS[role].duration-5)*1000;
@@ -126,10 +126,22 @@ test('result validation enforces full-shift eligibility, one-day expiry, and rul
     assert.equal(validateResult(value,run,eligibleAt),null,'The documented five-second network allowance is honored');
     assert.equal(validateResult(value,run,START+86400000),null);
     assert.match(validateResult(value,run,START+86400001),/expired/);
-    assert.match(validateResult({...value,role:(role+1)%3},run,eligibleAt),/new shift/);
+    assert.match(validateResult({...value,role:(role+1)%SHIFTS.length},run,eligibleAt),/new shift/);
     assert.match(validateResult(value,{...run,ruleset:'previous'},eligibleAt),/new shift/);
     assert.match(validateResult(value,null,eligibleAt),/new shift/);
   }
+});
+
+test('a Night Shift run starts, waits for its 210 second clock, and posts an ordinary score',async t=>{
+  const f=fixture(t),run=await f.start(3);
+  assert.equal(SHIFTS[3].duration,210);
+  assert.equal((await f.post(run,{},{now:START+204999})).status,400,'Night Shift needs its own full clock');
+  assert.equal((await f.post(run,{sourced:1},{now:START+210000})).status,400,'No Covari offer on Night Shift');
+  assert.equal((await f.post(run,{calls:1},{now:START+210000})).status,400,'No customer calls on Night Shift');
+  assert.equal((await f.post(run,{shipped:7},{now:START+210000})).status,400);
+  assert.equal((await f.post(run,{score:4200,shipped:6},{now:START+210000})).status,200);
+  const board=await (await f.send('/api/leaderboard')).json();
+  assert.equal(board.entries[0].score,4200);assert.equal(board.entries[0].stars,3);
 });
 
 test('HTTP score posts reject early and expired runs without consuming the valid run',async t=>{

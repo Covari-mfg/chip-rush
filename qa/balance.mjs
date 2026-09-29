@@ -30,7 +30,7 @@ const pathCode = section('function routeSegmentClear(', '\nfunction goToStation(
 const walkingSpeed = Number(source.match(/let speed=([\d.]+)/)?.[1]);
 assert.equal(walkingSpeed, 4.4, 'Revisit balance if production walking speed changes');
 const context = vm.createContext({ Math });
-vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep};`, context);
+vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,MAPS};`, context);
 const nav = context.nav;
 const accesses = Object.fromEntries(nav.layout.map(s => [s.id, s.access ?? { x:s.x, z:s.z+s.d/2+.63 }]));
 assert.ok(accesses.office, 'Office must have a production access point');
@@ -42,6 +42,10 @@ assert.match(source, /distance:11\*active\+normalSpeed\*\(dt-active\)/, 'Product
 export const navigation = {
   spawn:{...nav.spawn},
   accesses,
+  layout:nav.layout,
+  activate:nav.activateMap,
+  has:nav.mapHas,
+  maps:nav.MAPS,
   route(from,to) {nav.player.x=from.x;nav.player.z=from.z;return nav.findPath(to.x,to.z);},
   clear:nav.routeSegmentClear,
   safe:nav.safeSpot,
@@ -88,6 +92,7 @@ export class Driver {
   pathTo(id) {
     const access = accesses[id];
     assert.ok(access, 'Known destination ' + id);
+    nav.activateMap(this.game.config.mapId);
     nav.player.x=this.position.x;nav.player.z=this.position.z;
     const points = nav.findPath(access.x, access.z);
     assert.ok(points.length || Math.hypot(this.position.x-access.x,this.position.z-access.z)<1.4, 'Reachable ' + id);

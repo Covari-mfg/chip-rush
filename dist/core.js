@@ -78,6 +78,16 @@ export const SHIFTS = [
     recipes:[0,1,6,0,6,1,6,1],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
     programming:true,sourcing:true,calls:true,callTimes:[27,77,127],passTarget:5,stars:[5,6,8],
   },
+  {
+    id:'night-shift',mapId:'night-shop',name:'Night Shift',author:'Claude Sonnet 5.5',harness:'Cursor Cloud Agent',
+    subtitle:'Deburr. Anodize. Finish the run.',
+    brief:'The phones are off and the shop is quiet. Finishing work has arrived: deburr edges and run parts through the color bath before inspection.',
+    tip:'Deburr takes 4 seconds and the color bath 8. Start the bath, then use the wait for CAD or the next part.',
+    retryTip:'Keep the color bath busy. Prepare the next CAD job while it runs.',
+    duration:210,firstArrival:20,interval:28,deadline:120,maxOrders:6,
+    recipes:[2,5,4,3,4,2],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
+    programming:true,sourcing:false,calls:false,callTimes:[],passTarget:4,stars:[4,5,6],
+  },
 ];
 
 export const PROGRAM_DURATION = 6;

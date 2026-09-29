@@ -6,7 +6,7 @@ import { ShopGame, SHIFTS, PROGRAM_DURATION, stockType } from '../dist/core.js';
 import { orderWorkflow } from '../dist/workflow.js';
 
 function advance(game,seconds){for(let t=0;t<seconds;t+=.05)game.tick(Math.min(.05,seconds-t));}
-for(const role of [0,1,2])test(`role ${role} route tells the player exactly when to collect material`,()=>{
+for(const role of [0,1,2,3])test(`role ${role} route tells the player exactly when to collect material`,()=>{
   const game=new ShopGame();game.reset(role);game.nextArrival=Infinity;game.nextCallAt=Infinity;
   const order=game.selected;
   let steps=orderWorkflow(order,game.config.programming);
@@ -47,12 +47,28 @@ test('optional call rules preserve unlocks and leave historical records intact',
   for(const version of ['v7','v6','v5','v4','v3','v2']) {
     const old={unlocked:2,bests:[2900,5000,8000],grades:[3,3,3]},key='chip-rush-roles-'+version;
     const {result,data}=migrate({[key]:old});
-    assert.deepEqual(result,{unlocked:2,bests:[0,0,0],grades:[0,0,0]});
+    assert.deepEqual(result,{unlocked:3,bests:[0,0,0,0],grades:[0,0,0,0]},'Clearing the last earlier level unlocks Night Shift');
     assert.deepEqual(JSON.parse(data.get(key)),old,'Historical records remain intact');
-    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0]);
+    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0,0]);
   }
+  const {result}=migrate({'chip-rush-roles-v7':{unlocked:2,bests:[1,2,3],grades:[3,2,0]}});
+  assert.equal(result.unlocked,2,'An uncleared Rush Hour leaves Night Shift locked');
 });
 test('current-season progress takes precedence over previous progress',()=>{
-  const {result}=migrate({'chip-rush-roles-v8':{unlocked:1,bests:[1,2,3],grades:[1,2,3]},'chip-rush-roles-v6':{unlocked:2,bests:[9000,9000,9000]}});
-  assert.deepEqual(result,{unlocked:1,bests:[1,2,3],grades:[1,2,3]});
+  const {result}=migrate({'chip-rush-roles-v8':{unlocked:1,bests:[1,2,3],grades:[1,0,0]},'chip-rush-roles-v6':{unlocked:2,bests:[9000,9000,9000]}});
+  assert.deepEqual(result,{unlocked:1,bests:[1,2,3,0],grades:[1,0,0,0]});
+});
+test('a save from before Night Shift keeps its records and unlocks it once Rush Hour is cleared',()=>{
+  const saved={unlocked:2,bests:[3500,4400,3900],grades:[3,3,1]};
+  const {result}=migrate({'chip-rush-roles-v8':saved});
+  assert.deepEqual(result,{unlocked:3,bests:[3500,4400,3900,0],grades:[3,3,1,0]});
+  assert.equal(migrate({'chip-rush-roles-v8':{...saved,grades:[3,3,0]}}).result.unlocked,2,'Rush Hour must be cleared first');
+});
+test('stars from a friend challenge on a locked level unlock nothing',()=>{
+  const {result}=migrate({'chip-rush-roles-v8':{unlocked:0,bests:[0,0,9000],grades:[0,0,3]}});
+  assert.equal(result.unlocked,0);
+  assert.equal(migrate({'chip-rush-roles-v8':{unlocked:1,bests:[0,0,0],grades:[0,0,3]}}).result.unlocked,1,'Only a cleared, unlocked level advances progress');
+});
+test('a save can never unlock past the final level',()=>{
+  assert.equal(migrate({'chip-rush-roles-v8':{unlocked:99,bests:[],grades:[3,3,3,3]}}).result.unlocked,SHIFTS.length-1);
 });

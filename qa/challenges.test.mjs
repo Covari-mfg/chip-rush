@@ -8,7 +8,7 @@ function query(extra={}) {
 }
 
 test('challenge links round-trip each role and keep only current challenge parameters',()=>{
-  for(const role of [0,1,2]) {
+  for(const role of SHIFTS.keys()) {
     const result={role,score:role===2?4173:2000,shipped:SHIFTS[role].stars[2]};
     const url=new URL(challengeURL(result,'https://example.test/chip-rush/?watch=owner&old=1#results'));
     assert.equal(url.origin,'https://example.test');assert.equal(url.pathname,'/chip-rush/');
@@ -47,7 +47,7 @@ test('challenge numeric fields reject signs, decimals, nonfinite values, markup,
       assert.equal(parseChallenge(query({[field]:value})),null,field+' rejects '+JSON.stringify(value));
     }
   }
-  assert.equal(parseChallenge(query({role:'3'})),null);
+  assert.equal(parseChallenge(query({role:String(SHIFTS.length)})),null);
   assert.equal(parseChallenge(query({score:'20001'})),null);
   assert.equal(parseChallenge(query({shipped:'13'})),null);
   assert.equal(parseChallenge(query({role:'0',shipped:'9'})),null);
