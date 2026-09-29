@@ -44,7 +44,7 @@ function setup() {
       badgeCalls.push({keys:selected,markup});return markup;
     },
   });
-  vm.runInContext(section('function updateTickets(','\nfunction nextTarget(')
+  vm.runInContext(section('function onPhone(','\nfunction useStation(')+'\n'+section('function updateTickets(','\nfunction nextTarget(')
     +'\n'+section('function updateSourceUI(','\nfunction updateOfficeUI('),context);
   return {game,$,context,badgeCalls};
 }

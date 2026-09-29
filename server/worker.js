@@ -1,8 +1,8 @@
-import { RULESET, SHIFTS } from '../dist/core.js';
+import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 const fail=(message,status=400)=>json({error:message},status);
-const validRole=role=>Number.isInteger(role)&&role>=0&&role<3;
+const validRole=role=>Number.isInteger(role)&&role>=0&&role<SHIFTS.length;
 const playerId=request=>request.headers.get('cookie')?.match(/(?:^|;\s*)chip_player=([a-f0-9-]{36})(?:;|$)/)?.[1];
 async function body(request){
   if(!request.headers.get('content-type')?.startsWith('application/json'))throw new Error('Send JSON.');
@@ -12,11 +12,36 @@ async function body(request){
   text+=decoder.decode();const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw new SyntaxError('Expected an object.');return value;
 }
 export function validateResult(value,run,now=Date.now()){
-  if(!run||run.ruleset!==RULESET||value.role!==run.role)return 'Start a new shift before posting.';
-  if(now-run.started_at<(SHIFTS[run.role].duration-5)*1000)return 'Finish the full shift before posting.';
-  if(now-run.started_at>86400000)return 'This score submission has expired. Play another shift.';
-  const ranges={score:[0,20000],shipped:[0,SHIFTS[run.role].maxOrders??8],missed:[0,15],sourced:[0,run.role===0?0:1],calls:[0,run.role===2?3:0]};
+  if(!run||!validRole(run.role)||run.ruleset!==RULESET||value.role!==run.role)return 'Start a new shift before posting.';
+  const config=SHIFTS[run.role],wallSeconds=(now-run.started_at)/1000;
+  if(wallSeconds>86400)return 'This score submission has expired. Play another shift.';
+  const ranges={score:[0,20000],shipped:[0,config.maxOrders??8],missed:[0,15],sourced:[0,config.sourcing?1:0],calls:[0,config.calls?config.callTimes.length:0]};
   for(const [key,[min,max]] of Object.entries(ranges))if(!Number.isInteger(value[key])||value[key]<min||value[key]>max)return 'That result is outside this shift’s limits.';
+  if(value.finishReason!==undefined&&!['work-complete','time-up'].includes(value.finishReason))return 'Finish this shift before posting.';
+  if(value.elapsed!==undefined&&(!Number.isFinite(value.elapsed)||value.elapsed<0||value.elapsed>config.duration+.1||wallSeconds<value.elapsed-5))return 'That finish time does not match this run.';
+  if(value.finishReason==='work-complete'){
+    if(!Number.isFinite(value.elapsed)||!Number.isInteger(value.spawned)||value.spawned<1||value.spawned>(config.maxOrders??8)||value.spawned!==value.shipped+value.missed)return 'Finish every outstanding order before posting.';
+    const lastArrival=value.spawned<2?0:config.firstArrival+(value.spawned-2)*config.interval;
+    if(value.elapsed<lastArrival)return 'Those orders have not all arrived yet.';
+    // Conservative eligibility check, not an authoritative replay. Give the
+    // next arrival its longest possible gap; even then it must be ineligible.
+    // This shares the game's late-arrival cutoff instead of inventing a timer.
+    const probe=new ShopGame();probe.reset(run.role);probe.orders=[];
+    probe.spawnIndex=value.spawned;probe.elapsed=value.elapsed;probe.time=config.duration-value.elapsed;
+    // Before four arrivals the queue cannot have been full. Those scheduled
+    // arrivals cannot be omitted; allow the engine's 0.1s tick rounding per gap.
+    if(value.spawned<Math.min(4,config.maxOrders??Infinity)){
+      const nextScheduled=config.firstArrival+(value.spawned-1)*config.interval+.1*(value.spawned+1);
+      if(nextScheduled<=value.elapsed&&probe.spawnRecipe(config.duration-nextScheduled))return 'Those scheduled orders are missing from this result.';
+    }
+    probe.nextArrival=value.elapsed+Math.max(config.firstArrival,config.interval,2);
+    if(probe.hasEligibleFutureArrival())return 'There is still work scheduled for this shift.';
+    if(value.calls>config.callTimes.filter(at=>at+3<=value.elapsed).length)return 'Those calls have not finished yet.';
+  }else{
+    // Older clients may omit completion metadata; they still need the full clock.
+    if(wallSeconds<config.duration-5)return 'Finish the full shift before posting.';
+    if(value.elapsed!==undefined&&value.elapsed<config.duration-.1)return 'Finish the full shift before posting.';
+  }
   if(value.sourced&&value.shipped<2)return 'That score does not match the completed work.';
   const support=value.sourced*300+value.calls*25;
   // Each answered call can lose its 25 points if the accepted rush misses.
@@ -24,6 +49,7 @@ export function validateResult(value,run,now=Date.now()){
   if(value.score<value.sourced*300||value.score>value.shipped*1600+support)return 'That score does not match the completed work.';
   return null;
 }
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);

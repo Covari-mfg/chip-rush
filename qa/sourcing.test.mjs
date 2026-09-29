@@ -45,7 +45,8 @@ test('offer timeout and decline have no penalty and do not consume ordinary capa
 test('source acceptance is one click from anywhere, leaves CAD untouched, and respects pause and phone guards', () => {
   const game = ready(1); game.setOfficePresence(false); assert.equal(game.requestSource(), true); assert.equal(game.sourcing.state, 'sourcing'); assert.equal(game.sourcing.programmed, true); assert.equal(game.sourcing.programRemaining, 0);
   const paused = ready(); paused.mode = 'paused'; const before = paused.snapshot(); assert.equal(paused.requestSource(), false); advance(paused, 10); assert.deepEqual(paused.snapshot(), before);
-  const phone = ready(2); phone.nextCallAt = phone.elapsed; phone.maybeCall(); assert.ok(phone.call); assert.equal(phone.requestSource(), false); assert.equal(phone.sourcing.state, 'offer');
+  const phone = ready(2); phone.nextCallAt = phone.elapsed; phone.maybeCall(); assert.ok(phone.call); assert.equal(phone.requestSource(), true); assert.equal(phone.sourcing.state, 'sourcing');
+  const answering = ready(2); answering.nextCallAt = answering.elapsed; answering.maybeCall(); answering.setOfficePresence(true); answering.interact('office'); assert.equal(answering.call.state, 'answering'); assert.equal(answering.requestSource(), false); assert.equal(answering.sourcing.state, 'offer');
 });
 
 test('delivery sets receiving and awards no points or ordinary shipment credit', () => {

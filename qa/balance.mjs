@@ -2,8 +2,8 @@
 // production A* collision paths, walking speed, and attended office time.
 // Default adds 0.5s after each station/CAD interaction. --reaction=1
 // explores a slower player; --rush additionally accepts every live rush offer.
-// Default answers and declines phone offers; --ignore-calls measures the cost
-// of letting mandatory interruptions time out. Each answered call costs 3s.
+// Default answers and declines phone offers; --ignore-calls lets the shop keep
+// working while the phone rings. Each answered call costs 3s.
 // --trace prints the reproducible action log; --assert checks normal passes.
 // --expert adds Owner runs with 0.1s reactions, collision-checked click
 // routes and legal straight-line dashes. This is an attainability proof,
@@ -161,7 +161,7 @@ export class Driver {
   calls() {
     const call=this.game.call;
     if (!call||!['ringing','answering','offer'].includes(call.state)) return false;
-    if (this.phonePolicy==='ignore') {this.tick(.2);return true;}
+    if (this.phonePolicy==='ignore') return false;
     this.walk('office');
     if (this.game.call?.state==='ringing') {
       this.game.interact('phone');this.event('answer-phone',{orderId:this.game.call?.orderId});
@@ -193,7 +193,10 @@ export class Driver {
         let order=this.game.order(this.activeId);
         if(!order) {order=this.game.orders[0];this.activeId=order?.id;}
         if(!order) {this.tick(.2);continue;}
-        if(!order.programmed) {this.program(order);continue;}
+        if(!order.programmed) {
+          if (this.game.call?.state==='ringing') { this.tick(.2); continue; }
+          this.program(order);continue;
+        }
         if(!order.started) {this.interact('material-'+stockType(order));this.activeId=this.game.hand?.orderId??order.id;continue;}
         const machine=this.game.stations[order.location];
         if(machine?.ready) {this.interact(order.location);continue;}
@@ -210,7 +213,8 @@ export class Driver {
       // Finish downstream work first, then favor urgent orders and short trips.
       ready.sort((a,b)=>((a.order.route.length-a.order.index)*4+priority(a.order)*.08+this.distanceTo(a.station)*.3)-((b.order.route.length-b.order.index)*4+priority(b.order)*.08+this.distanceTo(b.station)*.3));
       if(ready.length) {this.interact(ready[0].station);continue;}
-      const fresh=this.game.orders.filter(o=>!o.started&&!this.game.stations[o.route[0]]?.part);
+      const fresh=this.game.orders.filter(o=>!o.started&&!this.game.stations[o.route[0]]?.part &&
+        (o.programmed || this.game.call?.state!=='ringing'));
       fresh.sort((a,b)=>priority(a)-priority(b));
       if(fresh.length) {
         const order=fresh[0];
@@ -220,7 +224,7 @@ export class Driver {
       // Complete the next queued job's CAD while a machine runs. CAD pauses
       // during the walk to/from the office and must precede material pickup.
       const unprogrammed=this.game.orders.filter(o=>!o.started&&!o.programmed).sort((a,b)=>a.remaining-b.remaining)[0];
-      if(unprogrammed) {this.program(unprogrammed);continue;}
+      if(unprogrammed && this.game.call?.state!=='ringing') {this.program(unprogrammed);continue;}
       this.tick(.2);
     }
     assert.ok(guard<20000,'Driver must finish a shift');
@@ -230,7 +234,7 @@ export class Driver {
       id:arrival.orderId,name:arrival.name,route:arrival.route,
       steps:this.log.filter(event=>event.orderId===arrival.orderId&&['programmed','pickup','load','shipped','expired'].includes(event.action)).map(event=>({at:event.at,action:event.action,station:event.station??null})),
     }));
-    return {role:this.game.config.name,strategy:this.strategy,phone:this.phonePolicy,rush:this.phonePolicy==='accept',reaction:this.actionDelay,movement:`click route + ${this.dash?'dash':'walk'}`,spawned:this.game.spawnIndex,shipped:this.game.shipped,pass:this.game.passed(),stars:this.game.stars(),score:this.game.score,missed:this.game.missed,unfinished:this.game.unfinished,walkingSeconds:+this.travelSeconds.toFixed(1),cadSeconds:+this.cadSeconds.toFixed(1),dashes:this.dashes,lastShipmentAt,finalIdleSeconds:this.game.unfinished===0?+(this.game.config.duration-lastResolvedAt).toFixed(2):0,callsReceived:this.game.callsReceived,callsAnswered:this.game.callsAnswered,rushesAccepted:this.game.rushesAccepted,rushesWon:this.game.rushesWon,rushesMissed:this.game.rushesMissed,rushPenaltyPoints:Math.max(0,-(this.game.scoreDetails.rushPenalty??0)),scoreDetails:{...this.game.scoreDetails},orders,log:this.log};
+    return {role:this.game.config.name,strategy:this.strategy,phone:this.phonePolicy,rush:this.phonePolicy==='accept',reaction:this.actionDelay,movement:`click route + ${this.dash?'dash':'walk'}`,spawned:this.game.spawnIndex,shipped:this.game.shipped,pass:this.game.passed(),stars:this.game.stars(),score:this.game.score,missed:this.game.missed,unfinished:this.game.unfinished,elapsed:+this.game.elapsed.toFixed(2),remaining:+this.game.time.toFixed(2),finishReason:this.game.finishReason,walkingSeconds:+this.travelSeconds.toFixed(1),cadSeconds:+this.cadSeconds.toFixed(1),dashes:this.dashes,lastShipmentAt,finalIdleSeconds:this.game.unfinished===0?+Math.max(0,this.game.elapsed-lastResolvedAt).toFixed(2):0,callsReceived:this.game.callsReceived,callsAnswered:this.game.callsAnswered,rushesAccepted:this.game.rushesAccepted,rushesWon:this.game.rushesWon,rushesMissed:this.game.rushesMissed,rushPenaltyPoints:Math.max(0,-(this.game.scoreDetails.rushPenalty??0)),scoreDetails:{...this.game.scoreDetails},orders,log:this.log};
   }
 }
 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { ShopGame, PROGRAM_DURATION, stockType } from '../dist/core.js';
+import { ShopGame, SHIFTS, PROGRAM_DURATION, stockType } from '../dist/core.js';
 import { orderWorkflow } from '../dist/workflow.js';
 
 function advance(game,seconds){for(let t=0;t<seconds;t+=.05)game.tick(Math.min(.05,seconds-t));}
@@ -39,20 +39,20 @@ const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 const migration=main.slice(main.indexOf("const SAVE_KEY="),main.indexOf('const STATION_LAYOUT='));
 function migrate(initial){
   const data=new Map(Object.entries(initial).map(([k,v])=>[k,JSON.stringify(v)]));
-  const context=vm.createContext({localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
-  vm.runInContext(`let unlocked=0,bests=[0,0,0],grades=[0,0,0];function save(){localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}${migration};this.result={unlocked,bests,grades,migrationNotice};`,context);
+  const context=vm.createContext({SHIFTS,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
+  vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}${migration};this.result={unlocked,bests,grades};`,context);
   return {result:JSON.parse(JSON.stringify(context.result)),data};
 }
-test('new stock rules preserve unlocks and leave historical records intact',()=>{
-  for(const version of ['v6','v5','v4','v3','v2']) {
+test('optional call rules preserve unlocks and leave historical records intact',()=>{
+  for(const version of ['v7','v6','v5','v4','v3','v2']) {
     const old={unlocked:2,bests:[2900,5000,8000],grades:[3,3,3]},key='chip-rush-roles-'+version;
     const {result,data}=migrate({[key]:old});
-    assert.deepEqual(result,{unlocked:2,bests:[0,0,0],grades:[0,0,0],migrationNotice:true});
+    assert.deepEqual(result,{unlocked:2,bests:[0,0,0],grades:[0,0,0]});
     assert.deepEqual(JSON.parse(data.get(key)),old,'Historical records remain intact');
-    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v7')).bests,[0,0,0]);
+    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0]);
   }
 });
 test('current-season progress takes precedence over previous progress',()=>{
-  const {result}=migrate({'chip-rush-roles-v7':{unlocked:1,bests:[1,2,3],grades:[1,2,3]},'chip-rush-roles-v6':{unlocked:2,bests:[9000,9000,9000]}});
-  assert.deepEqual(result,{unlocked:1,bests:[1,2,3],grades:[1,2,3],migrationNotice:false});
+  const {result}=migrate({'chip-rush-roles-v8':{unlocked:1,bests:[1,2,3],grades:[1,2,3]},'chip-rush-roles-v6':{unlocked:2,bests:[9000,9000,9000]}});
+  assert.deepEqual(result,{unlocked:1,bests:[1,2,3],grades:[1,2,3]});
 });

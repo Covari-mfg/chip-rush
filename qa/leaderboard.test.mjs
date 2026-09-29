@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import worker, { validateResult } from '../server/worker.js';
 import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
+import { simulateShift } from './balance.mjs';
 
 const journal=JSON.parse(await readFile(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'));
 const migrations=await Promise.all(journal.entries.map(({tag})=>readFile(new URL('../drizzle/'+tag+'.sql',import.meta.url),'utf8')));
@@ -279,4 +280,49 @@ test('API unavailability does not prevent the static game from loading',async t=
   const staticResponse=await worker.fetch(new Request(ORIGIN+'/'),{ASSETS:f.env.ASSETS});
   assert.equal(await staticResponse.text(),'static game');
   assert.equal((await f.send('/api/unknown')).status,404);
+});
+
+// Exercise the actual early-finish engine result through the HTTP/DB boundary.
+test('completed workloads can post before the shift timer without losing run ownership checks',async t=>{
+  const f=fixture(t);
+  for(const role of [0,1,2]){
+    const result=simulateShift(role,{reaction:.1,dash:true});
+    assert.equal(result.finishReason,'work-complete');
+    assert.ok(result.elapsed<SHIFTS[role].duration);
+    const run=await f.start(role);
+    const data={score:result.score,shipped:result.shipped,missed:result.missed,sourced:0,calls:result.callsAnswered,elapsed:result.elapsed,spawned:result.spawned,finishReason:result.finishReason};
+    const now=START+Math.ceil(result.elapsed*1000);
+    assert.equal((await f.post(run,data,{now,cookie:undefined})).status,400);
+    const response=await f.post(run,data,{now});
+    assert.equal(response.status,200,await response.clone().text());
+  }
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,3);
+});
+
+test('early completion requires plausible elapsed time, resolved orders, and no eligible future arrivals',()=>{
+  const run={role:1,ruleset:RULESET,started_at:START};
+  const done={role:1,score:3000,shipped:6,missed:0,sourced:0,calls:0,elapsed:150,spawned:6,finishReason:'work-complete'};
+  assert.equal(validateResult(done,run,START+150000),null);
+  for(const patch of [{elapsed:0},{elapsed:NaN},{elapsed:Infinity},{elapsed:'150'},{elapsed:181},{elapsed:undefined},{spawned:undefined},{spawned:5},{spawned:7},{spawned:6.5},{shipped:4},{finishReason:'paused'},{finishReason:'time-up'}]){
+    assert.ok(validateResult({...done,...patch},run,START+150000),JSON.stringify(patch));
+  }
+  assert.ok(validateResult(done,run,START+1000),'Cannot invent elapsed time beyond server wall time');
+  assert.ok(validateResult({...done,elapsed:100,spawned:4,shipped:4},run,START+100000),'Reaching the pass target is not completion');
+  const first={...done,role:0,elapsed:90,spawned:4,shipped:4};
+  assert.ok(validateResult(first,{...run,role:0},START+90000),'Uncapped first shift still has eligible future orders');
+});
+
+
+test('early results cannot omit arrivals before the queue could have filled',()=>{
+  for(const role of [0,1,2]){
+    const elapsed=SHIFTS[role].duration-20;
+    for(const spawned of [1,2,3]){
+      const result={role,score:1600,shipped:spawned,missed:0,sourced:0,calls:0,elapsed,spawned,finishReason:'work-complete'};
+      assert.match(validateResult(result,{role,ruleset:RULESET,started_at:START},START+elapsed*1000),/scheduled orders/);
+    }
+    // Genuine queue saturation/expiry must remain postable.
+    const game=new ShopGame();game.reset(role);
+    while(game.mode==='playing')game.tick(.1);
+    assert.equal(validateResult({role,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,spawned:game.spawnIndex,finishReason:game.finishReason},{role,ruleset:RULESET,started_at:START},START+Math.ceil(game.elapsed*1000)),null);
+  }
 });

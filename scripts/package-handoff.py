@@ -6,8 +6,8 @@ import shutil
 
 root = Path(__file__).resolve().parents[1]
 archive = root / 'CHIP-RUSH-complete.zip'
-paths = [root / name for name in ('.gitignore', 'README.md', 'ARNOLDAS-START-HERE.md', 'CONTRIBUTING.md', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'drizzle.config.ts')]
-for folder in ('dist', 'qa', 'scripts', 'db', 'drizzle', 'server'):
+paths = [root / name for name in ('.gitignore', 'AGENTS.md', 'README.md', 'ARNOLDAS-START-HERE.md', 'CONTRIBUTING.md', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'drizzle.config.ts')]
+for folder in ('dist', 'qa', 'scripts', 'db', 'drizzle', 'server', 'docs'):
     paths.extend(p for p in (root / folder).rglob('*') if p.is_file()
         and not p.is_symlink() and 'downloads' not in p.relative_to(root).parts
         and not (folder == 'dist' and p.relative_to(root / folder).parts[0] in ('client', 'server', '.openai'))

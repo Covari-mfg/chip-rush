@@ -229,3 +229,11 @@ test('an empty community board has no fabricated scores on either surface',async
   assert.equal(f.$('home-board-list').children.length,0);assert.equal(f.$('board-list').children.length,0);
   assert.match(f.$('home-board-status').textContent,/No scores yet/);
 });
+
+test('score posting preserves the early completion snapshot',async()=>{
+  const f=setup();f.social.start(1);await settle();
+  f.finish({role:1,score:3000,shipped:6,missed:0,sourced:0,calls:0,elapsed:150,spawned:6,finishReason:'work-complete'});
+  await f.submit();
+  const posted=f.requests.find(request=>request.path==='/api/scores').body;
+  assert.equal(posted.elapsed,150);assert.equal(posted.spawned,6);assert.equal(posted.finishReason,'work-complete');
+});
