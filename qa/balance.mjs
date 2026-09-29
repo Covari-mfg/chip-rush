@@ -53,10 +53,11 @@ export const navigation = {
 };
 
 export class Driver {
-  constructor(shift, strategy, phonePolicy = 'decline', {reaction = .5, dash = false} = {}) {
+  constructor(shift, strategy, phonePolicy = 'decline', {reaction = .5, dash = false, covari = 'decline'} = {}) {
     assert.ok(Number.isFinite(reaction)&&reaction>=0,'Nonnegative reaction time');
     this.actionDelay = reaction;
     this.dash = dash;
+    this.covari = covari;
     this.dashCooldown = 0;
     this.dashes = 0;
     this.game = new ShopGame();
@@ -82,7 +83,7 @@ export class Driver {
       this.game.tick(dt);
       this.cadSeconds+=beforeCad-(cadOrder?.programRemaining??0);
       for (const event of this.game.drain()) {
-        if (['arrival','programming','programmed','pickup','load','ready','shipped','expired','rushWon','rushExpired'].includes(event.type)) {
+        if (['arrival','programming','programmed','pickup','load','ready','shipped','expired','rushWon','rushExpired','sourcePlaced','sourceDelivered','sourceFulfilled'].includes(event.type)) {
           const order=this.game.order(event.orderId);
           this.event(event.type,{...event,...(event.type==='arrival'&&order?{name:order.name,route:[...order.route]}:{})});
         }
@@ -187,6 +188,8 @@ export class Driver {
     let guard=0;
     while(this.game.mode==='playing'&&guard++<20000) {
       if(this.calls()) continue;
+      // Choosing the Covari card is instant; Decline (the default) lets the offer lapse.
+      if(this.covari==='accept'&&this.game.sourcing?.state==='offer'&&this.game.requestSource()){this.event('source-accept');this.tick(Math.max(DT,this.actionDelay));continue;}
       const held=this.game.heldOrder;
       if(held) {
         if(!held.programmed) {this.program(held);continue;}
@@ -218,6 +221,7 @@ export class Driver {
       // Finish downstream work first, then favor urgent orders and short trips.
       ready.sort((a,b)=>((a.order.route.length-a.order.index)*4+priority(a.order)*.08+this.distanceTo(a.station)*.3)-((b.order.route.length-b.order.index)*4+priority(b.order)*.08+this.distanceTo(b.station)*.3));
       if(ready.length) {this.interact(ready[0].station);continue;}
+      if(this.game.receiving&&this.game.sourcing?.state==='delivered') {this.interact('receiving');continue;}
       const fresh=this.game.orders.filter(o=>!o.started&&!this.game.stations[o.route[0]]?.part &&
         (o.programmed || this.game.call?.state!=='ringing'));
       fresh.sort((a,b)=>priority(a)-priority(b));
@@ -239,7 +243,7 @@ export class Driver {
       id:arrival.orderId,name:arrival.name,route:arrival.route,
       steps:this.log.filter(event=>event.orderId===arrival.orderId&&['programmed','pickup','load','shipped','expired'].includes(event.action)).map(event=>({at:event.at,action:event.action,station:event.station??null})),
     }));
-    return {role:this.game.config.name,strategy:this.strategy,phone:this.phonePolicy,rush:this.phonePolicy==='accept',reaction:this.actionDelay,movement:`click route + ${this.dash?'dash':'walk'}`,spawned:this.game.spawnIndex,shipped:this.game.shipped,pass:this.game.passed(),stars:this.game.stars(),score:this.game.score,missed:this.game.missed,unfinished:this.game.unfinished,elapsed:+this.game.elapsed.toFixed(2),remaining:+this.game.time.toFixed(2),finishReason:this.game.finishReason,walkingSeconds:+this.travelSeconds.toFixed(1),cadSeconds:+this.cadSeconds.toFixed(1),dashes:this.dashes,lastShipmentAt,finalIdleSeconds:this.game.unfinished===0?+Math.max(0,this.game.elapsed-lastResolvedAt).toFixed(2):0,callsReceived:this.game.callsReceived,callsAnswered:this.game.callsAnswered,rushesAccepted:this.game.rushesAccepted,rushesWon:this.game.rushesWon,rushesMissed:this.game.rushesMissed,rushPenaltyPoints:Math.max(0,-(this.game.scoreDetails.rushPenalty??0)),scoreDetails:{...this.game.scoreDetails},orders,log:this.log};
+    return {role:this.game.config.name,strategy:this.strategy,phone:this.phonePolicy,rush:this.phonePolicy==='accept',reaction:this.actionDelay,movement:`click route + ${this.dash?'dash':'walk'}`,spawned:this.game.spawnIndex,shipped:this.game.shipped,pass:this.game.passed(),stars:this.game.stars(),score:this.game.score,missed:this.game.missed,unfinished:this.game.unfinished,elapsed:+this.game.elapsed.toFixed(2),remaining:+this.game.time.toFixed(2),finishReason:this.game.finishReason,sourced:this.game.sourced,sourcePoints:this.game.sourcePoints,walkingSeconds:+this.travelSeconds.toFixed(1),cadSeconds:+this.cadSeconds.toFixed(1),dashes:this.dashes,lastShipmentAt,finalIdleSeconds:this.game.unfinished===0?+Math.max(0,this.game.elapsed-lastResolvedAt).toFixed(2):0,callsReceived:this.game.callsReceived,callsAnswered:this.game.callsAnswered,rushesAccepted:this.game.rushesAccepted,rushesWon:this.game.rushesWon,rushesMissed:this.game.rushesMissed,rushPenaltyPoints:Math.max(0,-(this.game.scoreDetails.rushPenalty??0)),scoreDetails:{...this.game.scoreDetails},orders,log:this.log};
   }
 }
 

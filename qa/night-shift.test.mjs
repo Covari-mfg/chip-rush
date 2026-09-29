@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { ShopGame, SHIFTS, RECIPES, OPS, RULESET, scoreShipment, stockType } from '../dist/core.js';
+import { ShopGame, SHIFTS, RECIPES, OPS, RULESET, SOURCE_JOBS, FINISHING_SOURCE_JOBS, scoreShipment, stockType } from '../dist/core.js';
+import { TECHNOLOGIES } from '../dist/technology.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 import { validateResult } from '../server/worker.js';
 import { Driver, simulateShift, navigation } from './balance.mjs';
@@ -58,11 +59,12 @@ test('the three released levels keep their configuration', () => {
   ]);
 });
 
-test('Night Shift adds finishing routes without calls or Covari offers', () => {
+test('Night Shift adds finishing routes and a Covari offer, without customer calls', () => {
   assert.deepEqual(night.unlocks, ['lathe', 'mill', 'deburr', 'anodize', 'inspect']);
   assert.equal(night.programming, true);
   assert.equal(night.calls, false);
-  assert.equal(night.sourcing, false);
+  assert.equal(night.sourcing, true);
+  assert.equal(night.sourceJobs, FINISHING_SOURCE_JOBS);
   const operations = new Set(night.recipes.flatMap(index => RECIPES[index].route));
   for (const key of ['lathe', 'mill', 'deburr', 'anodize', 'inspect']) assert.ok(operations.has(key), `${key} is used by an order`);
   for (const index of night.recipes) {
@@ -74,8 +76,95 @@ test('Night Shift adds finishing routes without calls or Covari offers', () => {
   game.nextArrival = 1;
   advance(game, night.duration);
   assert.equal(game.callsReceived, 0);
-  assert.equal(game.sourcing, null);
+  assert.equal(game.sourcing, null, 'No Covari offer until two normal shipments');
   assert.equal(game.finishReason, 'time-up');
+});
+
+test('the Covari offer is a finishing capability with no station on the floor', () => {
+  assert.equal(FINISHING_SOURCE_JOBS.length, SOURCE_JOBS.length);
+  const stations = new Set([...Object.keys(OPS), ...Object.values(OPS).map(op => op.name.toLowerCase())]);
+  for (const job of FINISHING_SOURCE_JOBS) {
+    assert.ok(job.name && job.capability && job.gap, `${job.name} names its process and why the floor lacks it`);
+    assert.ok(TECHNOLOGIES[job.technology], `${job.name} has a technology badge`);
+    assert.equal(stations.has(job.technology) || stations.has(job.capability.toLowerCase()), false, `${job.capability} has no station`);
+    assert.ok(!night.recipes.some(index => RECIPES[index].name === job.name), 'The shop never makes it itself');
+  }
+  assert.equal(new Set(FINISHING_SOURCE_JOBS.map(job => job.technology)).size, FINISHING_SOURCE_JOBS.length);
+  assert.deepEqual(SOURCE_JOBS.map(job => job.technology), ['im', 'edm', 'sm'], 'Earlier levels keep their pool');
+  for (const shift of [1, 2]) assert.equal(SHIFTS[shift].sourceJobs, undefined);
+});
+
+function offered(level = NIGHT) {
+  const game = fresh(level);
+  game.shipped = 2;
+  advance(game, 35.05);
+  assert.equal(game.sourcing?.state, 'offer');
+  return game;
+}
+
+test('Night Shift offers one finishing job after two shipments, on the shared timing gates', () => {
+  const game = fresh();
+  game.shipped = 1;
+  advance(game, 60);
+  assert.equal(game.sourcing, null, 'Two shipments come first');
+  game.shipped = 2;
+  advance(game, .1);
+  assert.equal(game.sourcing?.state, 'offer');
+  assert.ok(FINISHING_SOURCE_JOBS.some(job => job.name === game.sourcing.name));
+  assert.equal(game.sourcing.gap, FINISHING_SOURCE_JOBS.find(job => job.name === game.sourcing.name).gap);
+  const late = fresh();
+  late.shipped = 2;
+  late.time = 44;
+  advance(late, 35);
+  assert.equal(late.sourcing, null, 'No offer with under 45 seconds left');
+  for (const shift of [1, 2]) assert.ok(SOURCE_JOBS.some(job => job.name === offered(shift).sourcing.name), 'Earlier levels still offer the original pool');
+});
+
+test('accepting Covari delivers a crate to Receiving, then QC and shipping earn 300 without a shipment', () => {
+  const game = offered();
+  const orders = game.orders.map(order => order.id);
+  assert.equal(game.requestSource(), true);
+  advance(game, 22.05);
+  assert.equal(game.sourcing.state, 'delivered');
+  assert.equal(game.interact('receiving'), true);
+  assert.equal(game.hand.orderId, 201);
+  run(game, 'inspect', OPS.inspect.duration);
+  assert.equal(game.interact('inspect'), true);
+  const before = game.score, shipped = game.shipped;
+  assert.equal(game.interact('ship'), true);
+  assert.equal(game.score - before, 300);
+  assert.equal(game.sourced, 1);
+  assert.equal(game.shipped, shipped, 'Covari work earns no shipment or star credit');
+  assert.deepEqual(game.orders.map(order => order.id), orders, 'It never used an order slot');
+  assert.equal(game.scoreDetails.sourcing, 300);
+});
+
+test('a carried Covari crate swaps with a finished part waiting at QC', () => {
+  const game = offered();
+  game.requestSource();
+  advance(game, 22.05);
+  assert.equal(game.interact('receiving'), true);
+  const waiting = game.orders[0];
+  Object.assign(waiting, { programmed: true, started: true, index: 1, location: 'inspect' });
+  waiting.route = ['lathe', 'inspect', 'ship'];
+  game.stations.inspect = { part: { orderId: waiting.id }, remaining: 0, ready: true };
+  assert.equal(game.interact('inspect'), true);
+  assert.equal(game.hand.orderId, waiting.id, 'The finished part comes out');
+  assert.equal(game.stations.inspect.part.orderId, 201, 'The crate goes into QC');
+  assert.equal(game.stations.inspect.ready, false);
+  assert.equal(game.stations.inspect.remaining, OPS.inspect.duration);
+});
+
+test('declining or ignoring the Covari offer costs nothing and never blocks the finish', () => {
+  const declined = offered();
+  assert.equal(declined.declineSource(), true);
+  const before = declined.score;
+  advance(declined, 40);
+  assert.equal(declined.score, before);
+  assert.equal(declined.sourced, 0);
+  const ignored = offered();
+  advance(ignored, 31);
+  assert.equal(ignored.sourcing.state, 'declined');
 });
 
 test('deburr and anodize stay unavailable in the released levels', () => {
@@ -134,7 +223,7 @@ test('every map is registered and offers the stations its levels use', () => {
   const ids = mapId => Array.from(navigation.layout.filter(def => navigation.has(def, mapId)), def => def.id).sort();
   const original = ['buffer', 'inspect', 'lathe', 'material-block', 'material-plate', 'material-round', 'mill', 'office', 'receiving', 'ship'];
   assert.deepEqual(ids('first-shop'), original, 'Released levels keep exactly their original stations');
-  assert.deepEqual(ids('night-shop'), [...original.filter(id => id !== 'receiving'), 'anodize', 'deburr'].sort());
+  assert.deepEqual(ids('night-shop'), [...original, 'anodize', 'deburr'].sort(), 'Night Shift keeps Receiving for its Covari deliveries');
   for (const shift of SHIFTS) {
     const available = ids(shift.mapId);
     assert.ok(navigation.maps[shift.mapId], `${shift.id} has a registered map`);
@@ -164,6 +253,11 @@ test('each map keeps every station reachable, uncluttered and collision-safe', (
       for (const point of path) { assert.ok(navigation.clear(previous, point), `${mapId}: ${from} to ${def.id} avoids corners`); previous = point; }
     }
     assert.ok(map.theme, `${mapId} names a theme`);
+    for (const def of defs) for (const other of defs) {
+      if (def.id === other.id || !['deburr', 'anodize', 'receiving'].includes(def.id)) continue;
+      const a = navigation.accesses[def.id], b = navigation.accesses[other.id];
+      assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 1.3, `${mapId}: ${def.id} and ${other.id} have distinct access points`);
+    }
   }
 });
 
@@ -177,7 +271,7 @@ test('Night Shift finishing stations are not obstacles in the released map', () 
   }
   navigation.activate('night-shop');
   const receiving = navigation.layout.find(station => station.id === 'receiving');
-  assert.ok(navigation.safe(receiving.x, receiving.z), 'The unused receiving bench is cleared away in the night map');
+  assert.equal(navigation.safe(receiving.x, receiving.z), false, 'Receiving is a solid bench on the night map');
   for (const id of ['deburr', 'anodize']) {
     const def = navigation.layout.find(station => station.id === id);
     assert.equal(navigation.safe(def.x, def.z), false, `${id} is solid on the night map`);
@@ -222,7 +316,7 @@ test('Night Shift expert routes are legal, repeatable and finish inside the cloc
   assert.equal(result.finishReason, 'work-complete');
   assert.ok(result.lastShipmentAt <= night.duration);
   assert.equal(result.scoreDetails.calls, 0);
-  assert.equal(result.scoreDetails.sourcing, 0);
+  assert.equal(result.scoreDetails.sourcing, 0, 'The default profile declines Covari');
   assert.equal(result.score, Object.values(result.scoreDetails).reduce((total, points) => total + points, 0));
 });
 
@@ -239,6 +333,29 @@ test('every Night Shift part follows CAD, stock, its route and shipping in order
     order.route.forEach(key => stations.add(key));
   }
   assert.ok(stations.has('deburr') && stations.has('anodize'));
+});
+
+test('accepting the Covari job is an optional trade that keeps mastery for ordinary concurrent play', () => {
+  for (const reaction of [.5, 1]) {
+    const declined = simulateShift(NIGHT, { strategy: 'flow', reaction });
+    const accepted = simulateShift(NIGHT, { strategy: 'flow', reaction, covari: 'accept' });
+    assert.equal(accepted.sourced, 1);
+    assert.equal(accepted.scoreDetails.sourcing, 300);
+    assert.equal(accepted.stars, 3, `${reaction}s handoffs keep three stars while outsourcing`);
+    assert.equal(accepted.shipped, declined.shipped, 'Covari work adds no shipment');
+    assert.equal(accepted.missed, 0);
+    assert.equal(accepted.unfinished, 0);
+    assert.ok(accepted.score > declined.score);
+    assert.equal(accepted.score, Object.values(accepted.scoreDetails).reduce((total, points) => total + points, 0));
+    const steps = accepted.log.filter(event => ['source-accept', 'sourceDelivered', 'sourceFulfilled'].includes(event.action)).map(event => event.action);
+    assert.deepEqual(steps, ['source-accept', 'sourceDelivered', 'sourceFulfilled']);
+  }
+  assert.equal(simulateShift(NIGHT, { strategy: 'flow', reaction: .5 }).sourced, 0, 'Declining is the default and earns nothing');
+  const expert = simulateShift(NIGHT, { reaction: .1, dash: true, covari: 'accept' });
+  assert.equal(expert.stars, 3);
+  assert.equal(expert.sourced, 1);
+  assert.deepEqual(expert, simulateShift(NIGHT, { reaction: .1, dash: true, covari: 'accept' }));
+  assert.ok(simulateShift(NIGHT, { strategy: 'flow', reaction: 1.5, covari: 'accept' }).stars >= 1, 'A slow player who outsources can still clear');
 });
 
 test('a stalled shift still ends at the clock without extra income', () => {
@@ -264,8 +381,12 @@ test('the hosted score board and challenge links accept Night Shift results with
   const run = { role: NIGHT, ruleset: RULESET, started_at: START };
   const now = START + result.elapsed * 1000;
   assert.equal(validateResult(value, run, now), null);
+  const outsourced = simulateShift(NIGHT, { reaction: .1, dash: true, covari: 'accept' });
+  const withCovari = { ...value, score: outsourced.score, shipped: outsourced.shipped, sourced: 1, elapsed: outsourced.elapsed, spawned: outsourced.spawned };
+  assert.equal(validateResult(withCovari, run, START + outsourced.elapsed * 1000), null, 'One Covari job is a valid Night Shift result');
+  assert.ok(validateResult({ ...withCovari, score: 200 }, run, START + outsourced.elapsed * 1000), 'The 300 Covari points cannot be missing');
   assert.ok(validateResult({ ...value, calls: 1 }, run, now), 'No customer calls on this level');
-  assert.ok(validateResult({ ...value, sourced: 1 }, run, now), 'No Covari offer on this level');
+  assert.ok(validateResult({ ...value, sourced: 2 }, run, now), 'At most one Covari job per shift');
   assert.ok(validateResult({ ...value, shipped: night.maxOrders + 1 }, run, now));
   assert.ok(validateResult({ ...value, role: 2 }, run, now), 'A run cannot be posted as another level');
   assert.match(validateResult({ ...value, finishReason: 'time-up', elapsed: night.duration - 30 }, run, START + night.duration * 1000), /full shift/);

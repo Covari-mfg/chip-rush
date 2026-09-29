@@ -132,16 +132,16 @@ test('result validation enforces full-shift eligibility, one-day expiry, and rul
   }
 });
 
-test('a Night Shift run starts, waits for its 210 second clock, and posts an ordinary score',async t=>{
+test('a Night Shift run starts, waits for its 210 second clock, and posts with an optional Covari job',async t=>{
   const f=fixture(t),run=await f.start(3);
   assert.equal(SHIFTS[3].duration,210);
   assert.equal((await f.post(run,{},{now:START+204999})).status,400,'Night Shift needs its own full clock');
-  assert.equal((await f.post(run,{sourced:1},{now:START+210000})).status,400,'No Covari offer on Night Shift');
+  assert.equal((await f.post(run,{sourced:2},{now:START+210000})).status,400,'At most one Covari job on Night Shift');
   assert.equal((await f.post(run,{calls:1},{now:START+210000})).status,400,'No customer calls on Night Shift');
   assert.equal((await f.post(run,{shipped:7},{now:START+210000})).status,400);
-  assert.equal((await f.post(run,{score:4200,shipped:6},{now:START+210000})).status,200);
+  assert.equal((await f.post(run,{score:4500,shipped:6,sourced:1},{now:START+210000})).status,200,'One Covari job posts like any other level');
   const board=await (await f.send('/api/leaderboard')).json();
-  assert.equal(board.entries[0].score,4200);assert.equal(board.entries[0].stars,3);
+  assert.equal(board.entries[0].score,4500);assert.equal(board.entries[0].stars,3);
 });
 
 test('HTTP score posts reject early and expired runs without consuming the valid run',async t=>{

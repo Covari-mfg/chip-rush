@@ -44,13 +44,13 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
-  {id:'deburr',name:'DEBURR',x:-1.9,z:.85,height:2.05,w:2.16,d:1.31,map:'night-shop'},
-  {id:'anodize',name:'ANODIZE',x:1.7,z:.85,height:2.2,w:2.27,d:1.31,map:'night-shop'},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:'night-shop'},
+  {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:'night-shop'},
 ];
 // A map lists the stations it adds (def.map) and the shared ones it clears away.
 const MAPS={
   'first-shop':{theme:'day'},
-  'night-shop':{theme:'night',hide:['receiving']},
+  'night-shop':{theme:'night'},
 };
 const mapHas=(def,mapId)=>def.map?def.map===mapId:!MAPS[mapId].hide?.includes(def.id);
 const SPAWN={x:0,z:2.6};
@@ -396,7 +396,7 @@ function updateSourceUI(){
   const job=game.sourcing,visible=!!job&&!['declined','fulfilled'].includes(job.state);sourceCard.hidden=!visible;if(!visible)return;
   const offered=job.state==='offer',delivered=job.state==='delivered',qc=game.stations.inspect;
   $('source-title').textContent=job.name;
-  $('source-capability').hidden=!offered;$('source-capability').textContent='Outside shop capability';
+  $('source-capability').hidden=!offered;$('source-capability').textContent=job.gap??'Outside shop capability';
   const technology=$('source-technology');
   if(technology.dataset.technology!==job.technology){technology.innerHTML=technologyBadges([job.technology]);technology.dataset.technology=job.technology;}
   $('source-due').textContent=offered?`${Math.ceil(job.offerRemaining)}s`:'+300';

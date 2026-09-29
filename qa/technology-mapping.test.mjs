@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { ShopGame, OPS, RECIPES, SOURCE_JOBS, stockType } from '../dist/core.js';
+import { ShopGame, OPS, RECIPES, SOURCE_JOBS, FINISHING_SOURCE_JOBS, stockType } from '../dist/core.js';
+import { TECHNOLOGIES, technologyBadges as realBadges } from '../dist/technology.js';
 import { orderWorkflow, stockIcon } from '../dist/workflow.js';
 
 const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
@@ -90,6 +91,29 @@ test('each actual Covari offer maps its capability to the corresponding technolo
     assert.equal(f.$('source-capability').textContent,'Outside shop capability');
     assert.equal(f.$('source-technology').innerHTML,f.badgeCalls[0].markup);
   }
+});
+
+test('Night Shift offers show a finishing capability and why the floor lacks it',()=>{
+  for(let offset=0;offset<FINISHING_SOURCE_JOBS.length;offset++) {
+    const f=setup();f.game.reset(3);f.game.nextCallAt=Infinity;f.game.nextSourceKind=offset;f.game.shipped=2;
+    for(let tick=0;tick<701;tick++)f.game.tick(.05);
+    const job=FINISHING_SOURCE_JOBS[offset];
+    assert.equal(f.game.sourcing.state,'offer');f.context.updateSourceUI();
+    assert.equal(f.$('source-title').textContent,job.name);
+    assert.equal(f.$('source-capability').textContent,job.gap);
+    assert.deepEqual(f.badgeCalls.map(call=>call.keys),[[job.technology]]);
+  }
+});
+
+test('finishing technologies render a named badge with a short code',()=>{
+  for(const {technology,capability} of FINISHING_SOURCE_JOBS) {
+    assert.equal(TECHNOLOGIES[technology].name,capability);
+    const html=realBadges([technology]);
+    assert.match(html,new RegExp(`aria-label="${capability}"`));
+    assert.match(html,new RegExp(`>${technology.toUpperCase()}</span>`));
+    assert.match(html,/<svg /);
+  }
+  assert.doesNotMatch(realBadges(['lathe']),/technology-code/,'Machine badges stay icon-only');
 });
 
 test('source badge rendering is cached across countdowns and workflow states, then replaced for the next technology',()=>{
