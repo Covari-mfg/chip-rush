@@ -8,21 +8,22 @@ A complete single-player 3D machine-shop game. Original procedural assets, short
 
 Open **dist/CHIP-RUSH.html** in a current Chrome, Edge, Firefox, or Safari browser. Everything is embedded, including the 3D renderer. No account, server, network, or build step is required. WebGL 2 and hardware acceleration must be available.
 
-The First Shop chapter has three scenarios in one little shop:
+The First Shop chapter has four scenarios in one little shop:
 
 | Level | Shift | Clear target | New responsibility | Stars |
 | --- | --- | --- | --- | --- |
 | First Shift | 2½ minutes | 3 shipments | Material → turn or mill → inspect → ship | 3 / 4 / 5 |
 | Mixed Orders | 3 minutes | 4 shipments | CAD → material → turn or mill (sometimes both) → inspect → ship | 4 / 5 / 6 |
 | Rush Hour | 3 minutes | 5 shipments | CAD and combined routes, plus optional customer calls | 5 / 6 / 8 |
+| Night Shift | 3½ minutes | 4 shipments | Deburr and Anodize finishing after hours; no calls | 4 / 5 / 6 |
 
-Clearing a scenario unlocks the next. First Shift teaches the physical loop, Mixed Orders rewards practiced scheduling, and Rush Hour separates clearing the shift from an exceptional three-star run. The intended experience is mastery after focused practice, not a measured success-rate claim. See [docs/level-design.md](docs/level-design.md) for the current chapter contract and level details. Briefings show all three shipment targets before the clock starts; the live counter tracks the next star. Retries use the same job sequence.
+Clearing a scenario unlocks the next. Night Shift is the fourth level (Claude Sonnet 5.5, Cursor Cloud Agent): the phones are off, the lights are low, and deburr and color-bath finishing join the machining routes. See [docs/experiments/night-shift.md](docs/experiments/night-shift.md). First Shift teaches the physical loop, Mixed Orders rewards practiced scheduling, and Rush Hour separates clearing the shift from an exceptional three-star run. The intended experience is mastery after focused practice, not a measured success-rate claim. See [docs/level-design.md](docs/level-design.md) for the current chapter contract and level details. Briefings show all three shipment targets before the clock starts; the live counter tracks the next star. Retries use the same job sequence.
 
 First Shift opens with one order, then waits 18 seconds before the second and spaces later arrivals 19 seconds apart. This gives the first part more breathing room while keeping the existing seventh order eligible before the late-order safety cutoff. The job values, deadlines, score formula, and star targets stay the same.
 
 Mixed Orders has at most six orders: an opening order, a 16-second gap, then 25-second intervals. Its sequence includes two bearing housings that need both turning and milling. Rush Hour has at most eight orders, a first 12-second gap, then 18-second intervals, with three bearing housings in its sequence. Both scenarios retain the four-active-order limit and the closing-time check, which can substitute a shorter route or stop arrivals if work cannot reasonably finish. Ordinary deadlines are 105 seconds, plus 14 seconds for the opening order. Rush Hour mastery requires planning, machine overlap, and practiced routing; rush bonuses remain optional even for three stars.
 
-Personal bests and unlocks use the `chip-rush-roles-v8` save in this browser. Upgrading from v7/v6/v5/v4/v3/v2 keeps unlocked scenarios and starts fresh scores and stars for the updated call rules. Previous saves remain intact. Some browsers isolate or disable storage for local files; the game still works for that session.
+Personal bests and unlocks use the `chip-rush-roles-v8` save in this browser. Upgrading from v7/v6/v5/v4/v3/v2 keeps unlocked scenarios and starts fresh scores and stars for the updated call rules. Previous saves remain intact. A cleared, unlocked level unlocks its successor when a save is loaded, so players who had already cleared Rush Hour find Night Shift unlocked; stars from friend challenges on a locked level never unlock anything. Some browsers isolate or disable storage for local files; the game still works for that session.
 
 ## Add the next level
 
@@ -53,7 +54,7 @@ Small technology badges connect each order to its machine: turning and milling u
 
 Collect stock from the bin matching an order's pictogram: **Round**, **Plate**, or (in later scenarios) **Block**. Pickup starts the earliest-due CAD-ready, unstarted job of that stock type, with lower order number breaking a tie. Tickets are informational; no selection is needed. The carried part retains its customer order and unique machining route all the way to shipping.
 
-Follow the ticket's machine route. Machines work unattended, including the four-second inspection. Collect the finished part when the station label says **READY**. Inspection must finish before Shipping accepts the part. The Hold bench stores one part; using it while both hands and bench are occupied swaps them. A compatible new part can replace a ready machine's output in one interaction. Return an ordinary carried part to any stock bin to recycle it and restart its physical route. Outsourced parts cannot be recycled. Expired orders and their parts are cleared. Deburring and anodizing are omitted from these shifts. There is no collision damage or random machine failure.
+Follow the ticket's machine route. Machines work unattended, including the four-second inspection. Collect the finished part when the station label says **READY**. Inspection must finish before Shipping accepts the part. The Hold bench stores one part; using it while both hands and bench are occupied swaps them. A compatible new part can replace a ready machine's output in one interaction. Return an ordinary carried part to any stock bin to recycle it and restart its physical route. Outsourced parts cannot be recycled. Expired orders and their parts are cleared. Deburring and anodizing are omitted from the first three shifts and available in Night Shift, where Deburr takes four seconds and the Anodize color bath eight. There is no collision damage or random machine failure.
 
 Mixed Orders and Rush Hour require six attended seconds of CAD before stock pickup. Use the Office to resume its unfinished drawing, or start the earliest-due unprepared job. Machines keep running while you work. Leaving pauses CAD without losing progress; recycling preserves completed CAD. The ticket and Office label show CAD progress. CAD is required only before stock pickup, with no second office step between machines.
 

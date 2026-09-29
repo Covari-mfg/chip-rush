@@ -33,6 +33,9 @@ For the current three levels, stars depend on shipped orders, not score or rush 
 | First Shift | 2½ minutes | 3 | 4 | 5 |
 | Mixed Orders | 3 minutes | 4 | 5 | 6 |
 | Rush Hour | 3 minutes | 5 | 6 | 8 |
+| Night Shift | 3½ minutes | 4 | 5 | 6 |
+
+Night Shift (level 4) is a calmer after-hours chapter: no calls, a darker shop, and two new stations, DEBURR and ANODIZE, in the middle of the floor. Its routes run up to four steps between stock and inspection, and two orders share the single color bath. Worth checking: is the finishing island readable, and do the dial-knob, ocean-collar, satin-bracket and valve-body routes feel fair?
 
 First Shift should feel welcoming. The current three levels follow **matching stock bin → turn or mill (sometimes both) → Inspection → Shipping**; Mixed Orders and Rush Hour add six seconds of attended CAD before stock and reward overlapping work. The office automatically starts the earliest-due unprogrammed order and resumes a partial CAD job. After CAD is ready, walk to ROUND, PLATE, or BLOCK stock; each bin automatically gives you the earliest-due matching order. Material pickup requires completed CAD in levels that use programming. Mixed Orders has at most six jobs, with a 16-second opening gap and 25-second later spacing. Rush Hour has at most eight jobs, with a 12-second opening gap and 18-second later spacing. Both retain the four-active-order limit and closing-time safety check. Rush Hour three stars should reward practiced scheduling and routing.
 

@@ -1,5 +1,15 @@
 # CHIP RUSH verification
 
+## Night Shift (level 4) · 2026-09-29 (local source, not released)
+
+Full record: [docs/experiments/night-shift.md](../docs/experiments/night-shift.md).
+
+- 218 automated tests pass (24 new), plus `node qa/balance.mjs --rush --ignore-calls --expert --assert`, `pnpm build`, `pnpm deploy:dry-run` and `git diff --check`. Simulation rows for First Shift, Mixed Orders and Rush Hour are identical to `main`.
+- Simulation (not player data): Night Shift with 0.5s handoffs ships 5 serially (2 stars, clears) and 6 with overlapped work (3 stars, 4,811 points). With 1.5s handoffs serial play still clears; concurrent play at 2.0s clears with one star. Expert dash routes ship 6 at 5,264 points.
+- Browser (automated, headless Chrome 148, software WebGL, station-label clicks): one full Night Shift shipped 6 with 0 missed, 3 stars and 5,281 points at 169.0 game seconds, with no console errors. Software rendering runs the game slower than real time, so this proves the UI flow, not difficulty. No human has played it yet.
+- Released levels render the same draw calls and triangles as `main`. Standalone `CHIP-RUSH.html` from `file://` starts Night Shift with the finishing stations. Save unlock behavior and a level-4 friend challenge were checked in the browser.
+- Untested: real-display look of the night palette, touch and narrow screens, human difficulty, hosted D1 outside the local adapter.
+
 ## CAD and rush balance · 2026-09-27 (local source)
 
 - Manager and Owner now require one six-second CAD step at the office before Material. Every delivered advanced-role job earns 120 CAD points before the ordinary streak multiplier. CAD progress survives walking away and completed CAD survives recycling. Operator timing, scoring, recipes, and 3/4/5 stars remain unchanged.
