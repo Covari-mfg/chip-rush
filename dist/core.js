@@ -1,4 +1,4 @@
-export const RULESET = 'roles-v7-stock-outsourcing';
+export const RULESET = 'roles-v8-optional-calls';
 // Complexity, CAD, and speed earn points on delivery, so restarting a job
 // cannot farm points from unfinished work.
 export function scoreShipment(order, combo, {programming=false,rushBonus=0}={}) {
@@ -42,13 +42,42 @@ export const SOURCE_JOBS = [
   {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
   {name:'Sheet-metal bracket',capability:'Sheet metal fabrication',technology:'sm'},
 ];
-// Clearing a role is the introduction; its third star is the mastery target.
-// Higher roles add CAD and more complex routes, with a bounded workload that
-// leaves room to work the floor and answer customer calls.
+// New-level creative brief: docs/model-experiment.md. Current scenario details:
+// docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
+// Future levels may evolve mechanics; preserve earlier scenarios and their data.
+// Append levels: ids and array positions are permanent save/challenge identities.
+// mapId documents the current layout; loading different maps is not implemented.
 export const SHIFTS = [
-  {name:'Operator',subtitle:'Run the machines. Find your rhythm.',brief:'Collect stock, follow each route, and ship 3 orders to earn your promotion.',duration:150,firstArrival:18,interval:19,deadline:82,recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],programming:false,calls:false,passTarget:3,stars:[3,4,5]},
-  {name:'Production Manager',subtitle:'Complete the CAD. Keep work moving.',brief:'Complete 6 seconds of CAD at the office, collect material, and ship 4 orders.',duration:180,firstArrival:16,interval:25,deadline:105,maxOrders:6,recipes:[0,1,6,0,1,6],unlocks:['lathe','mill','inspect'],programming:true,calls:false,passTarget:4,stars:[4,5,6]},
-  {name:'Owner',subtitle:'Keep your promises. Choose your rushes.',brief:'Ship 5 orders to clear. Eight shipments earns the exceptional three-star Owner shift.',duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,recipes:[0,1,6,0,6,1,6,1],unlocks:['lathe','mill','inspect'],programming:true,calls:true,passTarget:5,stars:[5,6,8]},
+  {
+    id:'first-shift',mapId:'first-shop',name:'First Shift',author:'GPT-6 Astra',harness:'Codex',
+    subtitle:'Stock → machine → inspect → ship.',
+    brief:'Collect round or plate stock. Machine it, inspect it, and ship it. CAD is already prepared.',
+    tip:'Load the other machine while the first one runs.',
+    retryTip:'Load both machines before waiting for either.',
+    duration:150,firstArrival:18,interval:19,deadline:82,
+    recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],stock:['round','plate'],
+    programming:false,sourcing:false,calls:false,callTimes:[],passTarget:3,stars:[3,4,5],
+  },
+  {
+    id:'mixed-orders',mapId:'first-shop',name:'Mixed Orders',author:'GPT-6 Astra',harness:'Codex',
+    subtitle:'Prepare CAD. Keep both machines busy.',
+    brief:'Prepare CAD at the office, then collect stock. Some parts need both the lathe and mill.',
+    tip:'CAD takes 6 seconds. Prepare the next job while machines run. Covari can handle an outside-capability order.',
+    retryTip:'Complete the next CAD job while a machine is cutting.',
+    duration:180,firstArrival:16,interval:25,deadline:105,maxOrders:6,
+    recipes:[0,1,6,0,1,6],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
+    programming:true,sourcing:true,calls:false,callTimes:[],passTarget:4,stars:[4,5,6],
+  },
+  {
+    id:'rush-hour',mapId:'first-shop',name:'Rush Hour',author:'GPT-6 Astra',harness:'Codex',
+    subtitle:'More orders. Calls. Competing promises.',
+    brief:'Keep mixed orders moving while customers call. Take a rush or keep the original promise.',
+    tip:'Calls pause CAD; answer first at the office. Floor work continues while it rings. Rushes: +100 on time, −25 if missed.',
+    retryTip:'Keep both machines cutting. Clear inspection before collecting another part.',
+    duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,
+    recipes:[0,1,6,0,6,1,6,1],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
+    programming:true,sourcing:true,calls:true,callTimes:[27,77,127],passTarget:5,stars:[5,6,8],
+  },
 ];
 
 export const PROGRAM_DURATION = 6;
@@ -57,9 +86,7 @@ const CALL_ANSWER_DURATION = 3;
 const RUSH_WINDOW = 45;
 const RUSH_BONUS = 100;
 const RUSH_PENALTY = 25;
-// Calls are part of the Owner workload, even when the shop has no spare rush
-// capacity. Fixed spacing makes retries learnable and prevents lucky quiet runs.
-const OWNER_CALL_TIMES = [27, 77, 127];
+// Configured call times keep each scenario repeatable across retries.
 const CALL_RECOVERY_TIME = 10;
 
 export class ShopGame {
@@ -81,7 +108,7 @@ export class ShopGame {
     this.office = {present:false,orderId:null};
     this.call = null;
     this.callIndex = 0;
-    this.nextCallAt = this.config.calls ? OWNER_CALL_TIMES[0] : Infinity;
+    this.nextCallAt = this.config.calls ? this.config.callTimes[0] : Infinity;
     this.lastCallEndedAt = -Infinity;
     this.callsReceived = 0;
     this.callsAnswered = 0;
@@ -107,6 +134,7 @@ export class ShopGame {
     this.bestCombo = 0;
     this.events = [];
     this.mode = 'playing';
+    this.finishReason = null;
     this.spawn();
   }
 
@@ -154,13 +182,8 @@ export class ShopGame {
 
   spawn() {
     if (this.orders.length >= 4 || this.spawnIndex >= (this.config.maxOrders ?? Infinity)) return false;
-    let recipe = RECIPES[this.config.recipes[this.spawnIndex % this.config.recipes.length]];
-    if (this.time < this.requiredTime(recipe, true)) {
-      recipe = [RECIPES[0], RECIPES[1]]
-        .filter(candidate => this.time >= this.requiredTime(candidate, true))
-        .sort((a, b) => this.requiredTime(a, true) - this.requiredTime(b, true))[0];
-      if (!recipe) return false;
-    }
+    const recipe = this.spawnRecipe(this.time);
+    if (!recipe) return false;
     const deadline = this.config.deadline + (this.spawnIndex === 0 ? 14 : 0);
     const order = {
       id:this.nextId++,...recipe,route:[...recipe.route,'ship'],index:0,
@@ -175,6 +198,50 @@ export class ShopGame {
     return true;
   }
 
+  spawnRecipe(timeRemaining) {
+    let recipe = RECIPES[this.config.recipes[this.spawnIndex % this.config.recipes.length]];
+    if (timeRemaining < this.requiredTime(recipe, true)) {
+      recipe = [RECIPES[0], RECIPES[1]]
+        .filter(candidate => timeRemaining >= this.requiredTime(candidate, true))
+        .sort((a, b) => this.requiredTime(a, true) - this.requiredTime(b, true))[0];
+    }
+    return recipe ?? null;
+  }
+
+  hasEligibleFutureArrival() {
+    if (!Number.isFinite(this.nextArrival) || this.spawnIndex >= (this.config.maxOrders ?? Infinity)) return false;
+    const untilArrival = Math.max(0, this.nextArrival - this.elapsed);
+    return Boolean(this.spawnRecipe(this.time - untilArrival));
+  }
+
+  canFinishEarly() {
+    const sourcingActive = this.sourcing && !['fulfilled','declined'].includes(this.sourcing.state);
+    return this.orders.length === 0 && !this.hand && !this.buffer &&
+      !Object.values(this.stations).some(station => station.part) &&
+      !this.receiving && !sourcingActive && !this.call && !this.hasEligibleFutureArrival();
+  }
+
+  finish(reason) {
+    this.finishReason = reason;
+    this.unfinished = this.orders.length;
+    this.office.orderId = null;
+    this.missRush('shiftEnded');
+    this.clearCall();
+    this.receiving = null;
+    if (this.hand?.orderId === 201) this.hand = null;
+    if (this.buffer?.orderId === 201) this.buffer = null;
+    for (const station of Object.values(this.stations)) {
+      if (station.part?.orderId === 201) { station.part = null; station.remaining = 0; station.ready = false; }
+    }
+    if (this.sourcing && !['fulfilled','declined'].includes(this.sourcing.state)) {
+      this.sourcing.state = 'declined';
+      this.sourcing.started = false;
+      this.sourcing.location = 'closed';
+    }
+    this.mode = 'results';
+    this.emit('finish', {reason});
+  }
+
   maybeCall() {
     if (!this.config.calls || this.call || this.elapsed < this.nextCallAt ||
         this.elapsed < this.lastCallEndedAt + CALL_RECOVERY_TIME || this.time <= 25) return;
@@ -187,7 +254,7 @@ export class ShopGame {
       remaining:this.rushWindow(order),window:this.rushWindow(order),bonus:RUSH_BONUS,penalty:RUSH_PENALTY,rushAvailable:this.canRush(order),
     };
     this.callIndex++;
-    this.nextCallAt = OWNER_CALL_TIMES[this.callIndex] ?? Infinity;
+    this.nextCallAt = this.config.callTimes[this.callIndex] ?? Infinity;
     this.callsReceived++;
     this.emit('call', {orderId:order.id,window:this.call.window,bonus:RUSH_BONUS,number:this.callsReceived});
   }
@@ -241,7 +308,7 @@ export class ShopGame {
 
   requestSource() {
     if(this.mode !== 'playing' || this.sourcing?.state !== 'offer') return false;
-    if(this.call && this.call.state !== 'active') return this.fail('Finish the customer call before sourcing this job.');
+    if(this.call && ['answering','offer'].includes(this.call.state)) return this.fail('Finish the customer call before sourcing this job.');
     this.sourcing.state = 'sourcing';
     this.sourcing.location = 'supplier';
     this.emit('sourcePlaced', {orderId:201});
@@ -256,7 +323,7 @@ export class ShopGame {
   }
 
   tickSourcing(dt) {
-    if(!this.sourceOffered && this.shiftIndex > 0 && this.shipped >= 2 && this.elapsed >= 35 && this.time >= 45) {
+    if(!this.sourceOffered && this.config.sourcing && this.shipped >= 2 && this.elapsed >= 35 && this.time >= 45) {
       this.sourceOffered = true;
       // Only an actual offer advances the cosmetic rotation. Preserve this
       // cursor through resets, so retries can show every outside capability.
@@ -364,24 +431,12 @@ export class ShopGame {
     }
     this.maybeCall();
     this.tickSourcing(dt);
+    if (this.time > 0 && this.canFinishEarly()) {
+      this.finish('work-complete');
+      return;
+    }
     if (this.time <= 0) {
-      this.unfinished = this.orders.length;
-      this.office.orderId = null;
-      this.missRush('shiftEnded');
-      this.clearCall();
-      this.receiving = null;
-      if (this.hand?.orderId === 201) this.hand = null;
-      if (this.buffer?.orderId === 201) this.buffer = null;
-      for (const station of Object.values(this.stations)) {
-        if (station.part?.orderId === 201) { station.part = null; station.remaining = 0; station.ready = false; }
-      }
-      if (this.sourcing && !['fulfilled','declined'].includes(this.sourcing.state)) {
-        this.sourcing.state = 'declined';
-        this.sourcing.started = false;
-        this.sourcing.location = 'closed';
-      }
-      this.mode = 'results';
-      this.emit('finish');
+      this.finish('time-up');
     }
   }
 
@@ -413,9 +468,6 @@ export class ShopGame {
     if (this.mode !== 'playing') return false;
     if (this.call?.state === 'answering') return this.fail('Stay on the phone. The customer is explaining the rush request.');
     if (this.call?.state === 'offer') return this.fail('Accept or decline the customer’s rush request before returning to work.');
-    if (this.call?.state === 'ringing' && key !== 'office' && key !== 'phone') {
-      return this.fail('The customer is calling. Answer the phone at the office first.');
-    }
     if (key === 'source') return this.requestSource();
     if (key === 'receiving') {
       if (!this.receiving || this.sourcing?.state !== 'delivered') return this.fail('There is no supplier delivery to receive.');
@@ -587,7 +639,7 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,score:this.score,ruleset:RULESET,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,finishReason:this.finishReason,score:this.score,ruleset:RULESET,
       sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing,route:[...this.sourcing.route]}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),

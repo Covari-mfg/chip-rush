@@ -127,7 +127,6 @@
 .star-targets strong{display:block;font:700 20px ui-monospace,monospace;margin-top:4px}
 .star-targets small{display:block;font:500 13.5px "Avenir Next",Avenir,sans-serif;color:#bacfc6;margin-top:3px}
 .modal-panel p.briefing-challenge,.modal-panel p.result-progress{font-size:13.5px;line-height:1.5;color:#e7d7a3}
-.welcome-panel p.migration-note{font-size:13.5px;line-height:1.4;color:var(--gold);margin:0 0 13px}
 .owner-mastery{border-color:var(--gold);box-shadow:0 0 50px #ffd16925,0 30px 100px #0009}
 .owner-mastery #result-stars{filter:drop-shadow(0 0 12px #ffd16977)}
 #shipment-progress small{white-space:nowrap;font-size:10px;letter-spacing:.7px}
@@ -210,7 +209,6 @@
 .welcome-panel h1{font-size:32px;line-height:1.12;letter-spacing:-1px;margin:0 0 20px}
 .welcome-panel .shift-picker{margin-bottom:0}
 .welcome-panel #start-button{flex-shrink:0;margin:0 3px;width:calc(100% - 6px)}
-.welcome-panel .migration-note{margin:13px 0 0}
 @media(max-width:680px){
   .welcome-panel{margin-bottom:18px;gap:12px}
   .welcome-panel h1{font-size:27px;margin-bottom:14px}
@@ -350,8 +348,39 @@
 .stock-label .stock-pictogram{width:17px;height:17px}
 @media(max-width:759px){.station-label.stock-label{font-size:10px;min-height:19px;padding:1px 4px;gap:3px}.stock-label .stock-pictogram{width:14px;height:14px}}
 
-.result-covari-card{margin:16px 0;padding:14px 16px;border:1px solid #5b9e91;border-radius:10px;background:linear-gradient(135deg,#183d43,#12303a)}
-.result-covari-card h3{margin:0 0 7px;font-size:16px;line-height:1.25;letter-spacing:-.2px}
-.result-covari-card p{margin:0 0 8px;color:#b8d0ca;font-size:12px;line-height:1.5}
-.result-covari-card a{display:inline-flex;align-items:center;color:var(--gold);font-size:12px;font-weight:800;text-decoration:none}
-.result-covari-card a:hover{text-decoration:underline}
+/* A distinct brand moment after the shift, with gameplay actions still nearby. */
+.result-covari-card{margin:16px 0;padding:16px 18px;border:1px solid #8de4d4;border-radius:12px;background:linear-gradient(125deg,#eff9ed,#c9f2e7);color:#123b40;box-shadow:0 6px 24px #001a2524}
+.result-covari-brand{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.result-covari-logo{display:block;width:29px;height:29px;border-radius:7px;overflow:hidden;background:white;flex-shrink:0}
+.result-covari-logo img{display:block;width:58px;height:58px;max-width:none;transform:translate(-14px,-14px)}
+.result-covari-brand strong{font-size:17px;letter-spacing:-.4px}
+.result-covari-brand>span:last-child{margin-left:auto;font-size:8px;font-weight:800;letter-spacing:1px;color:#376663}
+.result-covari-card h3{margin:0 0 6px;font-size:29px;line-height:1.1;letter-spacing:-.7px}
+.modal-panel .result-covari-card p{margin:0 0 12px;color:#315a59;font-size:13px;line-height:1.45}
+.result-covari-card a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 15px;border-radius:6px;background:#123b40;color:#f4f6e4;font-size:13px;font-weight:800;text-decoration:none}
+.result-covari-card a:hover{background:#205b5a}
+.result-covari-card a:focus-visible{outline:3px solid #123b40;outline-offset:3px}
+@media(max-width:480px){.result-covari-card{padding:14px}.result-covari-card h3{font-size:25px}.result-covari-brand>span:last-child{font-size:7px;letter-spacing:.5px}.result-covari-card a{width:100%}}
+
+/* Keep the post-shift offer visible alongside a compact results summary. */
+#results-panel{padding:24px 30px}
+#results-panel #result-stars{margin:8px 0 0;font-size:30px;line-height:1.2}
+#results-panel h2{margin:8px 0 10px;font-size:30px}
+#results-panel #result-message{margin:0 0 10px;font-size:13px;line-height:1.45}
+#results-panel #result-progress{margin:0 0 12px;font-size:12px}
+#results-panel .result-stats{padding:12px 0}
+#results-panel .result-stats strong{font-size:26px}
+#results-panel #result-breakdown{margin:8px 0;font-size:11px;line-height:1.4}
+#results-panel .result-best{padding:8px 0;font-size:10px}
+#results-panel .result-covari-card{margin:12px 0}
+#results-panel .social-results{margin:12px 0 0}
+@media(max-width:480px){#results-panel{padding:20px}#results-panel h2{font-size:28px}}
+
+/* The launch screen shows a growing sequence of shifts in the first shop. */
+.campaign-label{color:var(--teal);font-size:10px;font-weight:800;letter-spacing:2px;margin-bottom:9px}
+.future-shifts{display:flex;gap:12px;align-items:center;margin-top:12px;padding:12px 14px;border:1px dashed #6caaa05c;border-radius:8px;color:#acc7c1}
+.future-shifts>span:first-child{font-size:23px;letter-spacing:2px;color:var(--teal)}
+.future-shifts strong{display:block;font-size:13px;font-weight:600}
+.future-shifts small{display:block;font-size:11px;margin-top:4px;color:#89aaa4}
+.welcome-panel .shift-choice small{display:block;line-height:1.4;white-space:normal}
+@media(max-width:680px){.welcome-panel .shift-picker{flex-direction:column;gap:6px}.welcome-panel .shift-choice{display:flex;width:100%;align-items:center;padding:9px 12px}.welcome-panel .shift-choice .num{font-size:16px}.welcome-panel .shift-choice b{font-size:13px;margin-top:0}.welcome-panel .shift-choice small{font-size:10px}.welcome-panel .shift-choice .pick-mark{display:block}.future-shifts{padding:9px 12px}.campaign-label{font-size:9px;margin-bottom:7px}}

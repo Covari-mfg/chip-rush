@@ -15,7 +15,7 @@ test('analytics posts only the allowlisted event and numeric properties on produ
   assert.equal(url,'https://us.i.posthog.com/capture/');assert.equal(options.method,'POST');assert.equal(options.keepalive,true);
   assert.equal(body.api_key,'phc_uedod5FmepoVRfv5y23S9bVMP2NhDTUegzMLkxkcMDw');assert.equal(body.event,'chip_rush.shift_started');
   assert.equal(body.distinct_id,'tab-id');
-  assert.deepEqual(body.properties,{ruleset:'roles-v7-stock-outsourcing',product_surface:'chip_rush',distinct_id:'tab-id',role:2,score:9,shipped:3,sourced:1,$process_person_profile:false,$geoip_disable:true});
+  assert.deepEqual(body.properties,{ruleset:'roles-v8-optional-calls',product_surface:'chip_rush',distinct_id:'tab-id',role:2,score:9,shipped:3,sourced:1,$process_person_profile:false,$geoip_disable:true});
 });
 
 test('analytics stays silent outside production and when privacy signals are enabled',async()=>{
