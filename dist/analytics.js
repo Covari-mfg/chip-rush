@@ -1,7 +1,8 @@
 import { RULESET } from './core.js';
 
 const POSTHOG_HOST='https://us.i.posthog.com';
-const POSTHOG_KEY='phc_uedod5FmepoVRfv5y23S9bVMP2NhDTUegzMLkxkcMDw';
+// Public ingestion token for Covari's US PostHog project 442189.
+const POSTHOG_KEY='phc_uedod5FmepoVRfv5y23S9bVMP2NhDTUegzMLkxkcMDwP';
 const EVENTS=new Set(['chip_rush.shift_started','chip_rush.shift_completed','chip_rush.covari_clicked']);
 const NUMERIC_PROPERTIES=['role','score','shipped','sourced'];
 
