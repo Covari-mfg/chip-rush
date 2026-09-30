@@ -1,5 +1,16 @@
 # CHIP RUSH verification
 
+## Night Shift (level 4) · 2026-09-29 (local source, not released)
+
+Full record: [docs/experiments/night-shift.md](../docs/experiments/night-shift.md).
+
+- 226 automated tests pass (32 new), plus `node qa/balance.mjs --rush --ignore-calls --expert --assert`, `pnpm build`, `pnpm deploy:dry-run` and `git diff --check`. Full simulation traces for First Shift, Mixed Orders and Rush Hour are identical to `main` (18 profiles).
+- Covari (creator decision: every level has it): Night Shift offers one finishing job the floor has no station for (Heat-treated pin, Powder-coated panel or Laser-marked plate, with HT / PC / LM badges and a "no furnace / booth / laser on this floor" subtitle). Rules match the earlier levels: optional, after two shipments, 22s delivery to Receiving, QC, 300 points, no slot or star credit.
+- Simulation (not player data): with 0.5s handoffs serial play ships 5 (2 stars) and concurrent play ships 6 (3 stars, 4,810 points, or 5,072 after accepting Covari). At 1.0s concurrent play keeps 3 stars whether it declines or accepts. At 1.5s accepting Covari costs a star (2 stars declining, 1 accepting). Expert dash routes ship 6 at 5,262 (5,558 with Covari).
+- Browser (automated, headless Chrome 148, software WebGL, station-label clicks): a full shift accepted the Covari offer at 70.9 game seconds, received the crate at 93.6s, ran QC and shipped it, and finished with 6 shipped, 0 missed, 3 stars and 5,371 points (Covari 300 in the breakdown) at 178.1s. The score posted to the local board with `sourced: 1`. No console errors. A first attempt stalled because the script held the crate while QC was occupied; pressing Interact at QC swaps them, which is now a unit test. Software rendering runs the game slower than real time, so this proves the UI flow, not difficulty. No human has played it. The decline path was tested only by unit tests and simulation.
+- Released levels render the same draw calls and triangles as `main`. Standalone `CHIP-RUSH.html` from `file://` starts Night Shift with the finishing stations. Save unlock behavior and a level-4 friend challenge were checked in the browser.
+- Untested: real-display look of the night palette and new badges, touch and narrow screens, human difficulty, hosted D1 outside the local adapter.
+
 ## CAD and rush balance · 2026-09-27 (local source)
 
 - Manager and Owner now require one six-second CAD step at the office before Material. Every delivered advanced-role job earns 120 CAD points before the ordinary streak multiplier. CAD progress survives walking away and completed CAD survives recycling. Operator timing, scoring, recipes, and 3/4/5 stars remain unchanged.

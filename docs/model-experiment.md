@@ -44,8 +44,13 @@ later authors room to take the story somewhere else.
 
 Covari belongs in this world as an option for outsourcing a customer's work,
 not as the customer placing the order. You may find a new way to express that
-idea when it fits. An advertisement or outsourcing task is not mandatory in
-every level.
+idea when it fits. Decision (2026-09-29): every new level includes Covari
+outsourcing, because there is always something the shop cannot do. Build a real
+capability gap, meaning a process or step with no station on that level's floor,
+so outsourcing is the way to fulfil it. Reuse the shared offer rules (optional,
+after two normal shipments, delivery to Receiving, QC, 300 points, no order slot
+or star credit) or document any deliberate change. First Shift predates the
+decision and is unchanged.
 
 ## Shared starting conditions
 

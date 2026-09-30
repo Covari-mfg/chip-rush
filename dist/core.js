@@ -42,6 +42,13 @@ export const SOURCE_JOBS = [
   {name:'Wire EDM insert',capability:'Wire EDM',technology:'edm'},
   {name:'Sheet-metal bracket',capability:'Sheet metal fabrication',technology:'sm'},
 ];
+// Capabilities Night Shift's floor has no station for. Deburr and Anodize exist
+// there, so these are the finishing processes still worth outsourcing.
+export const FINISHING_SOURCE_JOBS = [
+  {name:'Heat-treated pin',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
+  {name:'Powder-coated panel',capability:'Powder coating',technology:'pc',gap:'No coating booth on this floor'},
+  {name:'Laser-marked plate',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
+];
 // New-level creative brief: docs/model-experiment.md. Current scenario details:
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
 // Future levels may evolve mechanics; preserve earlier scenarios and their data.
@@ -77,6 +84,16 @@ export const SHIFTS = [
     duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,
     recipes:[0,1,6,0,6,1,6,1],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
     programming:true,sourcing:true,calls:true,callTimes:[27,77,127],passTarget:5,stars:[5,6,8],
+  },
+  {
+    id:'night-shift',mapId:'night-shop',name:'Night Shift',author:'Claude Sonnet 5.5',harness:'Cursor Cloud Agent',
+    subtitle:'Deburr. Anodize. Finish the run.',
+    brief:'The phones are off and the shop is quiet. Finishing work has arrived: deburr edges and run parts through the color bath. Some jobs need a process the floor still lacks, and Covari can handle those.',
+    tip:'Deburr takes 4 seconds and the color bath 8. Start the bath, then use the wait for CAD or the next part. Covari can place a job the shop cannot finish itself.',
+    retryTip:'Keep the color bath busy. Prepare the next CAD job while it runs.',
+    duration:210,firstArrival:20,interval:28,deadline:120,maxOrders:6,
+    recipes:[2,5,4,3,4,2],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
+    programming:true,sourcing:true,sourceJobs:FINISHING_SOURCE_JOBS,calls:false,callTimes:[],passTarget:4,stars:[4,5,6],
   },
 ];
 
@@ -327,8 +344,9 @@ export class ShopGame {
       this.sourceOffered = true;
       // Only an actual offer advances the cosmetic rotation. Preserve this
       // cursor through resets, so retries can show every outside capability.
+      const jobs=this.config.sourceJobs??SOURCE_JOBS;
       this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
-      const job=SOURCE_JOBS[this.nextSourceKind];
+      const job=jobs[this.nextSourceKind%jobs.length];
       this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
       this.sourcing = {id:201,...job,kind:'block',route:['inspect','ship'],index:0,programmed:true,programRemaining:0,started:false,location:'supplier',value:300,color:0xffab8c,state:'offer',offerRemaining:30,remaining:22,points:300};
       this.emit('sourceOffer', {orderId:201});

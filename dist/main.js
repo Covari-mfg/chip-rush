@@ -16,16 +16,20 @@ const keys=new Set();let touchVector={x:0,y:0},selectedShift=0,unlocked=0,bests=
 const SAVE_KEY='chip-rush-roles-v8';
 function readRoleSave(key){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'&&!Array.isArray(value)?value:null;}catch{return null;}}
 function readUnlocked(value){return Math.max(0,Math.min(SHIFTS.length-1,Math.trunc(Number(value))||0));}
+// A level cleared before its successor existed unlocks that successor. Stars
+// earned on a still-locked level (friend challenges) never unlock anything.
+function unlockCleared(level,stars){for(let i=0;i<SHIFTS.length-1;i++)if(i<=level&&Number(stars?.[i])>0)level=Math.max(level,i+1);return level;}
 const roleSave=readRoleSave(SAVE_KEY);
 if(roleSave){
   unlocked=readUnlocked(roleSave.unlocked);
   bests=bests.map((_,i)=>Math.max(0,Number(roleSave.bests?.[i])||0));
   grades=grades.map((_,i)=>Math.max(0,Math.min(3,Math.trunc(Number(roleSave.grades?.[i]))||0)));
+  unlocked=unlockCleared(unlocked,grades);
 }else{
   const previousRoles=['v7','v6','v5','v4','v3','v2'].map(version=>readRoleSave('chip-rush-roles-'+version)).find(Boolean);
   if(previousRoles){
     // Preserve access and historical saves; changed workflows start fresh records.
-    unlocked=readUnlocked(previousRoles.unlocked);
+    unlocked=unlockCleared(readUnlocked(previousRoles.unlocked),previousRoles.grades);
     save();
   }
 }
@@ -40,9 +44,17 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:'night-shop'},
+  {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:'night-shop'},
 ];
+// A map lists the stations it adds (def.map) and the shared ones it clears away.
+const MAPS={
+  'first-shop':{theme:'day'},
+  'night-shop':{theme:'night'},
+};
+const mapHas=(def,mapId)=>def.map?def.map===mapId:!MAPS[mapId].hide?.includes(def.id);
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,lighting,appliedTheme=null;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
@@ -55,10 +67,14 @@ const down=new THREE.Vector3(cameraOffset.x,0,cameraOffset.z).normalize();
 const cameraUp=new THREE.Vector3().crossVectors(cameraOffset.clone().normalize(),right).normalize();
 let layoutDirty=true,shopFrame=null,playFrame=null;
 const bounds={minX:-8.55,maxX:7.65,minZ:-5.45,maxZ:3.35};
-const obstacles=STATION_LAYOUT.filter(s=>s.collidable!==false).map(s=>({minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25}));
-obstacles.push({minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,maxX:-5.12,minZ:-5.5,maxZ:-3.08},{minX:-7.62,maxX:-6.64,minZ:-4.12,maxZ:-3.26});
-// Perimeter packing and plants are physical props, outside the working aisle.
-obstacles.push({minX:6.05,maxX:7.85,minZ:-5.58,maxZ:-4.30},{minX:6.98,maxX:7.98,minZ:-4.46,maxZ:-3.46},{minX:-8.82,maxX:-7.80,minZ:2.37,maxZ:3.39});
+const fixedObstacles=[{minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,maxX:-5.12,minZ:-5.5,maxZ:-3.08},{minX:-7.62,maxX:-6.64,minZ:-4.12,maxZ:-3.26},
+  // Perimeter packing and plants are physical props, outside the working aisle.
+  {minX:6.05,maxX:7.85,minZ:-5.58,maxZ:-4.30},{minX:6.98,maxX:7.98,minZ:-4.46,maxZ:-3.46},{minX:-8.82,maxX:-7.80,minZ:2.37,maxZ:3.39}];
+let obstacles=[];
+function activateMap(mapId){
+  obstacles=[...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>({minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...fixedObstacles];
+}
+activateMap('first-shop');
 
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}catch{}}
 function toast(message,duration=2.6){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+duration*1000;}
@@ -136,15 +152,31 @@ function createMaterialBin(type){
   g.userData.workPoint=new THREE.Vector3(0,.8,0);g.userData.stock=type;return g;
 }
 
+// Both themes light the same shop. Night keeps every station readable.
+const THEMES={
+  day:{sky:0x102c38,backdrop:0x163845,hemi:[0xdafff3,0x466374,2.25],sun:[0xffe6b5,3.8],fill:[0x86d8ee,2],exposure:1.22},
+  night:{sky:0x070f19,backdrop:0x0a1620,hemi:[0x9db8f4,0x22303f,1.55],sun:[0xffc98d,2.9],fill:[0x4f7fd6,1.5],exposure:1.16},
+};
+function activeMapId(){return menuMode?'first-shop':game.config.mapId;}
+function applyMap(){
+  const mapId=activeMapId(),theme=THEMES[MAPS[mapId].theme];
+  if(appliedTheme!==mapId){
+    appliedTheme=mapId;scene.background.set(theme.sky);scene.fog.color.set(theme.sky);lighting.backdrop.material.color.set(theme.backdrop);
+    lighting.hemi.color.set(theme.hemi[0]);lighting.hemi.groundColor.set(theme.hemi[1]);lighting.hemi.intensity=theme.hemi[2];
+    lighting.sun.color.set(theme.sun[0]);lighting.sun.intensity=theme.sun[1];lighting.fill.color.set(theme.fill[0]);lighting.fill.intensity=theme.fill[1];
+    renderer.toneMappingExposure=theme.exposure;activateMap(mapId);
+  }
+  for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
+}
 function boot(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x102c38);scene.fog=new THREE.Fog(0x102c38,35,70);
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));renderer.setSize(viewport.w,viewport.h);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22;$('scene').appendChild(renderer.domElement);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();if(game.mode==='playing')pause();$('fatal-message').textContent='Your browser paused the 3D graphics. Reload the game to reopen the shop.';$('fatal').hidden=false;});
   camera=new THREE.OrthographicCamera(-15,15,10,-10,.1,100);
-  scene.add(new THREE.HemisphereLight(0xdafff3,0x466374,2.25));
+  const hemi=new THREE.HemisphereLight(0xdafff3,0x466374,2.25);scene.add(hemi);
   const sun=new THREE.DirectionalLight(0xffe6b5,3.8);sun.position.set(-7,15,9);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-15;sun.shadow.camera.right=15;sun.shadow.camera.top=14;sun.shadow.camera.bottom=-13;sun.shadow.camera.near=.5;sun.shadow.camera.far=45;sun.shadow.bias=-.00045;sun.shadow.normalBias=.03;sun.shadow.radius=3;scene.add(sun);
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
-  const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);
+  const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
   world=createWorkshop();scene.add(world);
   const officeArt=world.userData.office.userData;officeArt.normalScreenMaterial=officeArt.monitorScreen.material;
   // Brand the delivered crate with its supplier.
@@ -173,6 +205,7 @@ function measureShopFrame(){
   const include=p=>{const x=p.dot(right),y=p.dot(cameraUp);frame.left=Math.min(frame.left,x);frame.right=Math.max(frame.right,x);frame.bottom=Math.min(frame.bottom,y);frame.top=Math.max(frame.top,y);};
   for(const x of [bounds.minX,bounds.maxX])for(const z of [bounds.minZ,bounds.maxZ])include(new THREE.Vector3(x,0,z));
   for(const s of Object.values(stations)){
+    if(s.def.map)continue;
     const box=new THREE.Box3().setFromObject(s.model);
     for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z])include(new THREE.Vector3(x,y,z));
     include(new THREE.Vector3(s.def.x,s.def.height+.1,s.def.z));
@@ -299,7 +332,7 @@ function animateOfficeSeat(dt){
 }
 function animateShop(dt){
   const active=game.mode==='playing';
-  if(stations['material-block'])stations['material-block'].model.visible=menuMode||game.config.stock.includes('block');
+  applyMap();
   if(stations.receiving)stations.receiving.model.userData.crate.visible=!!game.receiving;
   for(const [id,s] of Object.entries(stations)){
     const state=game.stations[id],busy=!!state?.part&&!state.ready,ready=!!state?.ready;
@@ -363,7 +396,7 @@ function updateSourceUI(){
   const job=game.sourcing,visible=!!job&&!['declined','fulfilled'].includes(job.state);sourceCard.hidden=!visible;if(!visible)return;
   const offered=job.state==='offer',delivered=job.state==='delivered',qc=game.stations.inspect;
   $('source-title').textContent=job.name;
-  $('source-capability').hidden=!offered;$('source-capability').textContent='Outside shop capability';
+  $('source-capability').hidden=!offered;$('source-capability').textContent=job.gap??'Outside shop capability';
   const technology=$('source-technology');
   if(technology.dataset.technology!==job.technology){technology.innerHTML=technologyBadges([job.technology]);technology.dataset.technology=job.technology;}
   $('source-due').textContent=offered?`${Math.ceil(job.offerRemaining)}s`:'+300';
@@ -407,7 +440,7 @@ function positionLabels(){
   const p=screenPoint(new THREE.Vector3(s.def.x,s.def.height+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
   const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,ready=id==='receiving'?!!game.receiving:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state);
   const locked=id==='receiving'?!game.config.sourcing:id==='office'?!game.config.programming:id.startsWith('material-')?!game.config.stock.includes(id.slice(9)):!!OPS[id]&&id!=='ship'&&!game.config.unlocks.includes(id);
-  s.label.hidden=id==='receiving'?locked:!menuMode&&locked;s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('locked',!menuMode&&locked);
+  s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
   s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:busy?`${100*(1-st.remaining/OPS[id].duration)}%`:'0';s.label.style.opacity=menuMode?'.72':'';
 }}
@@ -424,7 +457,7 @@ function frame(now){
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small></span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
 function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){audio.init();game.reset(index);social.start(index);selectedShift=index;resultShown=false;menuMode=false;layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){audio.init();game.reset(index);social.start(index);selectedShift=index;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);$('scene').focus();}
 function pause(){if(game.mode!=='playing')return;game.mode='paused';audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused')return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
@@ -438,7 +471,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');last=performance.now();
 }
-function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();social.refreshBoard();}
+function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();social.refreshBoard();}
 function showBriefing(index){
   selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
