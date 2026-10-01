@@ -226,41 +226,45 @@ test('start page shows the first ten real server scores while the full board ret
   assert.equal(f.$('leaderboard-dialog').open,false,'Loading the start-page board does not open a modal');
 });
 
-test('a finished shift posts by default and an opt-out is remembered',async()=>{
-  const store=new Map();
-  const localStorage={getItem:key=>store.has(key)?store.get(key):null,setItem:(key,value)=>store.set(key,String(value))};
-  const f=setup({localStorage});
-  assert.equal(f.$('board-opt-out').checked,false);
-  f.$('player-name').value='Ada';f.$('player-name').oninput();
-  f.$('board-opt-out').checked=true;f.$('board-opt-out').onchange();
-  f.social.start(2);await settle();f.finish();await f.submit();await settle();
-  assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
-  assert.match(f.$('post-status').textContent,/off the leaderboard/);
-  assert.equal(store.has('chip-rush-roles-v8'),false);
-  const again=setup({localStorage});
-  assert.equal(again.$('board-opt-out').checked,true);
-  assert.equal(again.$('player-name').value,'Ada');
-  again.$('board-opt-out').checked=false;
-  await again.$('board-opt-out').onchange();
-  assert.equal(again.requests.some(request=>request.path==='/api/scores'),false,'Opting back in waits for a finished shift');
-  again.social.start(2);await settle();again.finish();await settle();
-  const posts=again.requests.filter(request=>request.path==='/api/scores');
-  assert.equal(posts.length,1);
-  assert.equal(posts[0].body.name,'Ada');
-  assert.equal(posts[0].body.runId,'run-1');
-  assert.equal(store.has('chip-rush-roles-v8'),false);
-});
-
-test('a finished shift without a display name asks on the existing post form',async()=>{
+test('Skip leaderboard closes the form without posting this score, and Post still posts',async()=>{
+  const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
+  assert.match(html,/id="post-score"[^>]*>Post my score<\/button><button id="skip-leaderboard" type="button">Skip leaderboard<\/button>/);
+  assert.doesNotMatch(html,/board-opt-out|Keep my scores off the leaderboard/);
   const f=setup();f.$('player-name').value='';
   f.social.start(2);await settle();f.finish();await settle();
-  assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
   assert.equal(f.$('leaderboard-dialog').open,true);
   assert.equal(f.$('post-form').hidden,false);
-  assert.equal(f.$('board-opt-out').checked,false);
+  assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
+  f.$('skip-leaderboard').onclick({preventDefault(){}});
+  assert.equal(f.$('leaderboard-dialog').open,false);
+  assert.equal(f.$('post-form').hidden,true);
+  assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
+  f.$('result-board').onclick();
   f.$('player-name').value='Night Crew';
   await f.submit();
   assert.equal(f.requests.find(request=>request.path==='/api/scores').body.name,'Night Crew');
+});
+
+test('a saved checkbox opt-out does not hide the score form or block posting',async()=>{
+  const store=new Map();
+  store.set('chip-rush-board',JSON.stringify({name:'Ada',optOut:true}));
+  const localStorage={getItem:key=>store.has(key)?store.get(key):null,setItem:(key,value)=>store.set(key,String(value))};
+  const blocked=setup({localStorage});
+  assert.equal(blocked.$('player-name').value,'Ada');
+  blocked.social.start(2);await settle();blocked.finish();await settle();
+  const posts=blocked.requests.filter(request=>request.path==='/api/scores');
+  assert.equal(posts.length,1);
+  assert.equal(posts[0].body.name,'Ada');
+  blocked.$('player-name').oninput();
+  assert.equal(JSON.parse(store.get('chip-rush-board')).optOut,undefined);
+  assert.equal(store.has('chip-rush-roles-v8'),false);
+  store.set('chip-rush-board',JSON.stringify({optOut:true}));
+  const unnamed=setup({localStorage});
+  unnamed.$('player-name').value='';
+  unnamed.social.start(2);await settle();unnamed.finish();await settle();
+  assert.equal(unnamed.$('leaderboard-dialog').open,true);
+  assert.equal(unnamed.$('post-form').hidden,false);
+  assert.equal(unnamed.requests.some(request=>request.path==='/api/scores'),false);
 });
 
 test('an empty community board has no fabricated scores on either surface',async()=>{

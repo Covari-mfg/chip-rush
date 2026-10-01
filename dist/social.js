@@ -22,20 +22,17 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
-  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null;
+  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,skipped=false;
   const BOARD_KEY='chip-rush-board';
-  function readBoard(){
+  function readBoardName(){
     try{
       const value=JSON.parse(localStorage.getItem(BOARD_KEY)||'null');
-      if(!value||typeof value!=='object'||Array.isArray(value))return {};
-      return {name:typeof value.name==='string'?value.name.trim():'',optOut:value.optOut===true};
-    }catch{return {};}
+      if(!value||typeof value!=='object'||Array.isArray(value))return '';
+      return typeof value.name==='string'?value.name.trim():'';
+    }catch{return '';}
   }
-  function writeBoard(patch){
-    try{
-      const next={...readBoard(),...patch};
-      localStorage.setItem(BOARD_KEY,JSON.stringify({name:typeof next.name==='string'?next.name.trim():'',optOut:next.optOut===true}));
-    }catch{}
+  function writeBoardName(name){
+    try{localStorage.setItem(BOARD_KEY,JSON.stringify({name:name.trim()}));}catch{}
   }
   const api=async(path,data)=>{
     if(!online)throw new Error('The shared board is available in the hosted game.');
@@ -63,18 +60,15 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
       renderScores('board-list',data.entries);renderScores('home-board-list',data.entries.slice(0,10));
     }catch(error){if(token!==boardGeneration)return;$('board-status').textContent=error.message;$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
   }
-  function optedOut(){return $('board-opt-out').checked===true;}
   function syncPostControls(){
     if(posting&&posting.token===generation)return;
-    const opted=optedOut();
-    $('post-score').disabled=opted||!run||posted;
+    $('post-score').disabled=!run||posted;
     if(posted)$('post-status').textContent='Posted. Nice shift.';
-    else if(opted)$('post-status').textContent='This score stays off the leaderboard.';
     else if(result&&!run)$('post-status').textContent='This shift was not connected. Play a new shift online to post.';
     else $('post-status').textContent='';
   }
   function postScore(){
-    if(optedOut()||!run||!result||posted)return Promise.resolve();
+    if(!run||!result||posted)return Promise.resolve();
     const name=$('player-name').value.trim();
     if(name.length<2)return Promise.resolve();
     if(posting&&posting.token===generation)return posting.promise;
@@ -84,7 +78,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
       try{
         await api('scores',{...current,runId,name});
         if(token!==generation||current!==result)return;
-        posted=true;writeBoard({name});
+        posted=true;writeBoardName(name);
         $('post-status').textContent='Posted. Nice shift.';loadBoard();
       }catch(error){
         if(token!==generation||current!==result)return;
@@ -96,9 +90,15 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     return promise;
   }
   function maybePost(){
-    if(optedOut()||!result)return;
+    if(skipped||!result)return;
     if($('player-name').value.trim().length>=2)return postScore();
     if(online)openBoard(true);
+  }
+  function skipLeaderboard(event){
+    event?.preventDefault();
+    if(!posted)skipped=true;
+    $('post-form').hidden=true;
+    $('leaderboard-dialog').close();
   }
   function openBoard(withResult=false){
     $('post-form').hidden=!withResult||!result;
@@ -106,11 +106,10 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     syncPostControls();
     $('leaderboard-dialog').showModal();loadBoard();
   }
-  const savedBoard=readBoard();
-  if(savedBoard.name)$('player-name').value=savedBoard.name;
-  $('board-opt-out').checked=savedBoard.optOut===true;
-  $('player-name').oninput=()=>writeBoard({name:$('player-name').value.trim()});
-  $('board-opt-out').onchange=()=>{writeBoard({optOut:optedOut()});if(optedOut())syncPostControls();else return postScore();};
+  const savedName=readBoardName();
+  if(savedName)$('player-name').value=savedName;
+  $('player-name').oninput=()=>writeBoardName($('player-name').value.trim());
+  $('skip-leaderboard').onclick=skipLeaderboard;
   $('board-open').onclick=()=>openBoard();$('result-board').onclick=()=>openBoard(true);
   $('board-close').onclick=()=>$('leaderboard-dialog').close();
   $('post-form').onsubmit=event=>{event.preventDefault();return postScore();};
@@ -126,7 +125,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role){const token=++generation;result=null;run=null;posted=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset:RULESET}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role){const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset:RULESET}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
     finish(value){
       if(generation>0&&finishedGeneration===generation)return;
       finishedGeneration=generation;

@@ -384,5 +384,4 @@
 .future-shifts small{display:block;font-size:11px;margin-top:4px;color:#89aaa4}
 .welcome-panel .shift-choice small{display:block;line-height:1.4;white-space:normal}
 @media(max-width:680px){.welcome-panel .shift-picker{flex-direction:column;gap:6px}.welcome-panel .shift-choice{display:flex;width:100%;align-items:center;padding:9px 12px}.welcome-panel .shift-choice .num{font-size:16px}.welcome-panel .shift-choice b{font-size:13px;margin-top:0}.welcome-panel .shift-choice small{font-size:10px}.welcome-panel .shift-choice .pick-mark{display:block}.future-shifts{padding:9px 12px}.campaign-label{font-size:9px;margin-bottom:7px}}
-.board-opt-out{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-size:13.5px;color:#d5e6e0}
-.board-dialog .board-opt-out input{width:16px;height:16px;padding:0;flex:none;accent-color:#5de2cb}
+.board-dialog #skip-leaderboard{background:transparent;color:#d5e6e0}
