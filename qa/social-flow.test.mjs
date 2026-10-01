@@ -14,7 +14,7 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{reso
 
 // Only the DOM surface and external services are stubbed. All event handlers,
 // snapshots, sharing logic, and asynchronous generation guards are production.
-function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,analytics}={}) {
+function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,analytics,localStorage}={}) {
   const nodes=new Map(),requests=[],copies=[],shares=[],acceptedChallenges=[];let nextRun=0;
   const element=()=>({hidden:true,disabled:false,value:'',textContent:'',children:[],open:false,selected:false,
     append(...children){this.children.push(...children);},replaceChildren(...children){this.children=[...children];},
@@ -31,7 +31,7 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,a
     return response({entries:[]});
   };
   const context=vm.createContext({RULESET,SHIFTS,URL,URLSearchParams,AbortSignal,
-    document:{getElementById:$,createElement:element},location:new URL(url),navigator,fetch});
+    document:{getElementById:$,createElement:element},location:new URL(url),navigator,fetch,localStorage});
   vm.runInContext(executable,context);
   const social=context.createSocial({onChallenge(role){acceptedChallenges.push(role);},analytics});
   const finish=(extra={})=>social.finish({role:2,score:4173,shipped:SHIFTS[2].stars[2],missed:0,sourced:1,calls:3,...extra});
@@ -75,8 +75,8 @@ test('sharing uses the exact finished snapshot and derived stars even if its inp
 
 test('successful posting sends the finished result once and keeps subsequent submits disabled',async()=>{
   const f=setup();f.social.start(2);await settle();f.finish();
-  f.$('result-board').onclick();await settle();assert.equal(f.$('post-score').disabled,false);
-  await f.submit();await settle();await f.submit();
+  await f.submit();assert.equal(f.$('post-score').disabled,true);
+  await f.submit();
   const posts=f.requests.filter(request=>request.path==='/api/scores');
   assert.equal(posts.length,1);
   assert.deepEqual(posts[0].body,{role:2,score:4173,shipped:SHIFTS[2].stars[2],missed:0,sourced:1,calls:3,stars:3,runId:'run-1',name:'Test Player'});
@@ -96,13 +96,15 @@ for(const outcome of ['success','failure'])test('a stale post '+outcome+' cannot
   const f=setup({fetcher:request=>request.path==='/api/scores'&&++scoreRequests===1?pending.promise:undefined});
   f.social.start(2);await settle();f.finish({score:3000,shipped:8});
   const oldSubmission=f.submit();assert.equal(f.$('post-score').disabled,true);
-  f.social.start(1);await settle();f.finish({role:1,score:2700,shipped:SHIFTS[1].stars[2],calls:0});
+  f.social.start(1);await settle();f.$('player-name').value='';
+  f.finish({role:1,score:2700,shipped:SHIFTS[1].stars[2],calls:0});
   f.$('result-board').onclick();await settle();
   assert.equal(f.$('post-score').disabled,false);assert.equal(f.$('post-status').textContent,'');
   if(outcome==='success')pending.resolve(response({posted:true}));else pending.reject(new Error('Old request failed'));
   await oldSubmission;await settle();
   assert.equal(f.$('post-score').disabled,false);assert.equal(f.$('post-status').textContent,'');
   assert.ok(f.requests.filter(request=>request.path.startsWith('/api/leaderboard')).every(request=>request.path==='/api/leaderboard'));
+  f.$('player-name').value='Test Player';
   await f.submit();
   const posts=f.requests.filter(request=>request.path==='/api/scores');assert.equal(posts.length,2);
   assert.equal(posts[1].body.runId,'run-2');assert.equal(posts[1].body.role,1);assert.equal(posts[1].body.score,2700);
@@ -222,6 +224,43 @@ test('start page shows the first ten real server scores while the full board ret
   assert.equal(small[0].children[1].children[0].innerHTML,undefined,'Names are assigned as text, never HTML');
   assert.equal(small[9].children[2].textContent,entries[9].score.toLocaleString());
   assert.equal(f.$('leaderboard-dialog').open,false,'Loading the start-page board does not open a modal');
+});
+
+test('a finished shift posts by default and an opt-out is remembered',async()=>{
+  const store=new Map();
+  const localStorage={getItem:key=>store.has(key)?store.get(key):null,setItem:(key,value)=>store.set(key,String(value))};
+  const f=setup({localStorage});
+  assert.equal(f.$('board-opt-out').checked,false);
+  f.$('player-name').value='Ada';f.$('player-name').oninput();
+  f.$('board-opt-out').checked=true;f.$('board-opt-out').onchange();
+  f.social.start(2);await settle();f.finish();await f.submit();await settle();
+  assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
+  assert.match(f.$('post-status').textContent,/off the leaderboard/);
+  assert.equal(store.has('chip-rush-roles-v8'),false);
+  const again=setup({localStorage});
+  assert.equal(again.$('board-opt-out').checked,true);
+  assert.equal(again.$('player-name').value,'Ada');
+  again.$('board-opt-out').checked=false;
+  await again.$('board-opt-out').onchange();
+  assert.equal(again.requests.some(request=>request.path==='/api/scores'),false,'Opting back in waits for a finished shift');
+  again.social.start(2);await settle();again.finish();await settle();
+  const posts=again.requests.filter(request=>request.path==='/api/scores');
+  assert.equal(posts.length,1);
+  assert.equal(posts[0].body.name,'Ada');
+  assert.equal(posts[0].body.runId,'run-1');
+  assert.equal(store.has('chip-rush-roles-v8'),false);
+});
+
+test('a finished shift without a display name asks on the existing post form',async()=>{
+  const f=setup();f.$('player-name').value='';
+  f.social.start(2);await settle();f.finish();await settle();
+  assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
+  assert.equal(f.$('leaderboard-dialog').open,true);
+  assert.equal(f.$('post-form').hidden,false);
+  assert.equal(f.$('board-opt-out').checked,false);
+  f.$('player-name').value='Night Crew';
+  await f.submit();
+  assert.equal(f.requests.find(request=>request.path==='/api/scores').body.name,'Night Crew');
 });
 
 test('an empty community board has no fabricated scores on either surface',async()=>{
