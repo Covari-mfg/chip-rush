@@ -57,7 +57,7 @@ test('older browsers without AbortSignal.timeout can still start music',async()=
 const mainCode=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 function homeMusic(f){
   const game={mode:'menu',call:null},document={hidden:false};
-  Object.assign(f.context,{game,document,audio:f.audio});
+  Object.assign(f.context,{game,document,audio:f.audio,phonePortrait:()=>false});
   for(const name of ['updateMusic','unlockHomeMusic']){
     const definition=mainCode.match(new RegExp('function '+name+'\\(\\)\\{[^\\n]+\\}'))?.[0];
     assert.ok(definition,`${name} exists`);vm.runInContext(definition,f.context);
