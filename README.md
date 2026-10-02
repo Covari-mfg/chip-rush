@@ -41,10 +41,14 @@ Start with `ARNOLDAS-START-HERE.md` for local play, the review checklist, and a 
 
 | Action | Keyboard | Mouse / touch |
 | --- | --- | --- |
-| Move | WASD / arrow keys | Click floor; touch joystick on touch devices |
+| Move | WASD / arrow keys | Click or tap the floor or a station |
 | Use station | E / Space | Click a machine or its label to walk over and interact |
 | Dash | Shift | Visible Dash button |
 | Pause | Escape / P | Pause button |
+
+Phones and tablets automatically select the mobile interface at the same address. Computers use the desktop interface, including touchscreen laptops and small desktop windows. Device selection stays the same when a phone rotates or a tablet connects a keyboard or mouse; window size still adjusts the interface to fit.
+
+On mobile, tap a station or its label to walk over and use it; tap the floor to walk anywhere. Tap the Dash button while walking to boost the current route. Its small bar shows recharge progress. There is no on-screen joystick, and repeated station taps cannot trigger a dash or repeat an interaction. Phones require landscape: portrait shows a solid rotate prompt and pauses any active shift, which you resume after turning back. A narrow order column leaves the rest of the landscape phone screen for the shop. Tablets can use either orientation. Mobile menus have solid backgrounds so the 3D shop and station labels cannot obscure the shift picker.
 
 Station clicks follow smooth collision-safe paths. Shift adds a short dash that stops at the next corner or station, so precise click-and-dash routing is available on desktop.
 
