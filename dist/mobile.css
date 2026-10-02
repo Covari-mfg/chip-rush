@@ -413,13 +413,6 @@
   line-height: 15px;
 }
 
-/* Tap destinations replace the joystick and separate action buttons. */
-:where(html[data-interface="mobile"]) #touch-controls,
-:where(html[data-interface="mobile"]) body.playing #touch-controls,
-:where(html[data-interface="mobile"]) body.playing.has-office #touch-controls {
-  display: none;
-}
-
 :where(html[data-interface="mobile"]) #mobile-tap-hint {
   position: absolute;
   right: calc(12px + var(--mobile-safe-right));

@@ -20,7 +20,7 @@ let challengeRun=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const keys=new Set();let touchVector={x:0,y:0},selectedShift=0,unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);
+const keys=new Set();let selectedShift=0,unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);
 const SAVE_KEY='chip-rush-roles-v8';
 function readRoleSave(key){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'&&!Array.isArray(value)?value:null;}catch{return null;}}
 function readUnlocked(value){return Math.max(0,Math.min(SHIFTS.length-1,Math.trunc(Number(value))||0));}
@@ -330,8 +330,8 @@ function syncParts(){
 }
 function updateMovement(dt){
   if(game.mode!=='playing'||onPhone())return;
-  let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touchVector.x;
-  let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+touchVector.y;
+  let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
+  let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0);
   const move=new THREE.Vector3();let speed=4.4,pathGoal=null;
   if(Math.hypot(sx,sy)>.1){path=[];pathStation=null;targetRing.visible=false;move.copy(right).multiplyScalar(sx).addScaledVector(down,sy);if(move.length()>1)move.normalize();}
   else if(path.length){
@@ -358,7 +358,7 @@ function animateOfficeSeat(dt){
   if(dt<=0)return;
   const u=character.userData,office=world.userData.office;
   if(!office?.userData.seatPoint)return;
-  const directionalInput=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight'].some(key=>keys.has(key))||Math.hypot(touchVector.x,touchVector.y)>.1;
+  const directionalInput=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight'].some(key=>keys.has(key));
   const leaving=!onPhone()&&(path.length>0||directionalInput);
   if(menuMode||!atOffice()||leaving)u.officeSeated=false;
   else if(onPhone()||game.office.orderId)u.officeSeated=true;
@@ -441,13 +441,10 @@ function updateUI(force=false){
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);updateTickets(force);
   updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
-  for(const id of ['action-interact','touch-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
+  for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
   const next=nextTarget(),target=nearby?.def.id;
   $('mobile-tap-hint').textContent=onPhone()?'Finish the customer call':next?`Next: ${stations[next]?.def.name||'station'}`:'Tap a station to walk and use it';
-  $('touch-action-label').textContent=nearby?action:next?`Next: ${stations[next]?.def.name||'station'}`:'Waiting for orders';
-  $('touch-interact').disabled=onPhone();$('touch-dash').disabled=onPhone()||dashCooldown>0;
   updateMobileDash();
-  $('touch-interact').textContent=onPhone()?'On call':!target?'Interact':target==='office'?(game.call?.state==='ringing'?'Answer':'CAD'):target==='ship'?'Ship':target==='receiving'?'Receive':target==='buffer'?(game.hand?(game.buffer?'Swap':'Park'):'Collect'):target.startsWith('material-')?(game.hand?'Recycle':'Collect'):game.stations[target]?.ready?(game.hand?'Swap':'Collect'):'Load';
 
 }
 function updateSourceUI(){
@@ -515,8 +512,8 @@ function frame(now){
 const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5'};
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${credit?`<small class="shift-credit">${credit}</small>`:''}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;}
-function clearMovement(){mobileTaps.reset();keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game.reset(index);social.start(index);selectedShift=index;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=true;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);$('scene').focus();}
+function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
+function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game.reset(index);social.start(index);selectedShift=index;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;nearby=null;renderedTickets='';processEvents();updateUI(true);$('scene').focus();}
 function pause(){if(game.mode!=='playing')return;game.mode='paused';audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
@@ -530,7 +527,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();social.refreshBoard();}
+function showMenu(){challengeRun=false;selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();social.refreshBoard();}
 function showBriefing(index){
   selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
@@ -539,7 +536,7 @@ function showBriefing(index){
 }
 function showResults(){
   if(resultShown)return;resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(SHIFTS.length-1,game.shiftIndex+1));
-  const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
+  const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   const stars=game.stars(),shiftMastery=stars===3;
   $('results-panel').classList.toggle('owner-mastery',shiftMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
@@ -585,12 +582,10 @@ function bindControls(){
     if(e.code==='KeyE'||e.code==='Space')interact();
     if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();
   });
-  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();updateMusic();});
+  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   renderer.domElement.addEventListener('pointerdown',e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){if(interfaceMode==='mobile')e.preventDefault();tapStation(chosen.def.id,e);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){if(interfaceMode==='mobile')e.preventDefault();tapFloor(p,e);}});
-  const joystick=$('joystick');let joystickPointer=null;
-  const joyMove=e=>{if(e.pointerId!==joystickPointer)return;const rect=joystick.getBoundingClientRect(),dx=e.clientX-rect.left-rect.width/2,dy=e.clientY-rect.top-rect.height/2;const len=Math.hypot(dx,dy),f=len>30?30/len:1;touchVector={x:dx*f/30,y:dy*f/30};$('joystick-knob').style.transform=`translate(${dx*f}px,${dy*f}px)`;};
-  joystick.onpointerdown=e=>{if(joystickPointer!==null)return;e.preventDefault();joystickPointer=e.pointerId;joystick.setPointerCapture(e.pointerId);joyMove(e);};joystick.onpointermove=joyMove;const joyRelease=e=>{if(e.pointerId!==joystickPointer)return;joystickPointer=null;touchVector={x:0,y:0};$('joystick-knob').style.transform='';};joystick.onpointerup=joystick.onpointercancel=joystick.onlostpointercapture=joyRelease;for(const [id,action] of [['touch-interact',interact],['touch-dash',dash],['mobile-dash',mobileDash],['action-interact',interact],['action-dash',dash]]){
+  for(const [id,action] of [['mobile-dash',mobileDash],['action-interact',interact],['action-dash',dash]]){
     const button=$(id);
     button.onpointerdown=e=>{if(e.button!==0||button.disabled)return;e.preventDefault();action();};
     // Pointer actions fire immediately; keyboard/assistive activation uses click.

@@ -38,7 +38,7 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
     reset(){events.push('reset');throw new Error('An allowed start needs the full game fixture');}};
   const context = vm.createContext({Math,Number,performance:{now:()=>time},$,game,player,
     interfaceMode,phoneDevice,innerWidth:portrait?390:844,innerHeight:portrait?844:390,
-    mobileTaps:createTapNavigation(),keys:new Set(),touchVector:{x:0,y:0},path:[],pathStation:null,
+    mobileTaps:createTapNavigation(),keys:new Set(),path:[],pathStation:null,
     dashTime:0,dashCooldown:0,last:0,helpReturn:null,
     stations:{mill:{model:{visible:true},access:{x:5,z:1}},
       ship:{model:{visible:true},access:{x:6,z:2}}},
