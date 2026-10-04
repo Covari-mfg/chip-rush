@@ -1,11 +1,11 @@
 import * as THREE from './vendor/three.module.js';
-import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex } from './assets/models.js';
+import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType } from './core.js';
 import { ShopAudio } from './audio.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
-import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, rentFor, opInfo, boardId } from './manager.js';
+import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, REVIEW_LEVELS, COVARI_BELOW, INSTALL_SECONDS, rentFor, opInfo, boardId } from './manager.js';
 
 const $=id=>document.getElementById(id);
 // Shifts and Open for Business share one renderer; game points at the active rules.
@@ -45,9 +45,10 @@ const STATION_LAYOUT=[
   {id:'material-round',name:'ROUND',x:-6.6,z:-1.5,height:1.15,w:1.65,d:.8,access:{x:-5.1,z:-1.5},stock:'round'},
   {id:'material-plate',name:'PLATE',x:-6.6,z:-.55,height:1.15,w:1.65,d:.8,access:{x:-5.1,z:-.55},stock:'plate'},
   {id:'material-block',name:'BLOCK',x:-6.6,z:.4,height:1.15,w:1.65,d:.8,access:{x:-5.1,z:.4},stock:'block'},
-  {id:'lathe',name:'LATHE',x:-2.55,z:-3.4,height:3.306,w:3.078,d:2.052,scale:1.14},
-  {id:'mill',name:'MILL',x:1.3,z:-3.4,height:3.534,w:3.648,d:2.109,scale:1.14},
-  {id:'inspect',name:'INSPECT',x:5.8,z:-2.25,height:2.05,w:1.6,d:2.4,rotationY:-Math.PI/2,access:{x:4.32,z:-2.25}},
+  // baseBay: in Open for Business the starting machines stand in bays that can be emptied, sold or refilled.
+  {id:'lathe',name:'LATHE',x:-2.55,z:-3.4,height:3.306,w:3.078,d:2.052,scale:1.14,baseBay:'large'},
+  {id:'mill',name:'MILL',x:1.3,z:-3.4,height:3.534,w:3.648,d:2.109,scale:1.14,baseBay:'large'},
+  {id:'inspect',name:'INSPECT',x:5.8,z:-2.25,height:2.05,w:1.6,d:2.4,rotationY:-Math.PI/2,access:{x:4.32,z:-2.25},baseBay:'bench'},
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
@@ -66,6 +67,22 @@ const STATION_LAYOUT=[
   {id:'bay-9',name:'BAY',bay:'small',x:8.6,z:2.95,height:.7,w:1.7,d:1.0,rotationY:Math.PI,access:{x:8.6,z:2.0},map:'owner-wing'},
   {id:'bay-10',name:'BAY',bay:'small',x:15.8,z:2.95,height:.7,w:1.7,d:1.0,rotationY:Math.PI,access:{x:15.8,z:2.0},map:'owner-wing'},
 ];
+// South halls: two columns below the main building and wing, three rows deep.
+// Each hall holds six large bays and two small ones, hidden until it opens.
+// Row one opens through doorways in the main building's south edge; later
+// rows and the column partition each have one doorway.
+const HALL_SIZE={w:13.325,d:18.6},HALL_ORIGIN={x:-9.25,z:3.85};
+const HALL_PLOTS=HALLS.map((hall,i)=>{
+  const x0=HALL_ORIGIN.x+hall.col*HALL_SIZE.w,z0=HALL_ORIGIN.z+(hall.row-1)*HALL_SIZE.d,cx=x0+HALL_SIZE.w/2;
+  const northDoors=hall.row>1?[[cx-1.6,cx+1.6]]:hall.col?[[5.0,7.2],[10.2,14.4]]:[[-7.5,-3.8]];
+  return {...hall,index:i,x0,z0,x1:x0+HALL_SIZE.w,z1:z0+HALL_SIZE.d,cx,northDoors,westDoor:hall.col?[z0+5.2,z0+7.2]:null};
+});
+const HALL_SPOTS=[[3.4,3.6],[9.9,3.6],[3.4,8.8],[9.9,8.8],[3.4,14],[9.9,14],[1.6,17.5],[11.7,17.5]];
+for(const h of HALL_PLOTS)HALL_SPOTS.forEach(([dx,dz],j)=>{const id=`bay-${11+h.index*HALL_SPOTS.length+j}`,x=h.x0+dx,z=h.z0+dz;
+  STATION_LAYOUT.push(j<6?{id,name:'BAY',bay:'large',x,z,height:.7,w:3.7,d:2.15,map:'owner-wing',hall:h.id}
+    :{id,name:'BAY',bay:'small',x,z,height:.7,w:1.7,d:1.0,rotationY:Math.PI,access:{x,z:z-1.0},map:'owner-wing',hall:h.id});});
+// Halls open in the active manager run; empty everywhere else.
+const openHalls=new Set();
 // A map lists the stations it adds (def.map) and the shared ones it clears away.
 const MAPS={
   'first-shop':{theme:'day'},
@@ -76,7 +93,7 @@ const MAPS={
   'owner-wing':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}},bounds:{maxX:16.65},
     obstacles:[{minX:16.0,maxX:16.75,minZ:-2.6,maxZ:-1.5}]},
 };
-const mapHas=(def,mapId)=>def.map?[].concat(def.map).includes(mapId):!MAPS[mapId].hide?.includes(def.id);
+const mapHas=(def,mapId)=>(!def.hall||openHalls.has(def.hall))&&(def.map?[].concat(def.map).includes(mapId):!MAPS[mapId].hide?.includes(def.id));
 const placed=(def,mapId)=>({...def,...MAPS[mapId].place?.[def.id]});
 const accessOf=def=>def.access||{x:def.x,z:def.z+def.d/2+.63};
 const SPAWN={x:0,z:2.6};
@@ -84,7 +101,7 @@ let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,anne
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
-const stations={},bays={},staffViews=new Map(),routeCache=new Map(),parts=new Map(),particles=[];const player={...SPAWN,angle:Math.PI};
+const stations={},bays={},staffViews=new Map(),routeCache=new Map(),parts=new Map(),particles=[],hallShells=new Map(),hallSigns=new Map();const player={...SPAWN,angle:Math.PI};
 let viewport={w:innerWidth,h:innerHeight};
 // Align the floor with the screen and look down into the working aisles.
 const cameraOffset=new THREE.Vector3(0,23,17);
@@ -99,7 +116,22 @@ const fixedObstacles=[{minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,m
 let obstacles=[];
 function activateMap(mapId){
   Object.assign(bounds,BASE_BOUNDS,MAPS[mapId].bounds);
-  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...fixedObstacles];
+  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...fixedObstacles,...hallObstacles(mapId)];
+}
+// Open halls stretch the floor south. Closed plots inside that span are
+// solid, and partitions block everything but their doorways.
+function hallObstacles(mapId){
+  const open=HALL_PLOTS.filter(h=>openHalls.has(h.id));
+  if(mapId!=='owner-wing'||!open.length)return [];
+  bounds.maxZ=Math.max(...open.map(h=>h.z1))-.7;
+  const result=[],m=.35;
+  const wall=(from,to,doors,make)=>{let at=from;for(const [a,b] of [...doors].sort((p,q)=>p[0]-q[0])){if(a>at)result.push(make(at,a));at=b;}if(to>at)result.push(make(at,to));};
+  for(const h of HALL_PLOTS){
+    if(!openHalls.has(h.id)){result.push({minX:h.x0-m,maxX:h.x1+m,minZ:h.z0-m,maxZ:h.z1+m});continue;}
+    wall(h.x0,h.x1,h.northDoors,(a,b)=>({minX:a-.1,maxX:b+.1,minZ:h.z0-m,maxZ:h.z0+m}));
+    if(h.westDoor)wall(h.z0,h.z1,[h.westDoor],(a,b)=>({minX:h.x0-m,maxX:h.x0+m,minZ:a-.1,maxZ:b+.1}));
+  }
+  return result;
 }
 activateMap('first-shop');
 
@@ -124,6 +156,7 @@ function smoothRoute(origin,points){
 }
 function dashStep(dt,remaining,normalSpeed){const active=Math.min(dt,remaining);return {distance:11*active+normalSpeed*(dt-active),remaining:Math.max(0,remaining-active)};}
 function findPath(tx,tz,from=player){
+  if(openHalls.size)return findPathWide(tx,tz,from);
   const cell=.32,ox=-8.5,oz=-5.4,nx=Math.max(54,Math.ceil((bounds.maxX-ox)/cell)+2),nz=35,budget=nx>54?6000:2200;
   const point=(ix,iz)=>({x:ox+ix*cell,z:oz+iz*cell});
   const nearest=(x,z)=>{let best=null,dist=Infinity;for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){const p=point(ix,iz);if(!safeSpot(p.x,p.z))continue;const d=(p.x-x)**2+(p.z-z)**2;if(d<dist){dist=d;best={ix,iz};}}return best;};
@@ -138,6 +171,38 @@ function findPath(tx,tz,from=player){
       const ax=x+dx,az=z+dz;if(ax<0||ax>=nx||az<0||az>=nz)continue;const ni=id(ax,az);if(closed.has(ni))continue;const p=point(ax,az);if(!safeSpot(p.x,p.z))continue;
       if(dx&&dz){const a=point(x+dx,z),b=point(x,z+dz);if(!safeSpot(a.x,a.z)||!safeSpot(b.x,b.z))continue;}
       const g=cost.get(cur)+Math.hypot(dx,dz);if(g<(cost.get(ni)??Infinity)){came.set(ni,cur);cost.set(ni,g);if(!open.includes(ni))open.push(ni);}
+    }
+  }return [];
+}
+// With south halls open the floor is several times larger than the search
+// above was budgeted for. This search caches the walkable grid for the
+// current obstacles and uses a binary heap; smoothing looks a bounded way ahead.
+let wideGrid=null;
+function wideWalkable(){
+  if(wideGrid?.obstacles===obstacles)return wideGrid;
+  const cell=.32,ox=-8.5,oz=-5.4,nx=Math.ceil((bounds.maxX-ox)/cell)+2,nz=Math.ceil((bounds.maxZ-oz)/cell)+2,open=new Uint8Array(nx*nz);
+  for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++)open[iz*nx+ix]=safeSpot(ox+ix*cell,oz+iz*cell)?1:0;
+  return wideGrid={obstacles,cell,ox,oz,nx,nz,open};
+}
+function findPathWide(tx,tz,from){
+  const {cell,ox,oz,nx,nz,open}=wideWalkable(),point=i=>({x:ox+i%nx*cell,z:oz+Math.floor(i/nx)*cell});
+  const nearest=(x,z)=>{let best=-1,dist=Infinity;for(let i=0;i<open.length;i++){if(!open[i])continue;const d=(ox+i%nx*cell-x)**2+(oz+Math.floor(i/nx)*cell-z)**2;if(d<dist){dist=d;best=i;}}return best;};
+  const start=nearest(from.x,from.z),end=nearest(tx,tz);if(start<0||end<0)return [];
+  const g=new Float32Array(nx*nz).fill(Infinity),came=new Int32Array(nx*nz).fill(-1),closed=new Uint8Array(nx*nz),heap=[];
+  const ex=end%nx,ez=Math.floor(end/nx),h=i=>Math.hypot(i%nx-ex,Math.floor(i/nx)-ez);
+  const push=(i,f)=>{heap.push([f,i]);for(let c=heap.length-1;c>0;){const p=(c-1)>>1;if(heap[p][0]<=heap[c][0])break;[heap[p],heap[c]]=[heap[c],heap[p]];c=p;}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;for(let c=0;;){const l=2*c+1,r=l+1;let m=c;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===c)break;[heap[m],heap[c]]=[heap[c],heap[m]];c=m;}}return top[1];};
+  g[start]=0;push(start,h(start));
+  while(heap.length){
+    const cur=pop();if(closed[cur])continue;closed[cur]=1;
+    if(cur===end){const route=[];for(let c=end;c!==start&&c>=0;c=came[c])route.push(point(c));route.reverse();if(safeSpot(tx,tz))route.push({x:tx,z:tz});
+      const smooth=[];let origin=from;for(let at=0;at<route.length;){let to=Math.min(route.length-1,at+14);while(to>at&&!routeSegmentClear(origin,route[to]))to--;smooth.push(route[to]);origin=route[to];at=to+1;}
+      return smooth;}
+    const x=cur%nx,z=(cur-x)/nx;
+    for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+      const ax=x+dx,az=z+dz;if(ax<0||ax>=nx||az<0||az>=nz)continue;const ni=az*nx+ax;if(!open[ni]||closed[ni])continue;
+      if(dx&&dz&&(!open[z*nx+ax]||!open[az*nx+x]))continue;
+      const ng=g[cur]+(dx&&dz?Math.SQRT2:1);if(ng<g[ni]){g[ni]=ng;came[ni]=cur;push(ni,ng+h(ni));}
     }
   }return [];
 }
@@ -197,17 +262,27 @@ function applyTheme(a,b=a,t=0){
   renderer.toneMappingExposure=THREE.MathUtils.lerp(a.exposure,b.exposure,t);
 }
 function applyMap(){
-  const mapId=activeMapId(),managing=!!game.manager&&!menuMode;
-  if(appliedTheme!==mapId){
-    appliedTheme=mapId;applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
+  const mapId=activeMapId(),managing=!!game.manager&&!menuMode,halls=managing&&mapId==='owner-wing'?game.halls:[];
+  const mapKey=halls.length?`${mapId}+${halls.join('+')}`:mapId;
+  if(appliedTheme!==mapKey){
+    appliedTheme=mapKey;openHalls.clear();for(const id of halls)openHalls.add(id);
+    applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
     for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office')s.model.position.set(s.def.x,0,s.def.z);}
     // The east wing widens the room: refit the camera and stretch the sun's shadows over it.
-    const wing=mapId==='owner-wing';annex.visible=wing;lighting.sun.shadow.camera.right=wing?19.5:15;lighting.sun.shadow.camera.updateProjectionMatrix();
-    shopFrame=measureShopFrame();layoutDirty=true;
+    const wing=mapId==='owner-wing';annex.visible=wing;for(const [id,shell] of hallShells)shell.built.visible=openHalls.has(id);fitLights(wing);
+    shopFrame=measureShopFrame();layoutDirty=true;resetView();
   }
+  for(const [id,shell] of hallShells)shell.plot.visible=managing&&mapId==='owner-wing'&&!openHalls.has(id)&&(game.hallBuyable(id)||game.hallsPending.includes(id));
   if(managing){const t=game.mode==='evening'||game.mode==='results'?1:Math.min(1,game.elapsed/DAY_SECONDS);applyTheme(THEMES.morning,THEMES.dusk,t*t);}
   for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
-  for(const [id,bay] of Object.entries(bays)){const def=stations[id].def;bay.visible=managing&&mapHas(def,mapId)&&!game.stations[id];bay.position.set(def.x,0,def.z);bay.rotation.y=def.rotationY??0;}
+  for(const [id,bay] of Object.entries(bays)){const def=stations[id].def;bay.visible=managing&&mapHas(def,mapId)&&!game.stations[id];bay.position.set(def.x,0,def.z);bay.rotation.y=def.baseBay?0:def.rotationY??0;}
+}
+// Shadows and fog cover the floor in use. Released maps keep their original light.
+function fitLights(wing){
+  const sun=lighting.sun,cam=sun.shadow.camera,far=openHalls.size?Math.max(...HALL_PLOTS.filter(h=>openHalls.has(h.id)).map(h=>h.z1)):0;
+  if(far){const cx=4,cz=(far-6.25)/2,r=(far+6.25)/2+3;sun.target.position.set(cx,0,cz);sun.position.set(cx-7,15,cz+9);Object.assign(cam,{left:-r,right:r+4,top:r,bottom:-r});scene.fog.near=70;scene.fog.far=150;}
+  else{sun.target.position.set(0,0,0);sun.position.set(-7,15,9);Object.assign(cam,{left:-15,right:wing?19.5:15,top:14,bottom:-13});scene.fog.near=35;scene.fog.far=70;}
+  sun.target.updateMatrixWorld();cam.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;
 }
 function createBay(def){
   const g=new THREE.Group(),tape=new THREE.MeshStandardMaterial({color:0xeac16b,roughness:.7}),dark=new THREE.MeshStandardMaterial({color:0x183441,roughness:.8});
@@ -226,13 +301,16 @@ function boot(){
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
   world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);
+  for(const h of HALL_PLOTS){const shell=createHall(h);shell.built.visible=shell.plot.visible=false;scene.add(shell.built,shell.plot);hallShells.set(h.id,shell);
+    const sign=$('wing-sign').cloneNode(true);sign.id='hall-sign-'+h.id;sign.classList.add('hall-sign');sign.setAttribute('aria-label',`Expand the shop with ${h.name}`);sign.querySelector('.station-name').textContent=`BUILD ${h.name.toUpperCase()}`;sign.onclick=()=>openPopover('hall',h.id);$('wing-sign').after(sign);hallSigns.set(h.id,sign);}
+  scene.add(sun.target);
   const officeArt=world.userData.office.userData;officeArt.normalScreenMaterial=officeArt.monitorScreen.material;
   // Brand the delivered crate with its supplier.
   new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff});stations.receiving.model.userData.brandMark.material=material;});
   for(const def of STATION_LAYOUT){
     const model=def.id==='office'?world.userData.office:def.id==='receiving'?createReceivingDock():def.stock?createMaterialBin(def.stock):def.bay?new THREE.Group():createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
-    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);const machine=def.bay||OPS[def.id]&&def.id!=='ship';label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span class="station-name">${def.name}</span><span class="station-time"></span><i class="station-progress"></i>${machine?'<i class="station-wear" hidden></i>':''}${def.bay?'<span class="label-more" role="button" tabindex="-1" aria-label="Machine options" hidden>⋯</span>':''}`;label.onclick=e=>{if(e.target.closest('.label-more'))return openPopover('machine',def.id);stationClick(def.id);};$('station-labels').appendChild(label);
-    stations[def.id]={def,base:def,model,label,access:accessOf(def),op:def.bay?null:def.id,height:def.height};if(def.bay){bays[def.id]=createBay(def);scene.add(bays[def.id]);}
+    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);const machine=def.bay||OPS[def.id]&&def.id!=='ship';label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span class="station-name">${def.name}</span><span class="station-time"></span><i class="station-progress"></i>${machine?'<i class="station-wear" hidden></i>':''}${def.bay||def.baseBay?'<span class="label-more" role="button" tabindex="-1" aria-label="Machine options" hidden>⋯</span>':''}`;label.onclick=e=>{if(e.target.closest('.label-more'))return openPopover('machine',def.id);stationClick(def.id);};$('station-labels').appendChild(label);
+    stations[def.id]={def,base:def,model,label,access:accessOf(def),op:def.bay?null:def.id,height:def.height};if(def.bay||def.baseBay){bays[def.id]=createBay(def);scene.add(bays[def.id]);}
     if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
   }
   character=createCharacter();scene.add(character);carryAnchor=character.userData.carryAnchor||character;
@@ -254,11 +332,14 @@ function measureShopFrame(){
   for(const x of [bounds.minX,bounds.maxX])for(const z of [bounds.minZ,bounds.maxZ])include(new THREE.Vector3(x,0,z));
   for(const s of Object.values(stations)){
     if(s.def.map)continue;
-    const box=new THREE.Box3().setFromObject(s.model);
+    // An emptied starting bay holds no model, so it has no box to fit.
+    const box=new THREE.Box3().setFromObject(s.model);if(box.isEmpty())continue;
     for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z])include(new THREE.Vector3(x,y,z));
     include(new THREE.Vector3(s.def.x,s.def.height+.1,s.def.z));
   }
-  for(const shellObject of annex?.visible?[world,annex]:[world]){
+  // A plot for sale peeks in at the edge of the fitted view, but only where it touches floor already open.
+  for(const h of HALL_PLOTS)if(!openHalls.has(h.id)&&game.manager&&!menuMode&&game.hallBuyable?.(h.id)&&(h.row===1||HALL_PLOTS.some(o=>openHalls.has(o.id)&&hallAdjacent(o,h))))include(new THREE.Vector3(h.cx,0,h.z0+2));
+  for(const shellObject of [world,...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
     const shell=new THREE.Box3().setFromObject(shellObject);
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
   }
@@ -266,10 +347,12 @@ function measureShopFrame(){
 }
 function measurePlayFrame(){
   const footer=$('game-footer').getBoundingClientRect(),orders=$('orders').getBoundingClientRect();
-  const left=10,rightEdge=viewport.w-10;
+  const left=10;let rightEdge=viewport.w-10;
   // Orders reserve the top edge; controls reserve the bottom. Fit the shop
   // across the full width, including after call controls change height.
-  const top=orders.bottom+12,bottom=footer.top-12;
+  const top=orders.bottom+12;let bottom=footer.top-12;
+  // After hours the ledger docks beside the floor (below it on phones); fit the floor into what it leaves.
+  const ledger=$('evening-panel');if(!ledger.hidden&&$('overlay').classList.contains('evening')){const r=ledger.getBoundingClientRect();if(r.left>viewport.w/2)rightEdge=r.left-12;else bottom=Math.min(bottom,r.top-12);}
   const scale=Math.max((shopFrame.right-shopFrame.left)/Math.max(120,rightEdge-left),(shopFrame.top-shopFrame.bottom)/Math.max(100,bottom-top));
   const cx=(left+rightEdge)/2,cy=(top+bottom)/2;
   const look=right.clone().multiplyScalar((shopFrame.left+shopFrame.right)/2-(cx-viewport.w/2)*scale)
@@ -288,11 +371,35 @@ function updateCamera(dt,instant=false){
   look.y=mobile?-7.2:.25;
   if(!menuMode&&(layoutDirty||!playFrame)){playFrame=measurePlayFrame();layoutDirty=false;}
   if(playFrame){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
+  if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
   camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
   camera.position.copy(look).add(cameraOffset);camera.lookAt(look);
   if(shake>0&&!reduced){camera.position.x+=(Math.random()-.5)*shake*.07;camera.position.y+=(Math.random()-.5)*shake*.04;}
   camera.updateMatrixWorld();
 }
+// Zoom and pan, Open for Business only: zoom 1 fits the floor in use; the pan
+// slides the look point across the screen plane and stays over the shop.
+// While zoomed in, the view follows the machinist when they walk near an edge.
+const view={zoom:1,x:0,y:0};let viewFollow=false;
+function managingView(){return !!game.manager&&!menuMode;}
+function resetView(){view.zoom=1;view.x=0;view.y=0;}
+function applyView(look,halfHeight,aspect,dt){
+  const baseX=look.dot(right),baseY=look.dot(cameraUp),margin=4;
+  if(viewFollow&&view.zoom>1.05&&dt>0){
+    const p=new THREE.Vector3(player.x,0,player.z),dx=p.dot(right)-baseX-view.x,dy=p.dot(cameraUp)-baseY-view.y,lx=halfHeight*aspect*.4,ly=halfHeight*.35,k=Math.min(1,dt*5);
+    if(Math.abs(dx)>lx)view.x+=(dx-Math.sign(dx)*lx)*k;if(Math.abs(dy)>ly)view.y+=(dy-Math.sign(dy)*ly)*k;
+  }
+  const f=shopFrame;view.x=THREE.MathUtils.clamp(view.x,f.left-margin-baseX,f.right+margin-baseX);view.y=THREE.MathUtils.clamp(view.y,f.bottom-margin-baseY,f.top+margin-baseY);
+  look.addScaledVector(right,view.x).addScaledVector(cameraUp,view.y);
+}
+// Zooms about a screen point so the floor under the cursor stays put.
+function zoomView(factor,sx=viewport.w/2,sy=viewport.h/2){
+  if(!managingView())return;
+  const before=view.zoom;view.zoom=THREE.MathUtils.clamp(view.zoom*factor,.7,8);if(view.zoom===before)return;
+  const old=camera.top,next=old*before/view.zoom,nx=sx/viewport.w*2-1,ny=1-sy/viewport.h*2;
+  view.x+=nx*(viewport.w/viewport.h)*(old-next);view.y+=ny*(old-next);
+}
+function panView(dx,dy){if(!managingView())return;const perPixel=2*camera.top/viewport.h;view.x-=dx*perPixel;view.y+=dy*perPixel;}
 // Sparks share one geometry and one material per color instead of allocating each.
 const particleGeometry=new THREE.BoxGeometry(.035,.035,.08),particleMaterials=new Map();
 const particleMaterial=color=>{if(!particleMaterials.has(color))particleMaterials.set(color,new THREE.MeshBasicMaterial({color}));return particleMaterials.get(color);};
@@ -335,7 +442,7 @@ function syncParts(){
   }
 }
 function updateMovement(dt){
-  if(game.mode!=='playing'||onPhone())return;
+  viewFollow=false;if(game.mode!=='playing'||onPhone())return;
   let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touchVector.x;
   let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+touchVector.y;
   const move=new THREE.Vector3();let speed=4.4,pathGoal=null;
@@ -351,7 +458,7 @@ function updateMovement(dt){
   // A click route ends a dash at its next corner or station, never beyond it.
   if(pathGoal){const remaining=Math.hypot(pathGoal.x-player.x,pathGoal.z-player.z);if(distance>=remaining){distance=remaining;dashTime=0;}}
   const before={x:player.x,z:player.z};moveBy(move.x*distance,move.z*distance);const moving=Math.hypot(player.x-before.x,player.z-before.z)>.003;
-  if(moving){player.angle=Math.atan2(move.x,move.z);walkPhase+=dt*(dashTime>0?23:15);}
+  viewFollow=moving;if(moving){player.angle=Math.atan2(move.x,move.z);walkPhase+=dt*(dashTime>0?23:15);}
   const u=character.userData;const swing=moving?Math.sin(walkPhase)*.65:Math.sin(clockTime*2)*.025;
   if(u.leftLeg)u.leftLeg.rotation.x=swing;if(u.rightLeg)u.rightLeg.rotation.x=-swing;
   const typing=(game.office?.orderId)&&atOffice();if(u.leftArm)u.leftArm.rotation.x=typing?-.75+Math.sin(clockTime*16)*.1:game.hand?-.8:-swing*.6;if(u.rightArm)u.rightArm.rotation.x=typing?-.75-Math.sin(clockTime*16)*.1:game.hand?-.8:swing*.6;
@@ -505,7 +612,8 @@ function positionLabels(){
   const p=screenPoint(new THREE.Vector3(s.def.x,(managing?s.height:s.def.height)+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
   if(managing){s.label.hidden=!mapHas(s.def,activeMapId())||id==='material-block'&&!game.config.stock.includes('block');s.label.classList.toggle('target',target===id||nearby?.def.id===id);s.label.style.opacity='';managerLabel(id,s);continue;}
   const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,ready=id==='receiving'?!!game.receiving:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state);
-  for(const name of ['for-sale','installing','down','servicing'])s.label.classList.remove(name);
+  for(const name of ['for-sale','installing','down','servicing','move-target','moving'])s.label.classList.remove(name);
+  const more=s.label.querySelector('.label-more');if(more)more.hidden=true;
   const locked=id==='receiving'?!game.config.sourcing:id==='office'?!game.config.programming:id.startsWith('material-')?!game.config.stock.includes(id.slice(9)):!!opInfo(id)&&id!=='ship'&&!game.config.unlocks.includes(id);
   s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
@@ -513,6 +621,9 @@ function positionLabels(){
 }
   const sign=$('wing-sign');sign.hidden=!managing||game.expanded||!['playing','evening'].includes(game.mode);
   if(!sign.hidden){const p=screenPoint(new THREE.Vector3(7.25,1.6,-.78));sign.style.left=p.x+'px';sign.style.top=p.y+'px';sign.querySelector('.station-time').textContent=game.wingPending?'TONIGHT':money(WING.cost);}
+  for(const h of HALL_PLOTS){const hallSign=hallSigns.get(h.id),pending=managing&&game.hallsPending.includes(h.id);
+    hallSign.hidden=!managing||!['playing','evening'].includes(game.mode)||!(pending||game.hallBuyable(h.id));
+    if(!hallSign.hidden){const p=screenPoint(new THREE.Vector3(h.cx,1,h.z0+1.6));hallSign.style.left=p.x+'px';hallSign.style.top=p.y+'px';hallSign.querySelector('.station-time').textContent=pending?'TONIGHT':money(h.cost);}}
   positionStaffTags();positionPopover();}
 function updateMusic(){audio.update(!document.hidden&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
 function unlockHomeMusic(){if(game.mode!=='menu'||document.hidden)return;audio.init();updateMusic();}
@@ -527,7 +638,7 @@ function frame(now){
   if(now-lastRender<1000/framesPerSecond(game.mode)-2)return;
   lastRender=now;
   const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;clockTime+=dt;
-  updateMovement(dt);if(game.manager)syncBays();if(game.mode==='playing'){game.setOfficePresence(atOffice());if(game.manager)game.setPlayerStation(nearby?.def.id??null);game.tick(dt);processEvents();syncParts();}
+  updateMovement(dt);if(game.manager)syncBays();if(game.mode==='playing'){game.setOfficePresence(atOffice());if(game.manager)game.setPlayerStation(nearby?.def.id??null);game.tick(dt);processEvents();syncParts();if(game.manager&&game.mode==='playing'&&now-lastRunSave>5000)saveRun();}
   animateShop(game.mode==='paused'||game.mode==='help'?0:dt);updateCamera(dt);positionLabels();updateMusic();
   uiElapsed+=dt;if(uiElapsed>.09){uiElapsed=0;if(!menuMode)updateUI();}
   if(toastUntil&&now>toastUntil){$('toast').classList.remove('visible');toastUntil=0;}
@@ -543,11 +654,39 @@ function startShift(index){audio.init();game=classicGame;closePopover();resetBay
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
-  game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;game.start({length:managerRecord.length});closePopover();resetBays();salesStrip=null;social.start(MANAGER_ROLE,boardId(managerRecord.length));
-  enterFloor();$('shift-number').textContent=managerHeading();$('shift-name').textContent=MANAGER_MODE.name;processEvents();updateUI(true);$('scene').focus();}
+  game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;game.start({length:managerRecord.length});closePopover();cancelMove();resetBays();salesStrip=null;social.start(MANAGER_ROLE,boardId(managerRecord.length));
+  enterFloor();$('shift-number').textContent=managerHeading();$('shift-name').textContent=MANAGER_MODE.name;processEvents();updateUI(true);saveRun();$('scene').focus();}
+// A saved run comes back exactly where it was left: mid-day runs return
+// paused, evenings return to the ledger. The board run id travels with it.
+function resumeManager(){
+  const saved=readRun();if(!saved)return;audio.init();
+  game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
+  game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;
+  if(!game.restore(saved.game)){clearRun();game=classicGame;showManagerBriefing();toast('That saved run could not be loaded. Start a new one.',3.5);return;}
+  managerRecord.length=game.length;save();
+  closePopover();cancelMove();resetBays();salesStrip=null;social.resume(saved.runId);
+  const mode=game.mode;enterFloor();
+  if(saved.player&&safeSpot(saved.player.x,saved.player.z)){player.x=saved.player.x;player.z=saved.player.z;}
+  $('shift-number').textContent=managerHeading();$('shift-name').textContent=MANAGER_MODE.name;processEvents();syncParts();updateUI(true);
+  if(mode==='evening')showEvening();else{game.mode='playing';pause();}
+}
 function restartRun(){if(game.manager)startManager();else startShift(game.shiftIndex);}
-function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
-function pause(){if(game.mode!=='playing')return;closeStore();closePopover();game.mode='paused';audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+// Open for Business keeps one run in progress in local storage.
+const RUN_KEY='chip-rush-manager-run-v1';let lastRunSave=0;
+function saveRun(){
+  if(!game.manager||!['playing','paused','help','evening'].includes(game.mode))return;lastRunSave=performance.now();
+  try{localStorage.setItem(RUN_KEY,JSON.stringify({game:game.serialize(),runId:social.runId(),player:{x:player.x,z:player.z},savedAt:Date.now()}));}catch{}
+}
+function readRun(){try{const value=JSON.parse(localStorage.getItem(RUN_KEY)||'null');return value&&typeof value==='object'&&typeof value.game==='string'?value:null;}catch{return null;}}
+function clearRun(){try{localStorage.removeItem(RUN_KEY);}catch{}}
+// What the welcome card and briefing say about the saved run, without loading it.
+function savedRunSummary(){
+  const saved=readRun();if(!saved)return null;
+  try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
+    return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
+}
+function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function pause(){if(game.mode!=='playing')return;closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused')return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
@@ -560,10 +699,10 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');last=performance.now();
 }
-function showMenu(){challengeRun=false;closeStore();closePopover();$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
+function showMenu(){if(game.manager)saveRun();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
 function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
-  $('briefing-lengths').hidden=true;$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
+  $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
@@ -571,15 +710,18 @@ function showBriefing(index){
 let briefingManager=false;
 function showManagerBriefing(){
   briefingManager=true;const cfg=MANAGER_MODE;hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
-  $('briefing-lengths').hidden=false;$('briefing-start').innerHTML='OPEN THE SHOP <span>↗</span>';renderRunLengths();
+  const run=savedRunSummary();$('briefing-continue').hidden=!run;$('briefing-replace').hidden=!run;
+  if(run)$('briefing-continue').innerHTML=`CONTINUE · DAY ${run.day}${run.length?' OF '+run.length:' · ENDLESS'} · ${money(run.cash)} <span>↗</span>`;
+  $('briefing-lengths').hidden=false;$('briefing-start').innerHTML=`${run?'START A NEW RUN':'OPEN THE SHOP'} <span>↗</span>`;$('briefing-start').classList.toggle('secondary',!!run);renderRunLengths();
   $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>days survived</small></strong></div>`).join('');
-  $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
+  $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$(run?'briefing-continue':'briefing-start').focus({preventScroll:true});
 }
 // The mode card on the welcome screen, beside (not inside) the shift list.
 function buildModeCard(){
   const card=$('mode-manager'),best=Math.max(0,...Object.values(managerRecord.bests));
-  card.querySelector('.mode-best').textContent=best?`Best ${money(best)}${managerRecord.days?` · Endless ${managerRecord.days} days`:''}`:'3, 5 or 7 days, or Endless';
+  const run=savedRunSummary();
+  card.querySelector('.mode-best').textContent=run?`Saved run · day ${run.day}${run.length?' of '+run.length:' · Endless'} · ${money(run.cash)}`:best?`Best ${money(best)}${managerRecord.days?` · Endless ${managerRecord.days} days`:''}`:'3, 5 or 7 days, or Endless';
 }
 function showResults(){
   if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(SHIFTS.length-1,game.shiftIndex+1));
@@ -616,7 +758,7 @@ const pct=n=>`${n>0?'+':n<0?'−':''}${Math.round(Math.abs(n)*100)}%`;
 const lengthName=length=>length?`${length}-day run`:'Endless';
 const OP_HEIGHT={lathe:3.306,mill:3.534,inspect:2.05,deburr:2.05,anodize:2.2,heat:2.65,laser:2.1};
 const opAt=id=>game.manager?(game.stations[id]?.op??null):id;
-function managerHeading(){return `OPEN FOR BUSINESS · DAY ${game.day}${game.length?' / '+game.length:''}${game.expanded?' · EAST WING':''}`;}
+function managerHeading(){return `OPEN FOR BUSINESS · DAY ${game.day}${game.length?' / '+game.length:''}${game.halls.length?` · ${game.halls.length} SOUTH HALL${game.halls.length>1?'S':''}`:game.expanded?' · EAST WING':''}`;}
 function renderRunLengths(){
   const holder=$('briefing-lengths');holder.replaceChildren();
   for(const length of RUN_LENGTHS){
@@ -648,26 +790,39 @@ function syncBays(){
   const signature=game.manager?Object.keys(game.stations).map(key=>key+':'+game.stations[key].op).join():'';
   if(signature===baySignature)return;baySignature=signature;
   for(const id of Object.keys(bays)){
-    const s=stations[id],op=game.manager?game.stations[id]?.op??null:null;
+    const s=stations[id],op=game.manager?game.stations[id]?.op??null:s.def.baseBay?id:null;
     if(s.op!==op){
       s.model.removeFromParent();
       const model=op?createMachine(op):new THREE.Group();
       model.position.set(s.def.x,0,s.def.z);model.rotation.y=s.def.rotationY??0;model.scale.setScalar(op==='lathe'||op==='mill'?1.14:1);
       if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
-      scene.add(model);s.model=model;s.op=op;s.height=op?OP_HEIGHT[op]:s.def.height;
+      scene.add(model);s.model=model;s.op=op;s.height=op?OP_HEIGHT[op]:s.def.bay?s.def.height:.7;
     }
   }
   for(const [id,s] of Object.entries(stations)){
     if(!s.def.bay&&!['lathe','mill','inspect'].includes(id))continue;
     const text=game.manager&&!menuMode?machineLabel(id):s.def.name;
     const name=s.label.querySelector('.station-name');if(name.textContent!==text)name.textContent=text;
-    s.label.setAttribute('aria-label',s.def.bay&&!game.stations?.[id]?`Empty ${BAY_SIZES[s.def.bay].toLowerCase()}: choose a machine`:`Walk to ${text}`);
+    // A starting spot's icon follows whatever machine stands there now.
+    if(s.def.baseBay){const op=game.manager&&!menuMode?game.stations[id]?.op??null:id;if(s.iconOp!==op){s.iconOp=op;s.label.querySelector('.technology-icon')?.remove();if(['lathe','mill'].includes(op))name.insertAdjacentHTML('beforebegin',technologyIcon(op));}}
+    s.label.setAttribute('aria-label',bayOf(id)&&!game.stations?.[id]?`Empty ${BAY_SIZES[bayOf(id)].toLowerCase()}: choose a machine`:`Walk to ${text}`);
   }
 }
 function resetBays(){baySignature='~';syncBays();}
+// A bay's size, including the bays the starting machines stand in (manager runs only).
+function bayOf(id){const def=stations[id]?.def;return def?.bay??(game.manager&&!menuMode?def?.baseBay??null:null);}
+// Moving a machine: pick it from its popover, then click an empty bay that fits.
+let moving=null;
+function moveFits(id){const st=moving&&game.stations[moving];return !!st&&id!==moving&&!!bayOf(id)&&!game.stations[id]&&mapHas(stations[id].def,activeMapId())&&MACHINES[st.op].sizes.includes(bayOf(id));}
+function startMove(id){moving=id;closePopover();toast(`Click an empty bay for the ${machineLabel(id).toLowerCase()}. It reinstalls there. Esc cancels.`,4);}
+function cancelMove(){if(!moving)return;moving=null;$('toast').classList.remove('visible');}
 function stationClick(id){
   const s=stations[id];
-  if(game.manager&&!menuMode&&s.def.bay&&['playing','evening'].includes(game.mode)){
+  if(moving&&game.manager&&['playing','evening'].includes(game.mode)){
+    if(id===moving)return cancelMove();
+    if(bayOf(id)&&!game.stations[id]){const from=moving;moving=null;game.moveMachine(from,id);processEvents();syncBays();updateUI(true);saveRun();if(game.mode==='evening')renderLedger();return;}
+  }
+  if(game.manager&&!menuMode&&bayOf(id)&&['playing','evening'].includes(game.mode)){
     if(!game.stations[id])return openPopover('bay',id);
     if(game.mode==='evening')return openPopover('machine',id);
   }
@@ -686,13 +841,17 @@ function renderPopover(){
   const el=$('floor-popover'),evening=game.mode==='evening',note=evening?'Ready when you open tomorrow.':'Installs in 12 seconds.';
   const option=(attrs,title,sub,price,disabled)=>`<button ${attrs} ${disabled?'disabled':''}><span><b>${title}</b><small>${sub}</small></span>${price!==undefined?`<em>${money(price)}</em>`:''}</button>`;
   if(popover.kind==='bay'){
-    const size=stations[popover.id].def.bay;
+    const size=bayOf(popover.id);
     el.innerHTML=`<header><small>${BAY_SIZES[size].toUpperCase()}</small><strong>Choose a machine</strong></header><div class="pop-list">${Object.entries(MACHINES).filter(([,m])=>m.sizes.includes(size)).map(([op,m])=>{
       const count=game.stationsFor(op).length;return option(`data-pop="buy" data-op="${op}"`,m.name,count?`${m.blurb} You have ${count}.`:`${m.blurb} Opens new jobs.`,m.cost,game.cash<m.cost);}).join('')}</div><p class="pop-note">${note} ${size==='large'?'Large bays take any machine.':'Lathes, mills and QC benches need a large bay.'}</p>`;
   }else if(popover.kind==='machine'){
     const st=game.stations[popover.id];if(!st)return closePopover();
-    const refund=Math.round(MACHINES[st.op].cost*RESALE),idle=!st.part&&!st.service&&!st.down;
-    el.innerHTML=`<header><small>${BAY_SIZES[stations[popover.id].def.bay].toUpperCase()} · WEAR ${Math.round(st.wear)}%</small><strong>${machineLabel(popover.id)}</strong></header><div class="pop-list">${option('data-pop="sell"','Sell and free the bay',idle?'Rearrange the floor or change what it can make.':'Empty and repair it first.',refund,!idle)}</div>`;
+    const refund=Math.round(MACHINES[st.op].cost*RESALE),idle=!st.part&&!st.service&&!st.down,installing=popover.id in game.installing;
+    const move=game.canMove()?option('data-pop="move"','Move to another bay',idle&&!installing?`Pick an empty bay it fits. It reinstalls there in ${INSTALL_SECONDS}s${evening?' (at once after closing)':''}.`:'Empty and repair it first.',undefined,!idle||installing):'';
+    el.innerHTML=`<header><small>${BAY_SIZES[bayOf(popover.id)].toUpperCase()} · WEAR ${Math.round(st.wear)}%</small><strong>${machineLabel(popover.id)}</strong></header><div class="pop-list">${move}${option('data-pop="sell"','Sell and free the bay',idle?'Rearrange the floor or change what it can make.':'Empty and repair it first.',refund,!idle)}</div>${game.canMove()?'':'<p class="pop-note">Buy a south hall to move machines between bays.</p>'}`;
+  }else if(popover.kind==='hall'){
+    const h=HALL_PLOTS.find(plot=>plot.id===popover.id),pending=game.hallsPending.includes(h.id),buyable=game.hallBuyable(h.id);
+    el.innerHTML=`<header><small>EXPANSION · SOUTH</small><strong>${h.name}</strong></header><p class="pop-note">Builders open it overnight: six large bays, two small bays, another order slot, more quotes and room for more staff. Owning any hall lets you move machines between bays. Each hall adds ${Math.round(100*HALL_RENT)}% to the base rent.</p><div class="pop-list">${option('data-pop="hall"',pending?'Builders arrive tonight':'Build overnight',pending?'Opens tomorrow morning.':`Rent becomes ${money(rentFor(game.day+1,true,game.halls.length+game.hallsPending.length+1))}/day from tomorrow.`,pending?undefined:h.cost,pending||!buyable||game.cash<h.cost)}</div>`;
   }else if(popover.kind==='wing'){
     const pending=game.wingPending;
     el.innerHTML=`<header><small>EXPANSION</small><strong>${WING.name}</strong></header><p class="pop-note">${WING.blurb}</p><div class="pop-list">${option('data-pop="wing"',pending?'Builders arrive tonight':'Build overnight',`Rent becomes ${money(rentFor(game.day+1,true))}/day from tomorrow.`,pending?undefined:WING.cost,pending||game.cash<WING.cost)}</div>`;
@@ -701,6 +860,7 @@ function renderPopover(){
 function popoverAnchor(){
   if(!popover)return null;
   if(popover.kind==='wing')return new THREE.Vector3(7.25,1.6,-.78);
+  if(popover.kind==='hall'){const h=HALL_PLOTS.find(plot=>plot.id===popover.id);return new THREE.Vector3(h.cx,1,h.z0+1.6);}
   const s=stations[popover.id];return new THREE.Vector3(s.def.x,(s.height??s.def.height)+.1,s.def.z);
 }
 function positionPopover(){
@@ -711,12 +871,14 @@ function positionPopover(){
 function popoverAction(event){
   const b=event.target.closest('button[data-pop]');if(!b||b.disabled||!popover)return;
   const act=b.dataset.pop,id=popover.id;
-  if(act==='buy')game.buyMachine(id,b.dataset.op);else if(act==='sell')game.sellMachine(id);else if(act==='wing')game.buildWing();
-  closePopover();processEvents();syncBays();updateUI(true);if(game.mode==='evening')renderLedger();
+  if(act==='move')return startMove(id);
+  if(act==='buy')game.buyMachine(id,b.dataset.op);else if(act==='sell')game.sellMachine(id);else if(act==='wing')game.buildWing();else if(act==='hall')game.buildHall(id);
+  closePopover();processEvents();syncBays();updateUI(true);saveRun();if(game.mode==='evening')renderLedger();
 }
 // Station labels in the owner's shop show wear, breakdowns and service.
 function managerLabel(id,s){
-  const st=game.stations[id],bayEmpty=!!s.def.bay&&!st,installing=!!st&&id in game.installing;
+  const st=game.stations[id],bayEmpty=!!bayOf(id)&&!st,installing=!!st&&id in game.installing;
+  s.label.classList.toggle('move-target',moveFits(id));s.label.classList.toggle('moving',moving===id);
   const ready=id==='receiving'?!!game.receiving:!!st?.ready,program=id==='office'?game.order(game.office.orderId):null;
   const busy=!!st?.part&&!st.ready&&!st.down||!!program&&game.office.present;
   s.label.classList.toggle('for-sale',bayEmpty);s.label.classList.toggle('installing',installing);
@@ -726,7 +888,7 @@ function managerLabel(id,s){
   if(wear){wear.hidden=!st||installing;if(st){wear.style.width=`${Math.round(st.wear)}%`;wear.dataset.level=st.wear>=BREAK_FROM?'high':st.wear>=35?'mid':'low';}}
   const more=s.label.querySelector('.label-more');if(more)more.hidden=!st||installing;
   const svc=st?.service;
-  const time=bayEmpty?(game.mode==='evening'||game.mode==='playing'?'+ ADD':''):installing?`INSTALL ${Math.ceil(game.installing[id])}s`:st?.down&&!svc?'DOWN · FIX':svc?`${svc.kind==='repair'?'FIXING':'SERVICE'} ${Math.ceil(svc.remaining)}s`:
+  const time=bayEmpty?(moveFits(id)?'MOVE HERE':game.mode==='evening'||game.mode==='playing'?'+ ADD':''):installing?`INSTALL ${Math.ceil(game.installing[id])}s`:st?.down&&!svc?'DOWN · FIX':svc?`${svc.kind==='repair'?'FIXING':'SERVICE'} ${Math.ceil(svc.remaining)}s`:
     id==='office'&&program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':'';
   s.label.querySelector('.station-time').textContent=time;
   s.label.querySelector('.station-progress').style.width=svc?`${100*(1-svc.remaining/svc.total)}%`:program?`${100*(1-program.programRemaining/program.programDuration)}%`:busy&&st?`${100*(1-st.remaining/(st.duration||1))}%`:'0';
@@ -741,9 +903,9 @@ function routeChips(order,{progress=false}={}){
 function gapText(order){const gaps=game.gapsFor(order.route);if(!gaps.length)return '';return gaps.map(key=>opInfo(key).external?`No ${opInfo(key).name.toLowerCase()} in this shop`:`No ${opInfo(key).name.toLowerCase()} yet`).join(' · ');}
 function customerTag(index){const c=game.customers[index];if(!c)return '';const pips=Math.round(c.loyalty);return `<span class="customer" title="${c.name} · loyalty ${c.loyalty.toFixed(1)} of 3">${c.name}<i>${'♥'.repeat(pips)}${'♡'.repeat(3-pips)}</i></span>`;}
 function quoteHTML(q){
-  const stock=stockType(q),gap=gapText(q),technology=q.technology?technologyBadges([q.technology]):'',contract=q.type==='contract';
+  const stock=stockType(q),gap=gapText(q),technology=q.technology?technologyBadges([q.technology]):'',contract=q.type==='contract',covari=game.covariEligible(q);
   const note=gap||(contract?`Contract · ${q.units} parts · due end of tomorrow · ${money(q.unitPrice)} each`:`${q.deadline}s to deliver · stock ${money(q.material)}${q.tight?' · tight tolerance':''}`);
-  return `<div class="ticket-top">${customerTag(q.customer)}<span class="due"></span></div><div class="ticket-heading"><h3>${contract?`${q.units} × `:''}${q.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technology}</span><b class="price"></b></div><div class="route">${routeChips(q)}</div><small class="quote-note${gap?' gap':''}">${note}</small><div class="quote-actions"><span class="bid" role="group" aria-label="Bid"><button data-act="bid-down" data-id="${q.id}" aria-label="Lower the bid">◀</button><output class="bid-value"></output><button data-act="bid-up" data-id="${q.id}" aria-label="Raise the bid">▶</button></span><button data-act="accept" data-id="${q.id}" class="${gap?'risky':''}"><span class="accept-label">Bid</span> <small class="chance"></small></button>${gap&&!contract?`<button data-act="covari" data-id="${q.id}" class="covari" aria-label="Outsource with Covari"><span class="source-logo"><img src="${$('covari-logo').src}" alt=""></span><span class="covari-keep"></span></button>`:''}<button data-act="decline" data-id="${q.id}" class="decline" aria-label="Turn quote ${q.id} away">No</button></div><div class="ticket-progress"><i></i></div>`;
+  return `<div class="ticket-top">${customerTag(q.customer)}<span class="due"></span></div><div class="ticket-heading"><h3>${contract?`${q.units} × `:''}${q.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technology}</span><b class="price"></b></div><div class="route">${routeChips(q)}</div><small class="quote-note${gap?' gap':''}">${note}</small><div class="quote-actions"><span class="bid" role="group" aria-label="Bid"><button data-act="bid-down" data-id="${q.id}" aria-label="Lower the bid">◀</button><output class="bid-value"></output><button data-act="bid-up" data-id="${q.id}" aria-label="Raise the bid">▶</button></span><button data-act="accept" data-id="${q.id}" class="${gap?'risky':''}"><span class="accept-label">Bid</span> <small class="chance"></small></button>${covari?`<button data-act="covari" data-id="${q.id}" class="covari" aria-label="Outsource with Covari"><span class="source-logo"><img src="${$('covari-logo').src}" alt=""></span><span class="covari-keep"></span></button>`:''}<button data-act="decline" data-id="${q.id}" class="decline" aria-label="Turn quote ${q.id} away">No</button></div><div class="ticket-progress"><i></i></div>`;
 }
 function managerTicketState(o){
   if(o.outsourced)return o.location==='supplier'?`Covari delivery in ${Math.ceil(o.deliveryRemaining)}s`:o.location==='receiving'?'Waiting at Receiving':o.location==='hands'?`In your hands · ${opInfo(o.route[o.index]).name} next`:o.location.startsWith('staff-')?`${staffName(o.location)} is carrying it`:ticketState(o);
@@ -754,13 +916,21 @@ function managerTicketState(o){
   if(o.location&&game.stations[o.location])return game.stations[o.location].ready?`${machineLabel(o.location)} done · collect it`:`${machineLabel(o.location)} working…`;
   return ticketState(o);
 }
+// Expedite and delay sit on every accepted job and contract.
+function workActions(id){return `<div class="work-actions"><button data-act="expedite" data-id="${id}" aria-pressed="false" title="Staff handle expedited work first: CAD, stock, machines and crates">⚡ Expedite</button><button data-act="delay" data-id="${id}" class="delay">+1 day <small class="risk"></small></button></div>`;}
+function updateWorkActions(el,target,id){
+  const expedite=el.querySelector('[data-act="expedite"]'),delay=el.querySelector('[data-act="delay"]'),risk=game.delayRisk(id);
+  el.classList.toggle('expedited',!!target.expedited);expedite.setAttribute('aria-pressed',String(!!target.expedited));expedite.textContent=target.expedited?'⚡ Expedited':'⚡ Expedite';
+  delay.querySelector('.risk').textContent=risk===null?'':`${Math.round(risk*100)}% risk`;
+  delay.title=`Ask ${customerName(target.customer)} for one more day. ${Math.round(risk*100)}% chance they refuse and take the job elsewhere, which counts as expired.${target.delays?` Already delayed ${target.delays}×.`:''}`;
+}
 function orderHTML(o){
   const stock=stockType(o);
-  return `<div class="ticket-top"><span>${o.outsourced?'Covari':'Order'} #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3>${o.outsourced?`<span class="source-logo"><img src="${$('covari-logo').src}" alt="Covari"></span>`:`<span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span>`}<b class="price">${money(o.price)}</b></div><div class="route">${routeChips(o,{progress:true})}</div><div class="ticket-status">${managerTicketState(o)}</div><div class="ticket-progress"><i></i></div>`;
+  return `<div class="ticket-top"><span>${o.outsourced?'Covari':'Order'} #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3>${o.outsourced?`<span class="source-logo"><img src="${$('covari-logo').src}" alt="Covari"></span>`:`<span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span>`}<b class="price">${money(o.price)}</b></div><div class="route">${routeChips(o,{progress:true})}</div><div class="ticket-status">${managerTicketState(o)}</div>${workActions(o.id)}<div class="ticket-progress"><i></i></div>`;
 }
 function contractHTML(c){
   const stock=stockType(c);
-  return `<div class="ticket-top"><span>Contract #${c.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${c.units} × ${c.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><b class="price">${money(c.unitPrice*c.units)}</b></div><div class="route">${routeChips(c)}</div><div class="contract-units"></div><div class="ticket-status"></div><div class="ticket-progress"><i></i></div>`;
+  return `<div class="ticket-top"><span>Contract #${c.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${c.units} × ${c.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><b class="price">${money(c.unitPrice*c.units)}</b></div><div class="route">${routeChips(c)}</div><div class="contract-units"></div><div class="ticket-status"></div>${workActions(c.id)}<div class="ticket-progress"><i></i></div>`;
 }
 function contractState(c){
   const units=game.orders.filter(o=>o.contractId===c.id),floor=units.filter(o=>o.started).length;
@@ -770,11 +940,16 @@ const customerName=index=>game.customers[index]?.name??'';
 function clock(seconds){const t=Math.max(0,Math.ceil(seconds));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;}
 // The sales strip: the rules your sales manager follows, and your standing bid.
 const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Accept'},contracts:{true:'Take',false:'Skip'}};
+const amountOrOff=n=>n?money(n):'Off';
 function salesStripHTML(){
+  const stepper=(key,label)=>`<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}"></output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
   return `<div class="sales-head"><small>SALES</small><strong class="sales-who"></strong></div>
-  <div class="sales-row"><span>Standing bid</span><span class="bid"><button data-policy="markup" data-step="-1" aria-label="Lower the standing bid">◀</button><output data-show="markup"></output><button data-policy="markup" data-step="1" aria-label="Raise the standing bid">▶</button></span></div>
+  <div class="sales-row"><span>Standing bid</span>${stepper('markup','standing bid')}</div>
+  <div class="sales-row" title="Quotes priced at or above this wait for you, even with a sales manager"><span>Review over</span>${stepper('review','review line')}</div>
   <div class="sales-row"><span>Missing process</span><button data-policy="gaps" data-show="gaps"></button></div>
+  <div class="sales-row" title="Bid used when the sales manager sends a job to Covari. Same follows the standing bid"><span>Covari bid</span>${stepper('covariMarkup','Covari bid')}</div>
   <div class="sales-row"><span>Keep slots free</span><button data-policy="reserve" data-show="reserve"></button></div>
+  <div class="sales-row" title="Jobs listed below this go to Covari even when your floor could make them"><span>Covari under</span>${stepper('covariBelow','Covari limit')}</div>
   <div class="sales-row"><span>Contracts</span><button data-policy="contracts" data-show="contracts"></button></div>`;
 }
 let salesStrip=null;
@@ -784,18 +959,22 @@ function updateSalesStrip(){
   salesStrip.querySelector('.sales-who').textContent=seller?`${seller.name} answers quotes`:'You answer quotes';
   salesStrip.classList.toggle('automatic',!!seller);
   salesStrip.querySelector('[data-show="markup"]').textContent=pct(p.markup);
+  salesStrip.querySelector('[data-show="covariMarkup"]').textContent=p.covariMarkup===null?'Same':pct(p.covariMarkup);
+  salesStrip.querySelector('[data-show="review"]').textContent=amountOrOff(p.review);
+  salesStrip.querySelector('[data-show="covariBelow"]').textContent=amountOrOff(p.covariBelow);
   salesStrip.querySelector('[data-show="gaps"]').textContent=POLICY_TEXT.gaps[p.gaps];
   salesStrip.querySelector('[data-show="reserve"]').textContent=String(p.reserve);
   salesStrip.querySelector('[data-show="contracts"]').textContent=POLICY_TEXT.contracts[p.contracts];
 }
 function policyAction(b){
   const key=b.dataset.policy,p=game.policy;
-  const next=key==='markup'?BIDS[Math.max(0,Math.min(BIDS.length-1,BIDS.indexOf(p.markup)+Number(b.dataset.step)))]:key==='gaps'?{decline:'covari',covari:'accept',accept:'decline'}[p.gaps]:key==='reserve'?(p.reserve+1)%3:!p.contracts;
+  const step=(list,value)=>list[Math.max(0,Math.min(list.length-1,list.indexOf(value)+Number(b.dataset.step)))];
+  const next=key==='markup'?step(BIDS,p.markup):key==='covariMarkup'?step([null,...BIDS],p.covariMarkup):key==='review'?step(REVIEW_LEVELS,p.review):key==='covariBelow'?step(COVARI_BELOW,p.covariBelow):key==='gaps'?{decline:'covari',covari:'accept',accept:'decline'}[p.gaps]:key==='reserve'?(p.reserve+1)%3:!p.contracts;
   game.setPolicy(key,next);processEvents();updateUI(true);
 }
 let renderedManagerTickets='';
 function updateManagerTickets(force){
-  const signature=[...game.quotes.map(q=>`q${q.id}:${game.gapsFor(q.route).join()}`),...game.contracts.map(c=>`c${c.id}`),...game.orders.filter(o=>!o.contractId).map(o=>`${o.id}:${o.index}:${o.location}:${o.programmed}:${o.started}:${o.id===game.selectedId}:${game.gapsFor(o.route).join()}`)].join('|');
+  const signature=[...game.quotes.map(q=>`q${q.id}:${game.gapsFor(q.route).join()}:${game.covariEligible(q)}`),...game.contracts.map(c=>`c${c.id}`),...game.orders.filter(o=>!o.contractId).map(o=>`${o.id}:${o.index}:${o.location}:${o.programmed}:${o.started}:${o.id===game.selectedId}:${game.gapsFor(o.route).join()}`)].join('|');
   const rail=$('orders');
   updateSalesStrip();
   if(force||signature!==renderedManagerTickets){
@@ -809,8 +988,9 @@ function updateManagerTickets(force){
   }
   const full=game.boardFull(),covariFull=game.covariOrders().length>=COVARI_SLOTS,seller=game.staff.find(m=>m.role==='sales');
   for(const q of game.quotes){const el=$('quote-'+q.id);if(!el)continue;
-    el.querySelector('.due').textContent=seller?`${seller.name} ${Math.max(0,Math.ceil(SALES_DELAY-q.age))}s`:Math.ceil(q.quoteRemaining)+'s';el.classList.toggle('urgent',q.quoteRemaining<6);
-    el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,seller?1-q.age/SALES_DELAY:q.quoteRemaining/QUOTE_WINDOW)})`;
+    const review=game.needsReview(q),handled=seller&&!review;el.classList.toggle('review',!!seller&&review);
+    el.querySelector('.due').textContent=handled?`${seller.name} ${Math.max(0,Math.ceil(SALES_DELAY-q.age))}s`:`${seller?'YOUR CALL · ':''}${Math.ceil(q.quoteRemaining)}s`;el.classList.toggle('urgent',q.quoteRemaining<6);
+    el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,handled?1-q.age/SALES_DELAY:q.quoteRemaining/QUOTE_WINDOW)})`;
     el.querySelector('.price').textContent=money(q.price);el.querySelector('.price').classList.toggle('marked-up',q.markup>0);el.querySelector('.price').classList.toggle('discount',q.markup<0);
     el.querySelector('.bid-value').textContent=pct(q.markup);
     el.querySelector('[data-act="bid-down"]').disabled=q.markup<=BIDS[0];el.querySelector('[data-act="bid-up"]').disabled=q.markup>=BIDS.at(-1);
@@ -822,12 +1002,13 @@ function updateManagerTickets(force){
   for(const c of game.contracts){const el=$('contract-'+c.id);if(!el)continue;const state=contractState(c);
     el.querySelector('.due').textContent=c.remaining>game.time?`${clock(c.remaining-game.time)} tomorrow`:clock(c.remaining);el.classList.toggle('urgent',c.remaining<25);
     el.querySelector('.ticket-status').textContent=state.text;el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,c.remaining/c.deadline)})`;
-    el.querySelector('.contract-units').innerHTML=Array.from({length:c.units},(_,i)=>{const u=state.units[i-c.shipped-c.failed];return `<i class="${i<c.shipped?'done':i<c.shipped+c.failed?'failed':u?.started?'active':''}"></i>`;}).join('');}
-  for(const o of game.orders){if(o.contractId)continue;const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.ticket-status').textContent=managerTicketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
+    el.querySelector('.contract-units').innerHTML=Array.from({length:c.units},(_,i)=>{const u=state.units[i-c.shipped-c.failed];return `<i class="${i<c.shipped?'done':i<c.shipped+c.failed?'failed':u?.started?'active':''}"></i>`;}).join('');updateWorkActions(el,c,c.id);}
+  for(const o of game.orders){if(o.contractId)continue;const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.ticket-status').textContent=managerTicketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;updateWorkActions(el,o,o.id);}
 }
 function quoteAction(act,id){
   if(game.mode!=='playing')return;
   if(act==='bid-up'||act==='bid-down'){game.bidQuote(id,act==='bid-up'?1:-1);processEvents();updateUI();return;}
+  if(act==='expedite'||act==='delay'){if(act==='expedite')game.expedite(id);else game.delayOrder(id);processEvents();updateUI(true);return;}
   const done=act==='accept'?game.acceptQuote(id):act==='covari'?game.outsourceQuote(id):game.declineQuote(id);
   processEvents();updateUI(true);if(done)$('scene').focus({preventScroll:true});
 }
@@ -836,7 +1017,7 @@ function storeRows(){
   const can=game.canManage(),evening=game.mode==='evening',rows=[];
   const row=(title,blurb,control,extra='')=>`<div class="store-row${extra}"><div><b>${title}</b><small>${blurb}</small></div>${control}</div>`;
   const buy=(attr,label,cost,disabled)=>`<button ${attr} ${disabled?'disabled':''}>${label}${cost!==undefined?` <span>${money(cost)}</span>`:''}</button>`;
-  rows.push('<p class="store-hint">Buy machines by clicking an empty bay on the floor. After closing, click a machine to sell it.</p>');
+  rows.push(`<p class="store-hint">Buy machines by clicking an empty bay on the floor. Use a machine's ⋯ to sell it${game.canMove()?' or move it to another bay':''}.${game.halls.length?' Scroll or pinch to zoom; drag the floor to look around.':''}</p>`);
   rows.push('<h4>Staff <small>wages are paid every evening</small></h4>');
   for(const [role,info] of Object.entries(STAFF)){
     const team=game.staff.filter(member=>member.role===role),max=game.staffMax(role),more=!game.expanded&&info.maxWing>info.max;
@@ -850,13 +1031,15 @@ function storeRows(){
   }
   rows.push('<h4>Room to grow</h4>');
   rows.push(row(WING.name,WING.blurb,game.expanded?'<span class="owned-tag">OPEN</span>':game.wingPending?'<span class="owned-tag">TONIGHT</span>':buy('data-wing="1"','Build',WING.cost,!can||game.cash<WING.cost)));
+  if(game.expanded)for(const h of HALLS){const open=game.halls.includes(h.id),pending=game.hallsPending.includes(h.id);if(!open&&!pending&&!game.hallBuyable(h.id))continue;
+    rows.push(row(`${h.name} <span class="wage">south</span>`,`Six large bays, two small bays, another order slot and more quotes. Rent +${Math.round(HALL_RENT*100)}%.`,open?'<span class="owned-tag">OPEN</span>':pending?'<span class="owned-tag">TONIGHT</span>':buy(`data-hall="${h.id}"`,'Build',h.cost,!can||game.cash<h.cost)));}
   rows.push(row('Local ad campaign',`+${AD.reputation} reputation. More quotes, better prices. Once a day.`,game.adDay===game.day?'<span class="owned-tag">BOOKED TODAY</span>':buy('data-ad="1"','Book',AD.cost,!can||game.cash<AD.cost||game.reputation>=5)));
   return rows.join('');
 }
 let storeSignature='';
 function renderStore(force=false){
   const holder=game.mode==='evening'?$('evening-store'):$('store-list');
-  const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.staff.map(m=>m.id).join(),game.adDay,game.mode].join('|');
+  const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.halls.join(),game.hallsPending.join(),game.staff.map(m=>m.id).join(),game.adDay,game.mode].join('|');
   $('store-status').textContent=game.mode==='evening'?'AFTER HOURS':`CASH ${money(game.cash)}`;
   if(!force&&signature===storeSignature)return;storeSignature=signature;
   holder.innerHTML=storeRows();
@@ -869,13 +1052,13 @@ function closeStore(){if($('store-panel').hidden)return;$('store-panel').hidden=
 function toggleStore(){if($('store-panel').hidden)openStore();else closeStore();}
 function storeAction(event){
   const b=event.target.closest('button');if(!b||b.disabled)return;
-  if(b.dataset.buy)game.purchase(b.dataset.buy);else if(b.dataset.hire)game.hire(b.dataset.hire);else if(b.dataset.fire)game.fire(b.dataset.fire);else if(b.dataset.ad)game.advertise();else if(b.dataset.wing)game.buildWing();else return;
-  processEvents();renderStore(true);updateUI(true);if(game.mode==='evening')renderLedger();
+  if(b.dataset.buy)game.purchase(b.dataset.buy);else if(b.dataset.hire)game.hire(b.dataset.hire);else if(b.dataset.fire)game.fire(b.dataset.fire);else if(b.dataset.ad)game.advertise();else if(b.dataset.wing)game.buildWing();else if(b.dataset.hall)game.buildHall(b.dataset.hall);else return;
+  processEvents();renderStore(true);updateUI(true);saveRun();if(game.mode==='evening')renderLedger();
 }
 function renderLedger(){
   const day=game.history.at(-1),net=day.revenue+day.tips-day.materials-day.covari-day.penalties-day.purchases-day.wages-day.rent;
   const lines=[['Jobs shipped',day.revenue,`${day.shipped} shipped`],['Early-delivery tips',day.tips],['Stock',-day.materials],['Paid to Covari',-day.covari],['Missed and cancelled',-day.penalties,day.missed?`${day.missed} missed`:''],['Equipment and ads',-day.purchases],['Wages',-day.wages],['Rent',-day.rent]].filter(([,value],i)=>value||i===0||i>=6);
-  const tomorrow=rentFor(game.day+1,game.expanded||game.wingPending)+game.wages();
+  const tomorrow=game.rentTomorrow()+game.wages();
   $('evening-ledger').innerHTML=`<dl>${lines.map(([label,value,note])=>`<div><dt>${label}${note?` <small>${note}</small>`:''}</dt><dd class="${value<0?'cost':value>0?'gain':''}">${value>0?'+':''}${money(value)}</dd></div>`).join('')}<div class="ledger-total"><dt>Today${day.breakdowns?` <small>${day.breakdowns} breakdown${day.breakdowns===1?'':'s'}</small>`:''}</dt><dd class="${net<0?'cost':'gain'}">${net>0?'+':''}${money(net)}</dd></div></dl><div class="ledger-summary"><span><small>CASH</small><b>${money(game.cash)}</b></span><span><small>NET WORTH</small><b>${money(game.netWorth())}</b></span><span><small>REPUTATION</small><b>★${game.reputation.toFixed(1)}</b></span></div>`;
   const warn=$('evening-warning');warn.hidden=game.cash>=tomorrow;warn.textContent=`Tomorrow's rent and wages come to ${money(tomorrow)}. Earn that during the day, or the bank takes the keys.`;
   $('evening-open').innerHTML=`OPEN DAY ${game.day+1} <span>↗</span>`;
@@ -887,9 +1070,9 @@ function showEvening(){
   const day=game.history.at(-1),net=day.revenue+day.tips-day.materials-day.covari-day.penalties-day.purchases-day.wages-day.rent;
   $('evening-kicker').textContent=`DAY ${game.day}${game.length?' OF '+game.length:''} CLOSED · ${lengthName(game.length).toUpperCase()}`;
   $('evening-title').textContent=net>=800?'Lights off. Good day.':net>=0?'Doors locked. Bills paid.':'A costly day. Regroup.';
-  renderLedger();renderStore(true);$('evening-panel').scrollTop=0;$('evening-open').focus({preventScroll:true});
+  renderLedger();renderStore(true);saveRun();layoutDirty=true;$('evening-panel').scrollTop=0;$('evening-open').focus({preventScroll:true});
 }
-function openNextDay(){if(!game.manager||!game.openDay())return;closePopover();hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered','evening');processEvents();updateUI(true);$('scene').focus();}
+function openNextDay(){if(!game.manager||!game.openDay())return;closePopover();cancelMove();saveRun();hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered','evening');layoutDirty=true;processEvents();updateUI(true);$('scene').focus();}
 function staffName(id){return game.staff?.find(member=>member.id===id)?.name??'Staff';}
 const STAFF_COLORS={runner:[0x4f8fd6,0x183441],programmer:[0x9b7fd8,0x2a2346],clerk:[0x5fc48a,0x183441],technician:[0xe0b33c,0x183441],sales:[0xe6e1d0,0x2a4f5a]};
 function ensureStaffViews(){
@@ -962,7 +1145,7 @@ function managerNextTarget(){
 }
 function managerStationAction(id){
   const st=game.stations[id],o=game.heldOrder;
-  if(stations[id].def.bay&&!st)return 'Empty bay · click it to add a machine';
+  if(bayOf(id)&&!st)return 'Empty bay · click it to add a machine';
   if(!st)return null;
   if(id in game.installing)return `Installing · ${Math.ceil(game.installing[id])}s`;
   if(st.service)return st.service.by==='owner'?`${st.service.kind==='repair'?'Repairing':'Servicing'} · stay here ${Math.ceil(st.service.remaining)}s`:`${staffName(st.service.by)} is working on it`;
@@ -983,6 +1166,12 @@ function managerEvent(ev){
     case 'sold':audio.event('park');syncBays();floatText(`+${money(ev.refund)} · SOLD`,ev.station,true);return true;
     case 'wingOrdered':audio.event('ready');toast('Builders start on the east wing tonight. It opens tomorrow morning.',3.2);return true;
     case 'wingOpened':audio.event('finish');toast('The east wing is open: four large bays, two small bays and a second CAD desk.',3.6);return true;
+    case 'hallOrdered':audio.event('ready');shopFrame=measureShopFrame();layoutDirty=true;toast(`Builders start on ${HALLS.find(h=>h.id===ev.hall).name} tonight. It opens tomorrow morning.`,3.2);return true;
+    case 'hallOpened':audio.event('finish');toast(`${ev.halls.map(id=>HALLS.find(h=>h.id===id).name).join(' and ')} ${ev.halls.length>1?'are':'is'} open. Scroll or pinch to zoom, drag to look around. Machines can now move between bays.`,4.2);return true;
+    case 'moved':audio.event('park');syncBays();floatText(game.mode==='playing'?`INSTALLING · ${INSTALL_SECONDS}s`:'MOVED ✓',ev.to,true);return true;
+    case 'expedite':audio.event('select');toast(ev.on?`#${ev.orderId} expedited: staff handle it first.`:`#${ev.orderId} back in the normal queue.`,2);return true;
+    case 'delayed':audio.event('programmed');toast(`${ev.customer} agreed: one more day for ${ev.contract?'contract ':''}#${ev.orderId}.`,2.8);return true;
+    case 'delayRefused':audio.event('expired');toast(`${ev.customer} refused the delay and took ${ev.contract?'contract ':''}#${ev.orderId} elsewhere. Its parts are scrapped.`,4);return true;
     case 'advertised':audio.event('programmed');floatText('REPUTATION ↑','office',true);return true;
     case 'hired':audio.event('programmed');toast(`${staffName(ev.staffId)} joins the shop as your ${STAFF[ev.role].name.toLowerCase()}.`,2.6);return true;
     case 'shipped':audio.event('shipped');floatText(`+${money(ev.points)}${ev.tip?' · EARLY TIP':''}`,'ship',!!ev.staffId);spawnParticles(6,1.2,1.2,0xffd76c,ev.staffId?12:28);if(!ev.staffId)shake=.7;return true;
@@ -1001,7 +1190,7 @@ function managerEvent(ev){
 function showManagerResults(){
   resultShown=true;audio.update(false);clearMovement();closeStore();closePopover();$('overlay').classList.remove('evening');
   const length=game.length,reason=game.finishReason,stars=game.stars(),key=String(length),previous=managerRecord.bests[key]||0;
-  managerRecord.bests[key]=Math.max(previous,game.score);if(!length)managerRecord.days=Math.max(managerRecord.days,game.daysCompleted);save();
+  managerRecord.bests[key]=Math.max(previous,game.score);if(!length)managerRecord.days=Math.max(managerRecord.days,game.daysCompleted);save();clearRun();
   hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   $('results-panel').classList.toggle('owner-mastery',stars===3&&reason!=='bankrupt');
   $('result-kicker').textContent=`OPEN FOR BUSINESS · ${lengthName(length).toUpperCase()} · ${reason==='bankrupt'?'BANKRUPT':reason==='retired'?'RETIRED':'BOOKS CLOSED'}`;
@@ -1025,14 +1214,14 @@ function bindControls(){
   addEventListener('resize',resize);$('scene').tabIndex=-1;
   $('source-accept').onclick=()=>{selectSourceJob();};$('source-decline').onclick=()=>{game.declineSource();updateUI(true);};
   $('source-collect').onclick=selectSourceCard;
-  $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('mode-manager').onclick=showManagerBriefing;$('briefing-back').onclick=showMenu;
+  $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=showManagerBriefing;$('briefing-back').onclick=showMenu;
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');
   $('orders').addEventListener('click',e=>{if(!game.manager)return;const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
-  addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign'))closePopover();});
+  addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});
   $('action-manage').onclick=toggleStore;$('touch-shop').onclick=toggleStore;$('store-close').onclick=closeStore;
   $('store-list').addEventListener('click',storeAction);$('evening-store').addEventListener('click',storeAction);
   $('evening-open').onclick=openNextDay;$('evening-retire').onclick=()=>{if(game.manager&&game.retire())processEvents();};$('evening-leave').onclick=showMenu;
@@ -1042,17 +1231,44 @@ function bindControls(){
     if(['Space','Enter'].includes(e.code)&&e.target.closest?.('button'))return;
     const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyE','ShiftLeft','ShiftRight'];
     if(game.mode==='playing'&&!onPhone()&&controls.includes(e.code))e.preventDefault();if(e.repeat)return;
+    if(e.code==='Escape'&&moving){e.preventDefault();cancelMove();return;}
     if(e.code==='Escape'&&popover){e.preventDefault();closePopover();return;}
     if(e.code==='Escape'&&!$('store-panel').hidden){e.preventDefault();closeStore();return;}
     if(e.code==='KeyM'&&game.manager&&game.mode==='playing'){e.preventDefault();toggleStore();return;}
+    if(managingView()&&['Equal','NumpadAdd','Minus','NumpadSubtract','Digit0','Numpad0'].includes(e.code)){e.preventDefault();if(e.code.endsWith('0'))resetView();else zoomView(/Equal|Add/.test(e.code)?1.4:1/1.4);return;}
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
     if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
     if(e.code==='KeyE'||e.code==='Space')interact();
     if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();
   });
-  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();updateMusic();});
+  addEventListener('pagehide',saveRun);
+  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  renderer.domElement.addEventListener('pointerdown',e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}});
+  const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}};
+  // Shifts act on press, as they always have. In Open for Business a press
+  // becomes a click only if it does not drag: dragging pans, two fingers pinch.
+  const pointers=new Map();let drag=null,pinch=null;
+  const canvas=renderer.domElement;
+  canvas.addEventListener('pointerdown',e=>{
+    if(!managingView())return floorClick(e);
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});try{canvas.setPointerCapture(e.pointerId);}catch{}
+    if(pointers.size===1){drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false,button:e.button};pinch=null;}
+    else if(pointers.size===2){drag=null;const [a,b]=[...pointers.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)};}
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!pointers.has(e.pointerId))return;const last=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch&&pointers.size===2){const [a,b]=[...pointers.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch.d>0&&d>0)zoomView(d/pinch.d,(a.x+b.x)/2,(a.y+b.y)/2);pinch.d=d;return;}
+    if(drag?.id!==e.pointerId)return;
+    if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>7)drag.moved=true;
+    if(drag.moved)panView(e.clientX-last.x,e.clientY-last.y);
+  });
+  const release=e=>{if(!pointers.has(e.pointerId))return;pointers.delete(e.pointerId);
+    if(e.type==='pointerup'&&drag?.id===e.pointerId&&!drag.moved)floorClick(e);
+    if(drag?.id===e.pointerId)drag=null;if(pointers.size<2)pinch=null;};
+  canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);
+  canvas.addEventListener('wheel',e=>{if(!managingView())return;e.preventDefault();zoomView(Math.exp(-e.deltaY*.0015),e.clientX,e.clientY);},{passive:false});
+  canvas.addEventListener('contextmenu',e=>{if(managingView())e.preventDefault();});
+  $('zoom-in').onclick=()=>zoomView(1.4);$('zoom-out').onclick=()=>zoomView(1/1.4);$('zoom-fit').onclick=resetView;
   const joystick=$('joystick');let joystickPointer=null;
   const joyMove=e=>{if(e.pointerId!==joystickPointer)return;const rect=joystick.getBoundingClientRect(),dx=e.clientX-rect.left-rect.width/2,dy=e.clientY-rect.top-rect.height/2;const len=Math.hypot(dx,dy),f=len>30?30/len:1;touchVector={x:dx*f/30,y:dy*f/30};$('joystick-knob').style.transform=`translate(${dx*f}px,${dy*f}px)`;};
   joystick.onpointerdown=e=>{e.preventDefault();joystickPointer=e.pointerId;joystick.setPointerCapture(e.pointerId);joyMove(e);};joystick.onpointermove=joyMove;joystick.onpointerup=joystick.onpointercancel=()=>{joystickPointer=null;touchVector={x:0,y:0};$('joystick-knob').style.transform='';};for(const [id,action] of [['touch-interact',interact],['touch-dash',dash],['action-interact',interact],['action-dash',dash]]){

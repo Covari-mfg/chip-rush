@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { ShopGame, SHIFTS, stockType } from '../dist/core.js';
+import { HALLS } from '../dist/manager.js';
 
 const source = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
 const section = (from, to) => {
@@ -29,8 +30,9 @@ const moveCode = section('function moveBy(', '\n// A* routing');
 const pathCode = section('function routeSegmentClear(', '\nfunction goToStation(');
 const walkingSpeed = Number(source.match(/let speed=([\d.]+)/)?.[1]);
 assert.equal(walkingSpeed, 4.4, 'Revisit balance if production walking speed changes');
-const context = vm.createContext({ Math });
-vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,placed,accessOf,MAPS};`, context);
+// The owner layout lays its south halls out from the engine's hall list.
+const context = vm.createContext({ Math, HALLS });
+vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,placed,accessOf,MAPS,openHalls,hallPlots:HALL_PLOTS};`, context);
 const nav = context.nav;
 const accesses = Object.fromEntries(nav.layout.map(s => [s.id, s.access ?? { x:s.x, z:s.z+s.d/2+.63 }]));
 assert.ok(accesses.office, 'Office must have a production access point');
@@ -44,6 +46,9 @@ export const navigation = {
   accesses,
   layout:nav.layout,
   activate:nav.activateMap,
+  // Open for Business south halls: which are open changes the owner-wing floor.
+  setHalls(ids = []) { nav.openHalls.clear(); for (const id of ids) nav.openHalls.add(id); },
+  hallPlots:nav.hallPlots,
   has:nav.mapHas,
   maps:nav.MAPS,
   // Where each station really stands on a map, after that map's placement overrides.

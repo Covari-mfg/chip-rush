@@ -142,6 +142,9 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     challenge,
     refreshBoard:()=>loadBoard(false),
     start(role,ruleset=RULESET){const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    // A saved manager run picks its board run back up; it was registered when the run began.
+    resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;skipped=false;},
+    runId:()=>run,
     finish(value){
       if(generation>0&&finishedGeneration===generation)return;
       finishedGeneration=generation;

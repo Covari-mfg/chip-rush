@@ -35,10 +35,18 @@ export const EARLY_TIP = .1;
 export const AD = {cost:400, reputation:.5};
 export const MAX_DAYS = 99;
 export const MATERIAL_COST = {round:30, plate:35, block:45};
-export const BIDS = [-.1, 0, .1, .2, .3];
+export const BIDS = [-.1, 0, .1, .2, .3, .4, .5];
 export const SALES_DELAY = 3;
 export const CONTRACT_BONUS = .1;
 export const CONTRACT_PENALTY = .25;
+// Sales rules: quotes priced at or above the review line wait for the owner;
+// jobs listed below the Covari line go to Covari even when the floor could make them.
+export const REVIEW_LEVELS = [0, 800, 1200, 1600, 2400, 3200];
+export const COVARI_BELOW = [0, 300, 400, 500, 600, 800];
+// Asking a customer for one more day: the first ask risks this much, each
+// further ask on the same job adds it again, and loyalty softens it.
+export const DELAY_RISK = .25;
+export const SAVE_VERSION = 1;
 
 // Processes that exist only in this mode. Heat and laser can be bought; the
 // external ones never get a station, so Covari always has real gaps to fill.
@@ -54,24 +62,39 @@ export const opInfo = key => OPS[key] ?? MANAGER_OPS[key];
 export const BASE_STATIONS = ['lathe', 'mill', 'inspect'];
 
 // Machines that can be bought into a bay. Bay size decides what fits:
-// compact island bays, small front-wall bays, and large bays in the wing.
+// compact island bays, small front-wall bays, large bays in the wing and halls,
+// and the bench spot where the shop's first QC bench stands.
 export const MACHINES = {
   lathe:{name:'Lathe', cost:2600, sizes:['large'], blurb:'A second turning center.'},
   mill:{name:'CNC mill', cost:3200, sizes:['large'], blurb:'A second milling center.'},
-  inspect:{name:'QC bench', cost:1500, sizes:['large'], blurb:'Another inspection bench.'},
-  deburr:{name:'Deburr station', cost:900, sizes:['compact', 'large'], blurb:'Breaks sharp edges in 4s.'},
-  anodize:{name:'Anodize bath', cost:1400, sizes:['compact', 'large'], blurb:'An 8s color dip.'},
-  heat:{name:'Heat-treat furnace', cost:1700, sizes:['compact', 'small', 'large'], blurb:'Hardens steel in 10s.'},
-  laser:{name:'Laser marker', cost:1000, sizes:['compact', 'small', 'large'], blurb:'Marks serials in 3s.'},
+  inspect:{name:'QC bench', cost:1500, sizes:['large', 'bench'], blurb:'Another inspection bench.'},
+  deburr:{name:'Deburr station', cost:900, sizes:['compact', 'large', 'bench'], blurb:'Breaks sharp edges in 4s.'},
+  anodize:{name:'Anodize bath', cost:1400, sizes:['compact', 'large', 'bench'], blurb:'An 8s color dip.'},
+  heat:{name:'Heat-treat furnace', cost:1700, sizes:['compact', 'small', 'large', 'bench'], blurb:'Hardens steel in 10s.'},
+  laser:{name:'Laser marker', cost:1000, sizes:['compact', 'small', 'large', 'bench'], blurb:'Marks serials in 3s.'},
 };
+// South halls open below the main building once the east wing stands. Each
+// must touch floor the shop already owns: row 1 touches the main building.
+export const HALLS = [
+  {id:'hall-a', name:'Hall A', row:1, col:0, cost:6000}, {id:'hall-b', name:'Hall B', row:1, col:1, cost:6000},
+  {id:'hall-c', name:'Hall C', row:2, col:0, cost:8000}, {id:'hall-d', name:'Hall D', row:2, col:1, cost:8000},
+  {id:'hall-e', name:'Hall E', row:3, col:0, cost:10000}, {id:'hall-f', name:'Hall F', row:3, col:1, cost:10000},
+];
+export const HALL_BAYS = ['large', 'large', 'large', 'large', 'large', 'large', 'small', 'small'];
+export const HALL_RENT = .1;
+export const HALL_ORDERS = 1;
 export const BAYS = [
   {id:'bay-1', size:'compact', wing:false}, {id:'bay-2', size:'compact', wing:false},
   {id:'bay-3', size:'small', wing:false}, {id:'bay-4', size:'small', wing:false},
   {id:'bay-5', size:'large', wing:true}, {id:'bay-6', size:'large', wing:true},
   {id:'bay-7', size:'large', wing:true}, {id:'bay-8', size:'large', wing:true},
   {id:'bay-9', size:'small', wing:true}, {id:'bay-10', size:'small', wing:true},
+  // The machines the shop opens with stand in bays of their own, so they can be sold or moved.
+  {id:'lathe', size:'large', wing:false, base:true}, {id:'mill', size:'large', wing:false, base:true}, {id:'inspect', size:'bench', wing:false, base:true},
+  ...HALLS.flatMap((hall, h) => HALL_BAYS.map((size, i) => ({id:`bay-${11 + h * HALL_BAYS.length + i}`, size, wing:true, hall:hall.id}))),
 ];
-export const BAY_SIZES = {compact:'Compact bay', small:'Small bay', large:'Large bay'};
+export const BAY_SIZES = {compact:'Compact bay', small:'Small bay', large:'Large bay', bench:'Bench bay'};
+export const hallAdjacent = (a, b) => (a.row === b.row && a.col !== b.col) || (a.col === b.col && Math.abs(a.row - b.row) === 1);
 export const UPGRADES = {
   spindles:{name:'High-speed spindles', cost:1200, blurb:'Every lathe and mill cuts 30% faster.'},
   cam:{name:'CAM software', cost:700, blurb:'CAD takes 3 seconds instead of 6.'},
@@ -79,14 +102,16 @@ export const UPGRADES = {
 };
 export const WING = {name:'East wing', cost:6000, rent:1.35, resale:.5,
   blurb:'Builders open a wing overnight: four large bays, two small bays, a second CAD desk and room for more staff. Rent rises 35%.'};
+// perHall: extra staff each open south hall makes room for (rounded down).
 export const STAFF = {
-  programmer:{name:'CAD programmer', wage:160, max:1, maxWing:2, speed:0, blurb:'Sits at a CAD desk and programs every accepted job.'},
-  runner:{name:'Shop runner', wage:240, max:2, maxWing:4, speed:3.6, blurb:'Fetches stock, loads machines and moves parts along each route.'},
-  clerk:{name:'Shipping clerk', wage:120, max:1, maxWing:2, speed:3.4, blurb:'Ships inspected parts and takes Covari crates to QC.'},
-  technician:{name:'Maintenance tech', wage:200, max:1, maxWing:2, speed:3.6, blurb:'Repairs breakdowns and services worn machines before they fail.'},
-  sales:{name:'Sales manager', wage:220, max:1, maxWing:1, speed:0, blurb:'Answers every quote with your sales rules after three seconds.'},
+  programmer:{name:'CAD programmer', wage:160, max:1, maxWing:2, perHall:0, speed:0, blurb:'Sits at a CAD desk and programs every accepted job.'},
+  runner:{name:'Shop runner', wage:240, max:2, maxWing:4, perHall:1, speed:3.6, blurb:'Fetches stock, loads machines and moves parts along each route.'},
+  clerk:{name:'Shipping clerk', wage:120, max:1, maxWing:2, perHall:.5, speed:3.4, blurb:'Ships inspected parts and takes Covari crates to QC.'},
+  technician:{name:'Maintenance tech', wage:200, max:1, maxWing:2, perHall:.5, speed:3.6, blurb:'Repairs breakdowns and services worn machines before they fail.'},
+  sales:{name:'Sales manager', wage:220, max:1, maxWing:1, perHall:0, speed:0, blurb:'Answers every quote with your sales rules after three seconds.'},
 };
-const STAFF_NAMES = {programmer:['Ada', 'Grace'], runner:['Rosa', 'Dev', 'Kim', 'Theo'], clerk:['Sam', 'Lou'], technician:['Rio', 'Hal'], sales:['Maya']};
+const STAFF_NAMES = {programmer:['Ada', 'Grace'], runner:['Rosa', 'Dev', 'Kim', 'Theo', 'Ines', 'Omar', 'Bea', 'Yuki', 'Nils', 'Pia'],
+  clerk:['Sam', 'Lou', 'Noor', 'Ash', 'Remy'], technician:['Rio', 'Hal', 'Ivo', 'June', 'Saul'], sales:['Maya']};
 // Fictional customers. Loyalty (0-3) moves prices and how often they call.
 export const CUSTOMERS = ['Halvorsen Pumps', 'Pinewick Cycles', 'Orchard Robotics', 'Tidewell Marine', 'Quillfeather Aero', 'Juniper & Vale Instruments'];
 // Machines wear with every cycle; past BREAK_FROM a cycle may end in a breakdown.
@@ -138,7 +163,9 @@ export function parseBoard(id) {
   return RUN_LENGTHS.includes(length) ? length : null;
 }
 // Rent climbs every day so Endless always ends; fixed runs feel it too.
-export function rentFor(day, wing = false) { return Math.round(300 * 1.3 ** (day - 1) * (wing ? WING.rent : 1) / 10) * 10; }
+export function rentFor(day, wing = false, halls = 0) { return Math.round(300 * 1.3 ** (day - 1) * (wing ? WING.rent : 1) * (1 + HALL_RENT * halls) / 10) * 10; }
+// The lathe, mill and QC bench the shop opens with, valued like any machine.
+export const START_ASSETS = BASE_STATIONS.reduce((sum, op) => sum + Math.round(MACHINES[op].cost * RESALE), 0);
 export function priceScale(day, reputation, loyalty = 0) { return (.8 + reputation * .2 / 3) * (1 + .05 * (day - 1)) * (1 + .04 * loyalty); }
 // The most a single shipment can pay on a given day: best reputation and
 // loyalty, the dearest job, the highest bid and the early tip. The server
@@ -151,8 +178,11 @@ export function deadlineFor(job, day = 1) {
   const work = job.route.reduce((sum, key) => sum + (key === 'inspect' ? inspectSeconds(job) : opInfo(key).duration), 0);
   return Math.round((45 + work * 1.5 + job.route.length * 8) * Math.max(.75, 1 - .02 * (day - 1)));
 }
-// A bigger shop draws more customers: the wing brings quotes 25% more often.
-export function quoteInterval(day, reputation, wing = false) { return Math.max(wing ? 5 : 6.5, (15 - (day - 1) * 1.1 - (reputation - 3) * 1.5) * (wing ? .75 : 1)); }
+// A bigger shop draws more customers: the wing brings quotes 25% more often,
+// and each south hall 12% more again.
+export function quoteInterval(day, reputation, wing = false, halls = 0) {
+  return Math.max(wing ? 5 * .88 ** halls : 6.5, (15 - (day - 1) * 1.1 - (reputation - 3) * 1.5) * (wing ? .75 : 1) * .88 ** halls);
+}
 // The customer's answer to a bid: certain at or below list, falling quickly above it.
 export function winChance(markup, reputation, loyalty) {
   if (markup <= 0) return 1;
@@ -184,7 +214,7 @@ export class ManagerGame extends ShopGame {
     for (const key of BASE_STATIONS) this.stations[key] = this.newStation(key);
     this.length = length;
     this.seed = seed >>> 0;
-    this.rng = mulberry32(this.seed);
+    this.useRng(this.seed);
     this.day = 1;
     this.daysCompleted = 0;
     this.totalElapsed = 0;
@@ -199,9 +229,12 @@ export class ManagerGame extends ShopGame {
     this.installing = {};
     this.expanded = false;
     this.wingPending = false;
+    this.halls = [];
+    this.hallsPending = [];
     this.orderLimit = 4;
     this.adDay = 0;
-    this.policy = {markup:0, gaps:'decline', reserve:0, contracts:true};
+    // covariMarkup null: Covari jobs carry the standing bid.
+    this.policy = {markup:0, gaps:'decline', reserve:0, contracts:true, review:0, covariMarkup:null, covariBelow:0};
     this.staff = [];
     this.staffHired = 0;
     this.receivingQueue = [];
@@ -222,9 +255,58 @@ export class ManagerGame extends ShopGame {
     this.breakdowns = 0;
     this.contractsDone = 0;
     this.contractsFailed = 0;
+    this.delays = 0;
+    this.delaysRefused = 0;
+    this.moves = 0;
     this.mode = 'playing';
     this.emit('dayStart', {day:1});
     return this;
+  }
+
+  // mulberry32 with its state kept on the game, so a saved run resumes the same stream.
+  useRng(state) {
+    this.rngState = state >>> 0;
+    this.rng = () => {
+      const a = this.rngState = (this.rngState + 0x6d2b79f5) >>> 0;
+      let t = Math.imul(a ^ (a >>> 15), a | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Saving -----------------------------------------------------------------------
+  // A run is plain data apart from its random stream, the event queue and the
+  // route function the view supplies, so it saves as JSON at any moment.
+  serialize() {
+    const data = {};
+    for (const [key, value] of Object.entries(this)) {
+      if (key === 'events' || typeof value === 'function') continue;
+      data[key] = value instanceof Set ? [...value] : value;
+    }
+    return JSON.stringify({version:SAVE_VERSION, ruleset:MANAGER_RULESET, data},
+      (key, value) => typeof value === 'number' && !Number.isFinite(value) ? (Number.isNaN(value) ? null : value > 0 ? '+Infinity' : '-Infinity') : value);
+  }
+  // Loads a saved run over a fresh one, so fields added since the save keep
+  // their defaults. A run saved mid-day comes back paused.
+  restore(text) {
+    let saved;
+    try { saved = JSON.parse(text, (key, value) => value === '+Infinity' ? Infinity : value === '-Infinity' ? -Infinity : value); } catch { return false; }
+    const data = saved?.data;
+    if (saved?.version !== SAVE_VERSION || saved.ruleset !== MANAGER_RULESET || !data || typeof data !== 'object' || Array.isArray(data)) return false;
+    const list = key => Array.isArray(data[key]);
+    if (!RUN_LENGTHS.includes(data.length) || !['playing', 'paused', 'help', 'evening'].includes(data.mode) || !Number.isInteger(data.day) || data.day < 1 ||
+      !Number.isFinite(data.cash) || !Number.isFinite(data.rngState) || !data.stations || typeof data.stations !== 'object' || !data.config?.unlocks ||
+      !['orders', 'quotes', 'contracts', 'staff', 'customers', 'history', 'upgrades', 'receivingQueue'].every(list)) return false;
+    this.start({length:data.length, seed:data.seed});
+    const policy = {...this.policy};
+    Object.assign(this, data);
+    this.config = {...MANAGER_MODE, ...data.config, unlocks:[...data.config.unlocks]};
+    this.upgrades = new Set(data.upgrades);
+    this.policy = {...policy, ...data.policy};
+    this.useRng(data.rngState);
+    this.events = [];
+    this.mode = data.mode === 'evening' ? 'evening' : 'paused';
+    return true;
   }
 
   newStation(op) { return {op, part:null, remaining:0, ready:false, duration:0, wear:0, down:false, service:null}; }
@@ -243,7 +325,7 @@ export class ManagerGame extends ShopGame {
   stationsFor(op) { return Object.keys(this.stations).filter(key => this.stations[key].op === op && this.installed(key)); }
   hasMachine(op) { return this.stationsFor(op).length > 0; }
   gapsFor(route) { return route.filter(key => key !== 'ship' && !this.hasMachine(key)); }
-  bayOpen(bay) { return Boolean(bay) && (!bay.wing || this.expanded); }
+  bayOpen(bay) { return Boolean(bay) && (!bay.wing || this.expanded) && (!bay.hall || this.halls.includes(bay.hall)); }
   bayMachines() { return BAYS.filter(bay => this.stations[bay.id]).map(bay => this.stations[bay.id].op); }
   usable(key) { const station = this.stations[key]; return this.installed(key) && !station.down && !station.service; }
   durationFor(op, order = null, key = null) {
@@ -255,6 +337,8 @@ export class ManagerGame extends ShopGame {
     return seconds * (1 + wear / 250);
   }
   cadTime() { return this.upgrades.has('cam') ? 3 : 6; }
+  // Expedited work comes first for everyone on staff; then the earliest due.
+  byPriority(a, b) { return (b.expedited ? 1 : 0) - (a.expedited ? 1 : 0) || a.remaining - b.remaining || a.id - b.id; }
   activeOrders() { return this.orders.filter(order => !order.outsourced); }
   covariOrders() { return this.orders.filter(order => order.outsourced); }
   // A contract takes one board slot however many units it has.
@@ -265,13 +349,27 @@ export class ManagerGame extends ShopGame {
     for (const bay of BAYS) if (this.stations[bay.id]) value += Math.round(MACHINES[this.stations[bay.id].op].cost * RESALE);
     for (const key of this.upgrades) value += Math.round(UPGRADES[key].cost * RESALE);
     if (this.expanded || this.wingPending) value += Math.round(WING.cost * WING.resale);
+    for (const id of [...this.halls, ...this.hallsPending]) value += Math.round(HALLS.find(hall => hall.id === id).cost * WING.resale);
     return value;
   }
   netWorth() { return Math.round(this.cash + this.assetValue()); }
   wages() { return this.staff.reduce((sum, member) => sum + STAFF[member.role].wage, 0); }
-  rentToday() { return rentFor(this.day, this.expanded); }
+  rentToday() { return rentFor(this.day, this.expanded, this.halls.length); }
+  // Tomorrow's rent, counting anything the builders open overnight.
+  rentTomorrow() { return rentFor(this.day + 1, this.expanded || this.wingPending, this.halls.length + this.hallsPending.length); }
   canManage() { return this.mode === 'evening' || this.mode === 'playing'; }
-  staffMax(role) { return this.expanded ? STAFF[role].maxWing : STAFF[role].max; }
+  staffMax(role) { return this.expanded ? STAFF[role].maxWing + Math.floor(this.halls.length * STAFF[role].perHall) : STAFF[role].max; }
+  boardSize() { return (this.upgrades.has('board') ? 6 : 4) + HALL_ORDERS * this.halls.length; }
+  maxQuotes() { return MAX_QUOTES + Math.floor(this.halls.length / 2); }
+  // Buying any south hall frees machines to move between bays.
+  canMove() { return this.halls.length + this.hallsPending.length > 0; }
+  hall(id) { return HALLS.find(hall => hall.id === id) ?? null; }
+  hallOwned(id) { return this.halls.includes(id) || this.hallsPending.includes(id); }
+  hallBuyable(id) {
+    const hall = this.hall(id);
+    if (!hall || !this.expanded || this.hallOwned(id)) return false;
+    return hall.row === 1 || HALLS.some(other => this.hallOwned(other.id) && hallAdjacent(hall, other));
+  }
   hasStaff(role) { return this.staff.some(member => member.role === role); }
 
   // Customers, quotes, bids and contracts ---------------------------------------
@@ -335,7 +433,8 @@ export class ManagerGame extends ShopGame {
   }
 
   setPolicy(key, value) {
-    const valid = {markup:BIDS, gaps:['decline', 'covari', 'accept'], reserve:[0, 1, 2], contracts:[true, false]}[key];
+    const valid = {markup:BIDS, gaps:['decline', 'covari', 'accept'], reserve:[0, 1, 2], contracts:[true, false],
+      review:REVIEW_LEVELS, covariMarkup:[null, ...BIDS], covariBelow:COVARI_BELOW}[key];
     if (!valid || !valid.includes(value)) return false;
     this.policy[key] = value;
     // A new standing bid also applies to quotes still waiting for an answer.
@@ -388,13 +487,18 @@ export class ManagerGame extends ShopGame {
     return true;
   }
 
-  // Covari only takes work the floor cannot make: the shared capability-gap
-  // rule, expressed per quote instead of as one scheduled offer.
+  // Covari takes work the floor cannot make (the shared capability-gap rule,
+  // expressed per quote) and, when the owner sets a limit, small jobs listed under it.
+  smallJob(quote) { return quote.type !== 'contract' && this.policy.covariBelow > 0 && quote.basePrice < this.policy.covariBelow; }
+  covariEligible(quote) { return quote.type !== 'contract' && (this.gapsFor(quote.route).length > 0 || this.smallJob(quote)); }
+  covariOpen(quote) { return this.covariEligible(quote) && this.covariOrders().length < COVARI_SLOTS && this.cash >= quote.covariCost; }
+  // Big quotes wait for the owner even when a sales manager is on staff.
+  needsReview(quote) { return this.policy.review > 0 && quote.price >= this.policy.review; }
   outsourceQuote(id, {bySales = false} = {}) {
     const quote = this.quote(id);
     if (this.mode !== 'playing' || !quote) return false;
     if (quote.type === 'contract') return this.fail('Covari places single jobs, not whole contracts.');
-    if (!this.gapsFor(quote.route).length) return this.fail('Your floor can make this one. Covari is for work your shop cannot do.');
+    if (!this.covariEligible(quote)) return this.fail(this.policy.covariBelow ? `Your floor can make this one, and it lists above your Covari limit of $${this.policy.covariBelow}.` : 'Your floor can make this one. Covari is for work your shop cannot do.');
     if (this.covariOrders().length >= COVARI_SLOTS) return this.fail(`Covari is already placing ${COVARI_SLOTS} jobs for you. Ship one first.`);
     if (this.cash < quote.covariCost) return this.fail(`Covari needs $${quote.covariCost} up front.`);
     this.quotes = this.quotes.filter(candidate => candidate !== quote);
@@ -416,19 +520,80 @@ export class ManagerGame extends ShopGame {
   salesDecide(quote) {
     const gaps = this.gapsFor(quote.route), room = !this.boardFull(this.policy.reserve);
     if (quote.type === 'contract') return this.policy.contracts && !gaps.length && room ? this.acceptQuote(quote.id, {bySales:true}) : this.declineQuote(quote.id, {bySales:true});
+    const small = !gaps.length && this.smallJob(quote);
+    if ((small || (gaps.length && this.policy.gaps === 'covari')) && this.salesOutsource(quote)) return true;
     if (gaps.length) {
-      if (this.policy.gaps === 'covari' && this.outsourceQuote(quote.id, {bySales:true})) return true;
       if (this.policy.gaps === 'accept' && room) return this.acceptQuote(quote.id, {bySales:true});
       return this.declineQuote(quote.id, {bySales:true});
     }
+    // A small job Covari cannot take right now is still work the floor can make.
     return room ? this.acceptQuote(quote.id, {bySales:true}) : this.declineQuote(quote.id, {bySales:true});
+  }
+  // Covari jobs carry their own markup; if Covari cannot take one, the quote keeps its old bid.
+  salesOutsource(quote) {
+    if (!this.covariOpen(quote)) return false;
+    const markup = quote.markup;
+    quote.markup = this.policy.covariMarkup ?? markup;
+    this.priceQuote(quote);
+    if (this.outsourceQuote(quote.id, {bySales:true})) return true;
+    quote.markup = markup;
+    this.priceQuote(quote);
+    return false;
+  }
+
+  // Accepted work ------------------------------------------------------------------
+  // A job or a whole contract by id: contracts act on every unit at once.
+  workUnits(id) {
+    const contract = this.contract(id);
+    if (contract) return {target:contract, units:this.orders.filter(order => order.contractId === id), contract};
+    const order = this.order(id);
+    return order && !order.contractId ? {target:order, units:[order], contract:null} : null;
+  }
+  // Expediting puts a job at the front of every queue: CAD, stock, machines and crates.
+  expedite(id) {
+    const work = this.workUnits(id);
+    if (this.mode !== 'playing' || !work?.units.length) return false;
+    const on = !work.target.expedited;
+    work.target.expedited = on;
+    for (const unit of work.units) unit.expedited = on;
+    this.emit('expedite', {orderId:id, on, contract:Boolean(work.contract)});
+    return true;
+  }
+  delayRisk(id) {
+    const work = this.workUnits(id);
+    if (!work) return null;
+    const loyalty = this.customers[work.target.customer]?.loyalty ?? 0;
+    return Math.max(.05, Math.min(.9, DELAY_RISK * (1 + (work.target.delays ?? 0)) - .05 * loyalty));
+  }
+  // Asking for one more day. Most customers agree; the rest take the work
+  // elsewhere at once, and the job expires where it stands.
+  delayOrder(id) {
+    const work = this.workUnits(id);
+    if (this.mode !== 'playing') return false;
+    if (!work?.units.length) return this.fail('That job has already closed.');
+    const risk = this.delayRisk(id), customer = this.customers[work.target.customer]?.name;
+    if (this.rng() < risk) {
+      this.delaysRefused++;
+      for (const unit of work.units) this.expire(unit.id);
+      this.emit('delayRefused', {orderId:id, customer, contract:Boolean(work.contract)});
+      return true;
+    }
+    this.delays++;
+    work.target.delays = (work.target.delays ?? 0) + 1;
+    for (const unit of [...work.units, ...(work.contract ? [work.contract] : [])]) {
+      unit.remaining += DAY_SECONDS;
+      unit.deadline += DAY_SECONDS;
+      unit.delays = work.target.delays;
+    }
+    this.emit('delayed', {orderId:id, customer, contract:Boolean(work.contract), risk:this.delayRisk(id)});
+    return true;
   }
 
   // Purchases -------------------------------------------------------------------
   buyMachine(bayId, op) {
     const bay = BAYS.find(candidate => candidate.id === bayId), machine = MACHINES[op];
     if (!this.canManage() || !machine || !bay) return false;
-    if (!this.bayOpen(bay)) return this.fail('That bay is in the east wing. Build the wing first.');
+    if (!this.bayOpen(bay)) return this.fail(this.closedBay(bay));
     if (this.stations[bayId]) return this.fail('That bay already holds a machine.');
     if (!machine.sizes.includes(bay.size)) return this.fail(`A ${machine.name.toLowerCase()} does not fit a ${BAY_SIZES[bay.size].toLowerCase()}.`);
     if (this.cash < machine.cost) return this.fail(`A ${machine.name.toLowerCase()} costs $${machine.cost.toLocaleString()}.`);
@@ -459,8 +624,34 @@ export class ManagerGame extends ShopGame {
     const closed = this.mode === 'evening' && this.history.at(-1);
     if (closed) { closed.purchases -= refund; closed.cash = this.cash; }
     this.config.unlocks = this.config.unlocks.filter(op => this.hasMachine(op));
-    for (const member of this.staff) if (member.task?.steps.some(step => step.station === key)) member.task = null;
+    this.dropTasksAt(key);
     this.emit('sold', {station:key, op:station.op, refund});
+    return true;
+  }
+  closedBay(bay) { return bay.hall ? `That bay is in ${this.hall(bay.hall).name}. Open the hall first.` : 'That bay is in the east wing. Build the wing first.'; }
+  // Staff heading for a machine that leaves its bay drop that errand and plan again.
+  dropTasksAt(key) { for (const member of this.staff) if (member.task?.steps.some(step => step.station === key)) member.task = null; }
+  // With a south hall bought, an idle machine can move to any open bay it
+  // fits. It has to be installed again, so it is out of use for a while.
+  moveMachine(from, to) {
+    const source = BAYS.find(bay => bay.id === from), target = BAYS.find(bay => bay.id === to), station = this.stations[from];
+    if (!this.canManage() || !source || !target || !station || from === to) return false;
+    if (!this.canMove()) return this.fail('Buy a south hall to start moving machines between bays.');
+    if (!this.bayOpen(target)) return this.fail(this.closedBay(target));
+    if (this.stations[to]) return this.fail('That bay already holds a machine.');
+    const machine = MACHINES[station.op];
+    if (!machine.sizes.includes(target.size)) return this.fail(`A ${machine.name.toLowerCase()} does not fit a ${BAY_SIZES[target.size].toLowerCase()}.`);
+    if (station.part || station.service || station.down) return this.fail('Empty and repair the machine before moving it.');
+    delete this.stations[from];
+    delete this.installing[from];
+    this.stations[to] = station;
+    Object.assign(station, {part:null, remaining:0, ready:false, duration:0});
+    this.config.unlocks = this.config.unlocks.filter(op => this.hasMachine(op));
+    this.dropTasksAt(from);
+    this.moves++;
+    if (this.mode === 'playing') this.installing[to] = INSTALL_SECONDS;
+    this.emit('moved', {from, to, op:station.op});
+    if (this.mode !== 'playing') this.install(to);
     return true;
   }
   purchase(key) {
@@ -469,7 +660,7 @@ export class ManagerGame extends ShopGame {
     if (this.cash < item.cost) return this.fail(`${item.name} costs $${item.cost.toLocaleString()}.`);
     this.spend('purchases', item.cost);
     this.upgrades.add(key);
-    if (key === 'board') this.orderLimit = 6;
+    if (key === 'board') this.orderLimit = this.boardSize();
     this.emit('purchase', {key, cost:item.cost});
     return true;
   }
@@ -480,6 +671,18 @@ export class ManagerGame extends ShopGame {
     this.spend('purchases', WING.cost);
     this.wingPending = true;
     this.emit('wingOrdered', {cost:WING.cost});
+    return true;
+  }
+  // South halls also open the next morning. Each one must touch owned floor.
+  buildHall(id) {
+    const hall = this.hall(id);
+    if (!this.canManage() || !hall || this.hallOwned(id)) return false;
+    if (!this.expanded) return this.fail('Open the east wing before building south.');
+    if (!this.hallBuyable(id)) return this.fail(`${hall.name} has to touch a hall you already own.`);
+    if (this.cash < hall.cost) return this.fail(`${hall.name} costs $${hall.cost.toLocaleString()}.`);
+    this.spend('purchases', hall.cost);
+    this.hallsPending.push(id);
+    this.emit('hallOrdered', {hall:id, cost:hall.cost});
     return true;
   }
 
@@ -499,7 +702,8 @@ export class ManagerGame extends ShopGame {
     const info = STAFF[role];
     if (!info || !this.canManage()) return false;
     if (this.staff.filter(member => member.role === role).length >= this.staffMax(role))
-      return this.fail(this.expanded || info.max === info.maxWing ? `You already have the most ${info.name.toLowerCase()}s this shop can use.` : `Build the east wing to make room for another ${info.name.toLowerCase()}.`);
+      return this.fail(!this.expanded && info.max < info.maxWing ? `Build the east wing to make room for another ${info.name.toLowerCase()}.`
+        : info.perHall && this.halls.length < HALLS.length ? `Open another south hall to make room for another ${info.name.toLowerCase()}.` : `You already have the most ${info.name.toLowerCase()}s this shop can use.`);
     const names = STAFF_NAMES[role], used = new Set(this.staff.map(member => member.name));
     const seats = this.staff.filter(member => member.role === 'programmer').map(member => member.seat);
     const member = {id:`staff-${++this.staffHired}`, role, name:names.find(name => !used.has(name)) ?? names[0],
@@ -537,7 +741,7 @@ export class ManagerGame extends ShopGame {
     const reserved = this.reservedOrders();
     const ready = this.orders
       .filter(order => !order.started && order.programmed && !order.outsourced && stockType(order) === type)
-      .sort((a, b) => a.remaining - b.remaining || a.id - b.id);
+      .sort((a, b) => this.byPriority(a, b));
     return ready.find(order => !reserved.has(order.id)) ?? ready[0];
   }
   // One CAD program covers every unit of a contract.
@@ -549,7 +753,7 @@ export class ManagerGame extends ShopGame {
   cadQueue(except = new Set()) {
     const seen = new Set();
     return this.orders.filter(order => !order.programmed && !order.outsourced && !except.has(order.id))
-      .sort((a, b) => a.remaining - b.remaining || a.id - b.id)
+      .sort((a, b) => this.byPriority(a, b))
       .filter(order => !order.contractId || (!seen.has(order.contractId) && seen.add(order.contractId)));
   }
 
@@ -665,7 +869,8 @@ export class ManagerGame extends ShopGame {
   clearStation(key) { Object.assign(this.stations[key], {part:null, remaining:0, ready:false}); }
 
   shipOrder(order, member) {
-    const tip = !order.outsourced && !order.contractId && order.remaining > order.deadline / 2 ? round10(order.price * EARLY_TIP) : 0;
+    // A job that needed an extra day earns no early-delivery tip.
+    const tip = !order.outsourced && !order.contractId && !order.delays && order.remaining > order.deadline / 2 ? round10(order.price * EARLY_TIP) : 0;
     this.earn(order.price, tip);
     this.reputation = Math.min(5, this.reputation + .1);
     const customer = this.customers[order.customer];
@@ -774,7 +979,7 @@ export class ManagerGame extends ShopGame {
     for (const quote of [...this.quotes]) {
       quote.quoteRemaining -= dt;
       quote.age += dt;
-      if (selling && quote.age >= SALES_DELAY) { this.salesDecide(quote); continue; }
+      if (selling && quote.age >= SALES_DELAY && !this.needsReview(quote)) { this.salesDecide(quote); continue; }
       if (quote.quoteRemaining <= 0) {
         this.quotes = this.quotes.filter(candidate => candidate !== quote);
         this.lapsed++;
@@ -783,7 +988,7 @@ export class ManagerGame extends ShopGame {
     }
     if (this.elapsed >= this.nextQuoteAt && this.time > QUOTE_CUTOFF) {
       this.quotesSeen++;
-      if (this.quotes.length < MAX_QUOTES) {
+      if (this.quotes.length < this.maxQuotes()) {
         const quote = this.makeQuote();
         this.quotes.push(quote);
         this.emit('quote', {orderId:quote.id, contract:quote.type === 'contract'});
@@ -791,7 +996,7 @@ export class ManagerGame extends ShopGame {
         this.lost++;
         this.emit('quoteLost');
       }
-      this.nextQuoteAt = this.elapsed + quoteInterval(this.day, this.reputation, this.expanded) + (this.rng() - .5) * 4;
+      this.nextQuoteAt = this.elapsed + quoteInterval(this.day, this.reputation, this.expanded, this.halls.length) + (this.rng() - .5) * 4;
     }
     this.tickStaff(dt);
     if (this.time <= 0) this.endDay();
@@ -847,6 +1052,13 @@ export class ManagerGame extends ShopGame {
       this.expanded = true;
       this.config.mapId = 'owner-wing';
       this.emit('wingOpened');
+    }
+    if (this.hallsPending.length) {
+      const opened = this.hallsPending;
+      this.halls = [...this.halls, ...opened];
+      this.hallsPending = [];
+      this.orderLimit = this.boardSize();
+      this.emit('hallOpened', {halls:opened});
     }
     this.mode = 'playing';
     this.emit('dayStart', {day:this.day});
@@ -1072,7 +1284,7 @@ export class ManagerGame extends ShopGame {
       return {orderId:carried.id, step:0, steps:[{station:'buffer', action:'park'}]};
     }
     const orders = this.reservedOrders(member);
-    const byDue = (a, b) => a.remaining - b.remaining || a.id - b.id;
+    const byDue = (a, b) => this.byPriority(a, b);
     const ready = Object.entries(this.stations)
       .filter(([, station]) => station.ready && station.part && !station.down && !orders.has(station.part.orderId))
       .map(([key, station]) => ({key, order:this.order(station.part.orderId)}))
@@ -1092,7 +1304,7 @@ export class ManagerGame extends ShopGame {
       const target = clerk ? null : this.freeStation(next, loads, 'buffer');
       if (target) return {orderId:parked.id, step:0, steps:[{station:'buffer', action:'unpark'}, {station:target, action:'load'}]};
     }
-    const crate = this.receivingQueue.find(id => !orders.has(id));
+    const crate = this.receivingQueue.filter(id => !orders.has(id) && this.order(id)).sort((a, b) => (this.order(b).expedited ? 1 : 0) - (this.order(a).expedited ? 1 : 0))[0];
     const qc = crate && this.freeStation('inspect', loads, 'receiving');
     if (qc) return {orderId:crate, step:0, steps:[{station:'receiving', action:'receive'}, {station:qc, action:'load'}]};
     if (clerk) return null;
@@ -1108,7 +1320,8 @@ export class ManagerGame extends ShopGame {
     return {
       ...super.snapshot(), manager:true, length:this.length, seed:this.seed, day:this.day, daysCompleted:this.daysCompleted,
       totalElapsed:this.totalElapsed, cash:this.cash, reputation:this.reputation, netWorth:this.netWorth(), orderLimit:this.orderLimit,
-      boardLoad:this.boardLoad(), expanded:this.expanded, wingPending:this.wingPending, policy:{...this.policy},
+      boardLoad:this.boardLoad(), expanded:this.expanded, wingPending:this.wingPending, halls:[...this.halls], hallsPending:[...this.hallsPending], policy:{...this.policy},
+      delays:this.delays, delaysRefused:this.delaysRefused, moves:this.moves,
       quotes:this.quotes.map(quote => ({...quote, route:[...quote.route]})), contracts:this.contracts.map(contract => ({...contract, route:[...contract.route]})),
       customers:this.customers.map(customer => ({...customer})), upgrades:[...this.upgrades], installing:{...this.installing},
       staff:this.staff.map(member => ({...member, task:member.task ? {...member.task, steps:member.task.steps.map(step => ({...step}))} : null})),

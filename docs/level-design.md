@@ -157,11 +157,11 @@ starts with $1,500, a lathe, a mill and QC.
 
 - **Quotes and bids.** A quote arrives three seconds into each day and then
   roughly every 6.5 to 15 seconds (faster on later days, with better
-  reputation, and 25% faster once the east wing is open); at most three wait
-  at once, each lapses after 18 seconds, and none arrive in the last 20
-  seconds. Each names one of six fictional customers with a loyalty of 0 to 3
+  reputation, 25% faster once the east wing is open and 12% faster again per
+  south hall); at most three wait at once (one more per two open halls), each
+  lapses after 18 seconds, and none arrive in the last 20 seconds. Each names one of six fictional customers with a loyalty of 0 to 3
   (prices +4% per point; more frequent quotes). The card crosses out any step
-  the floor cannot do. ◀ ▶ sets a bid from −10% to +30%: at or below list
+  the floor cannot do. ◀ ▶ sets a bid from −10% to +50%: at or below list
   the customer always says yes; above it the chance falls (1 − 2 × markup,
   plus reputation and loyalty). A lost bid simply goes elsewhere.
 - **Contracts.** From day 2 (never on a fixed run's last day) about one quote in
@@ -176,9 +176,12 @@ starts with $1,500, a lathe, a mill and QC.
   coating, injection molding and wire EDM, which can never be bought. The
   player pays 80% of the base price up front; the crate reaches Receiving after
   20 seconds; QC and Shipping pay the bid price. At most two in flight. This
-  deliberately replaces the 300-point single offer.
+  deliberately replaces the 300-point single offer. One further, deliberate
+  exception at the creator's request: the owner can set a Covari limit, and
+  single jobs listed below it may go to Covari even when the floor could make
+  them (the sales manager sends them automatically; off by default).
 - **Money.** Shipping pays the agreed price, plus a 10% tip if more than half
-  the deadline remains (single in-house jobs only). Stock costs $30–45 once
+  the deadline remains (single in-house jobs that were never delayed). Stock costs $30–45 once
   per part. An expired job costs 20% of its price, 0.4 reputation (0.8 if it
   was accepted while the floor lacked a process) and a point of the customer's
   loyalty. Reputation (1–5, starting at 3) scales prices and quote frequency.
@@ -186,43 +189,75 @@ starts with $1,500, a lathe, a mill and QC.
   bays: two compact island bays (deburr, anodize, furnace, laser) and two small
   front-wall bays (furnace, laser). Clicking an empty bay opens a popover of the
   machines that fit; they install in 12 seconds during the day or are ready by
-  morning. Several machines of one kind share the work. After closing, a
-  machine can be sold for 70% from its label. On this map QC and Shipping part
-  to leave a doorway east.
+  morning. Several machines of one kind share the work. A machine's ⋯ sells it
+  for 70% (clicking it after closing does the same). The starting lathe and
+  mill stand in large bays and the QC bench in a bench bay (QC, deburr,
+  anodize, furnace or laser), so they can be sold, moved or replaced like any
+  machine. On this map QC and Shipping part to leave a doorway east.
 - **East wing.** $6,000 from the EXPAND sign or the Shop panel; builders open it
   the next morning (map `owner-wing`). It adds four large bays (any machine,
   including extra lathes, mills and QC benches), two small bays, a second CAD
   desk, higher staff limits, 25% more frequent quotes and 35% higher rent.
+- **South halls.** After the wing, six halls (A–F, two columns, three rows)
+  can be built below the main building and wing, each the next morning, for
+  $6,000 (row 1), $8,000 (row 2) or $10,000 (row 3). A hall must touch floor
+  the shop owns or has ordered: row 1 touches the main building. Each adds six
+  large bays and two small ones, one more order-board slot, a runner (and a
+  clerk and a technician per two halls), 12% more frequent quotes and 10% of
+  the base rent. Main building, wing and halls together are about ten times the
+  original room. Rows connect through doorways in low partitions. Scroll,
+  pinch or + / − zoom the view (0 or ⤢ fits it); dragging the floor pans; while
+  zoomed in, the view follows the machinist near its edges.
+- **Moving machines.** Buying any hall lets the owner move an idle, working
+  machine from its ⋯ to any open empty bay it fits, across rooms. It keeps its
+  wear and installs again: 12 seconds during the day, at once after closing.
 - **Wear and breakdowns.** Every finished cycle adds wear (4–11 by machine);
   worn machines run up to 40% slower. Above 55 wear a cycle may end in a
   breakdown that traps the finished part until someone repairs the machine.
   The owner repairs in 5 seconds and services an idle machine (empty hands,
   wear 15+) in 3, but only while standing there. A maintenance tech does both
   on their own (8 and 4 seconds) and services machines from 45 wear.
+- **Expedite and delay.** Every accepted job and contract card has ⚡ Expedite,
+  which puts it first in every staff queue (CAD, stock, collection, Covari
+  crates), and +1 day, which asks the customer for one more working day (150
+  seconds) before the job expires. The card shows the chance they refuse: 25%
+  for a first ask, 25% more for each further ask, 5% less per loyalty point
+  (5–90%). A refusal expires the job at once with the usual fee and reputation
+  hit, and its part is scrapped wherever it is. A contract is delayed or lost
+  as a whole.
 - **Staff.** CAD programmer (one per CAD desk), shop runners (2, or 4 with the
-  wing), shipping clerk (1/2), maintenance tech (1/2) and a sales manager (1).
+  wing), shipping clerk (1/2), maintenance tech (1/2) and a sales manager (1);
+  south halls raise the runner, clerk and technician limits.
   Staff walk the production paths and claim tasks; runners pick the nearest free
   machine of the right kind and route around broken ones. Wages are paid each
   evening; staff can be let go only after closing.
 - **Sales rules.** A strip at the start of the order rail holds the standing bid
   for new quotes, what to do with a missing process (turn away, Covari, accept),
-  how many board slots to keep free and whether to take contracts. With a sales
-  manager hired, every quote is answered by these rules after three seconds;
-  the player can still act first.
-- **Evenings and endings.** Rent (300 × 1.3^(day−1), ×1.35 with the wing) and
+  how many board slots to keep free and whether to take contracts, plus a
+  review line (quotes priced at or above it wait for the owner), a Covari bid
+  (Same follows the standing bid) and the Covari limit for small jobs. With a
+  sales manager hired, every other quote is answered by these rules after three
+  seconds; the player can still act first.
+- **Evenings and endings.** Rent (300 × 1.3^(day−1), ×1.35 with the wing, ×(1 + 0.1 per hall)) and
   wages are charged at closing; accepted work carries over, open quotes close.
   The evening ledger docks beside the floor, so bays stay clickable after
   hours. Cash below zero ends the run as bankrupt. Fixed runs end after their
   last day; Endless can retire any evening. Unfinished jobs at the very end are
   cancelled with their fees. Score is net worth: cash plus 70% resale of
-  machines and upgrades and 50% of the wing, never below 0. Stars count days
+  machines (the starting three included, $5,110) and upgrades and 50% of the
+  wing and halls, never below 0. Stars count days
   survived (3 / 5 / 7); they are shown, never used to unlock.
 - **Data.** Same v8 save, with a `manager` record (best per length, longest
   Endless, last length) beside the untouched shift fields. Server runs use role
   `MANAGER_ROLE` (−1, never a level index) and rulesets `manager-v1-d3|d5|d7|endless`, each
   its own board; the `scores.days` column (migration 0002) ranks Endless by
   days then net worth. No challenge links. `validateManagerResult` bounds
-  elapsed time, days, finish reason and net worth by the economy.
+  elapsed time, days, finish reason and net worth by the economy. The run in
+  progress also saves to `chip-rush-manager-run-v1` (the whole `ManagerGame`
+  state, the board run id and the machinist's spot) every few seconds while
+  playing, on pause, at closing and when the page hides; the mode card and
+  briefing offer Continue, mid-day saves resume paused, and a finished run
+  clears it.
 
 ## Design and release rules
 

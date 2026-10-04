@@ -794,3 +794,45 @@ export function createAnnex() {
   g.userData.nookSeat=new THREE.Vector3(15.74,.335,-2.05);g.userData.nookYaw=Math.PI/2;
   return batchStatic(g);
 }
+// A south hall for Open for Business, built like the east wing: slab and
+// tiles, a tall outer wall on the west column, low partitions with doorways
+// on the north edge (and the west edge of the east column) so the camera sees
+// over them, and a dashed plot outline shown while the hall is for sale.
+export function createHall({x0,z0,x1,z1,col,name,northDoors,westDoor}) {
+  const built=new THREE.Group();built.name='south-hall';
+  const w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
+  box(built,w,.42,d,cx,-.27,cz,C.navy,.16);
+  box(built,w-.2,.075,d-.2,cx,-.025,cz,0x4e6971,.02).castShadow=false;
+  const floorMats=[0x506b73,0x4d6971,0x526e75,0x4b676f].map(c=>mat(c,.93));
+  const nx=Math.floor((w-.2)/1.41),nz=Math.floor((d-.2)/1.38),tx=cx-(nx-1)*1.41/2,tz=cz-(nz-1)*1.38/2;
+  for(let x=0;x<nx;x++)for(let z=0;z<nz;z++)
+    box(built,1.397,.035,1.367,tx+x*1.41,.021,tz+z*1.38,0,.006,floorMats[(x*7+z*3+col*2+1)%4]).castShadow=false;
+  // Low partitions leave openings; doors carry gold posts.
+  const partition=(from,to,fixed,alongX)=>{
+    const length=to-from;if(length<.1)return;
+    const mid=(from+to)/2;
+    if(alongX){box(built,length,.55,.16,mid,.275,fixed,C.tealDark,.02);box(built,length,.06,.22,mid,.58,fixed,C.navy,.01);}
+    else{box(built,.16,.55,length,fixed,.275,mid,C.tealDark,.02);box(built,.22,.06,length,fixed,.58,mid,C.navy,.01);}
+  };
+  const gaps=(start,end,doors)=>{const runs=[];let at=start;for(const [a,b] of [...doors].sort((p,q)=>p[0]-q[0])){runs.push([at,a]);at=b;}runs.push([at,end]);return runs;};
+  for(const [a,b] of gaps(x0,x1,northDoors))partition(a,b,z0,true);
+  for(const [a,b] of northDoors)for(const x of [a,b])box(built,.12,.95,.12,x,.475,z0,C.gold,.02);
+  if(westDoor){
+    for(const [a,b] of gaps(z0,z1,[westDoor]))partition(a,b,x0,false);
+    for(const z of westDoor)box(built,.12,.95,.12,x0,.475,z,C.gold,.02);
+  }else{
+    // The west column continues the main building's outer wall.
+    box(built,.20,2.46,d,x0+.13,1.23,cz,C.tealDark,.035);
+    box(built,.26,.12,d+.1,x0+.13,2.50,cz,C.navy,.015);
+    for(let i=0;i<Math.floor(d/1.94);i++)box(built,.065,2.15,.065,x0+.26,1.30,z0+1+i*1.94,0x36616a,.004);
+  }
+  box(built,w-.9,.008,.055,cx,.048,z1-.35,C.gold,.002).castShadow=false;
+  textPlate(built,name.toUpperCase(),1.5,.2,cx-w/2+1.4,.33,z0+.09,{color:'#e8dcb5',bg:'#294c57',size:46});
+  const plot=new THREE.Group();plot.name='hall-plot';
+  const dash=(ax,az,bx,bz)=>{
+    const length=Math.hypot(bx-ax,bz-az),count=Math.floor(length/1.3);
+    for(let i=0;i<count;i++){const t=(i+.3)/count,x=ax+(bx-ax)*t,z=az+(bz-az)*t;box(plot,ax===bx?.09:.75,.02,ax===bx?.75:.09,x,-.5,z,C.gold,.004).castShadow=false;}
+  };
+  dash(x0+.2,z0+.2,x1-.2,z0+.2);dash(x0+.2,z1-.2,x1-.2,z1-.2);dash(x0+.2,z0+.2,x0+.2,z1-.2);dash(x1-.2,z0+.2,x1-.2,z1-.2);
+  return {built:batchStatic(built),plot:batchStatic(plot)};
+}

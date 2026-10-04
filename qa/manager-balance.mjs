@@ -4,18 +4,18 @@
 // the same ManagerGame actions as the UI, and follows one buying policy.
 // Usage: node qa/manager-balance.mjs [--seeds=8] [--days=5] [--trace]
 import { navigation } from './balance.mjs';
-import { ManagerGame, MACHINES, UPGRADES, WING, BAYS, STAFF, rentFor } from '../dist/manager.js';
+import { ManagerGame, MACHINES, UPGRADES, WING, BAYS, STAFF, HALLS } from '../dist/manager.js';
 import { stockType } from '../dist/core.js';
 
 const WALK = 4.4, DT = .05;
-// Routes follow the floor the shop actually has: the original room, then the wing.
+// Routes follow the floor the shop actually has: the original room, the wing, then any south halls.
 const lengths = new Map();
 let activeMap = null;
-export function routeLength(a, b, map = 'owner-shop') {
+export function routeLength(a, b, map = 'owner-shop', halls = []) {
   if (a === b) return 0;
-  const key = `${map}:${a}>${b}`;
+  const floor = halls.length ? `${map}+${halls.join('+')}` : map, key = `${floor}:${a}>${b}`;
   if (!lengths.has(key)) {
-    if (activeMap !== map) { navigation.activate(map); activeMap = map; }
+    if (activeMap !== floor) { navigation.setHalls(halls); navigation.activate(map); activeMap = floor; }
     const accesses = navigation.accessesFor(map), from = accesses[a], to = accesses[b];
     const points = [from, ...navigation.route(from, to)];
     let length = 0;
@@ -27,7 +27,7 @@ export function routeLength(a, b, map = 'owner-shop') {
 
 // Buying policies are evening shopping lists, tried in order while the shop
 // keeps a cushion for the next day's bills. Entries: 'bay-N:op', 'hire:role',
-// 'up:key', 'wing'.
+// 'up:key', 'wing', 'hall:id'.
 const CORE = ['bay-1:deburr','bay-2:anodize','bay-4:laser','bay-3:heat'];
 export const POLICIES = {
   'solo, never buys':{buy:[]},
@@ -36,11 +36,15 @@ export const POLICIES = {
   'full manager':{buy:['bay-1:deburr','hire:programmer','bay-2:anodize','hire:runner','bay-4:laser','bay-3:heat','hire:technician','hire:clerk','hire:sales','up:spindles','hire:runner','wing','bay-5:lathe','bay-6:mill','hire:runner','bay-7:inspect','hire:programmer','hire:runner','up:board','hire:technician'],
     markup:.1, gaps:'covari'},
   'never services':{buy:['bay-1:deburr','hire:programmer','bay-2:anodize','hire:runner','bay-4:laser','bay-3:heat','hire:clerk','up:spindles','hire:runner'],noService:true},
+  // Everything above, then the first two south halls with a second turning and milling line.
+  'south halls':{buy:['bay-1:deburr','hire:programmer','bay-2:anodize','hire:runner','bay-4:laser','bay-3:heat','hire:technician','hire:clerk','hire:sales','up:spindles','hire:runner','wing','bay-5:lathe','bay-6:mill','hire:runner','bay-7:inspect','hire:programmer','hire:runner','up:board','hire:technician',
+    'hall:hall-a','bay-11:lathe','bay-12:mill','hire:runner','bay-13:heat','bay-14:anodize','hall:hall-b','bay-19:lathe','bay-20:mill','hire:runner','hire:clerk','bay-21:inspect','hire:technician'],
+    markup:.1, gaps:'covari'},
   'accepts everything':{buy:['bay-1:deburr','bay-2:anodize'],reckless:true},
   'no Covari':{buy:[...CORE,'up:spindles'],covari:false},
 };
 
-function cushion(game) { return rentFor(game.day + 1, game.expanded || game.wingPending) + game.wages() + 250; }
+function cushion(game) { return game.rentTomorrow() + game.wages() + 250; }
 function shop(game, policy) {
   const counts = {};
   for (const item of policy.buy) {
@@ -56,6 +60,11 @@ function shop(game, policy) {
       if (game.upgrades.has(key)) continue;
       if (game.cash - UPGRADES[key].cost < cushion(game)) return;
       game.purchase(key);
+    } else if (item.startsWith('hall:')) {
+      const id = item.slice(5);
+      if (game.hallOwned(id)) continue;
+      if (!game.hallBuyable(id) || game.cash - HALLS.find(hall => hall.id === id).cost < cushion(game) * 1.6) return;
+      game.buildHall(id);
     } else if (item === 'wing') {
       if (game.expanded || game.wingPending) continue;
       if (game.cash - WING.cost < cushion(game) * 1.6) return;
@@ -63,7 +72,7 @@ function shop(game, policy) {
     } else {
       const [bay, op] = item.split(':');
       if (game.stations[bay]) continue;
-      if (BAYS.find(candidate => candidate.id === bay).wing && !game.expanded) return;
+      if (!game.bayOpen(BAYS.find(candidate => candidate.id === bay))) return;
       if (game.cash - MACHINES[op].cost < cushion(game)) return;
       game.buyMachine(bay, op);
     }
@@ -72,7 +81,7 @@ function shop(game, policy) {
 
 export function simulate({seed = 1, length = 5, policy = POLICIES['machines + staff'], reaction = .6, trace = false} = {}) {
   const game = new ManagerGame();
-  game.distance = (a, b) => routeLength(a, b, game.expanded ? 'owner-wing' : 'owner-shop');
+  game.distance = (a, b) => routeLength(a, b, game.expanded ? 'owner-wing' : 'owner-shop', game.halls);
   game.start({length, seed});
   const routeLen = (a, b) => game.distance(a, b);
   if (policy.markup) game.setPolicy('markup', policy.markup);
@@ -143,7 +152,7 @@ export function simulate({seed = 1, length = 5, policy = POLICIES['machines + st
   return {
     seed, length, reason:game.finishReason, days:game.daysCompleted, netWorth:game.score, shipped:game.shipped, sourced:game.sourced,
     missed:game.missed, declined:game.declined + game.lapsed, breakdowns:game.breakdowns, contracts:game.contractsDone, contractsFailed:game.contractsFailed,
-    bidsLost:game.bidsLost, staff:game.staff.map(m => m.role), expanded:game.expanded, history:game.history, log,
+    bidsLost:game.bidsLost, staff:game.staff.map(m => m.role), expanded:game.expanded, halls:game.halls.length, history:game.history, log,
   };
 }
 
@@ -157,7 +166,7 @@ if (isMain) {
     if (only && !name.includes(only)) continue;
     const runs = Array.from({length:seeds}, (_, i) => simulate({seed:i + 1, length:days, policy}));
     const worth = runs.map(r => r.netWorth).sort((a, b) => a - b), mean = list => Math.round(list.reduce((s, v) => s + v, 0) / list.length);
-    console.log(`${name.padEnd(20)} net worth median $${worth[worth.length >> 1].toLocaleString().padStart(7)} (min $${worth[0].toLocaleString()}, max $${worth.at(-1).toLocaleString()}) · days ${mean(runs.map(r => r.days))} · bankrupt ${runs.filter(r => r.reason === 'bankrupt').length}/${seeds} · shipped ${mean(runs.map(r => r.shipped))} (Covari ${mean(runs.map(r => r.sourced))}) · expired ${mean(runs.map(r => r.missed))} · breakdowns ${mean(runs.map(r => r.breakdowns))} · contracts ${mean(runs.map(r => r.contracts))}/${mean(runs.map(r => r.contractsFailed))} · wing ${runs.filter(r => r.expanded).length}`);
+    console.log(`${name.padEnd(20)} net worth median $${worth[worth.length >> 1].toLocaleString().padStart(7)} (min $${worth[0].toLocaleString()}, max $${worth.at(-1).toLocaleString()}) · days ${mean(runs.map(r => r.days))} · bankrupt ${runs.filter(r => r.reason === 'bankrupt').length}/${seeds} · shipped ${mean(runs.map(r => r.shipped))} (Covari ${mean(runs.map(r => r.sourced))}) · expired ${mean(runs.map(r => r.missed))} · breakdowns ${mean(runs.map(r => r.breakdowns))} · contracts ${mean(runs.map(r => r.contracts))}/${mean(runs.map(r => r.contractsFailed))} · wing ${runs.filter(r => r.expanded).length} · halls ${mean(runs.map(r => r.halls))}`);
     if (process.argv.includes('--trace')) for (const day of runs[0].history) console.log('   ', JSON.stringify(day));
   }
 }

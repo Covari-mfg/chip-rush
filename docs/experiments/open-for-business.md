@@ -115,6 +115,35 @@ Round two (machinist to manager):
 - `qa/manager-balance.mjs`: bay purchases, the wing, technicians, sales,
   map-aware routes, and new strategies (full manager, never services).
 
+Round three (expedite, delays, sales rules, south halls, saved runs):
+
+- `dist/manager.js`: `expedite` and `byPriority` (expedited work first in
+  every staff queue); `delayOrder` and `delayRisk` (`DELAY_RISK`); sales
+  policy `review` (`REVIEW_LEVELS`, `needsReview`), `covariMarkup` and
+  `covariBelow` (`COVARI_BELOW`, `smallJob`, `covariEligible`,
+  `salesOutsource`); bids to +50%; the starting lathe, mill and QC bench as
+  bays (`bench` size) with `START_ASSETS` in net worth; `HALLS`,
+  `HALL_BAYS`, `buildHall`, `hallBuyable`, `hallAdjacent`, hall rent, quotes,
+  slots and staff room; `moveMachine` and `canMove`; `serialize`, `restore`
+  and a resumable seeded stream (`useRng`, same sequence as `mulberry32`).
+- `dist/main.js`: generated hall bays and `HALL_PLOTS` in the layout;
+  `openHalls` in `mapHas`; `hallObstacles` (closed plots and partitions);
+  `findPathWide`, a cached-grid, binary-heap search used only while halls are
+  open, so the released maps keep the original search; hall shells, plots and
+  signs; `fitLights`; zoom, pan, pinch and follow (`view`, `applyView`,
+  `zoomView`, `panView`) in manager runs only, where a press that drags pans
+  and shift levels keep acting on press; move mode; base bays swap models like
+  any bay; expedite and delay on cards; the two-column sales strip; hall rows
+  in the Shop; the evening camera fits the floor beside the docked ledger;
+  saved runs (`saveRun`, `resumeManager`, Continue on the card and briefing).
+- `dist/assets/models.js`: `createHall` (slab, tiles, outer wall, low
+  partitions with gold-posted doorways, sign, dashed for-sale plot).
+- `dist/social.js`: `resume` and `runId`, so a continued run can still post.
+- `server/worker.js`: the net-worth bound adds `START_ASSETS`.
+- Tests: eight new manager tests; the map test covers halls; `qa/balance.mjs`
+  passes `HALLS` into its sandbox and exposes `setHalls`; the shift movement
+  test's sandbox gets `HALLS` (the released levels' assertions are unchanged).
+
 ## Iteration log
 
 1. Proposal to the creator: a shop-manager mode with quotes, purchases, staff,
@@ -183,6 +212,49 @@ Round two (machinist to manager):
      - three `undefined`-as-boolean cases leaked manager visuals into the shift
        levels: bays drawn, label classes flipping, staff left visible
      - manager label classes left on hidden bay labels in shifts
+
+9. Creator, round three (2026-10-04), from a Slack list: "expedite order
+   function, user controlled"; for the sales manager "higher bids", "price
+   sensitive controls like flag for me to review above an amount" and
+   "automatically send to covari with markup added on our side for things we
+   cant do and or things below a certain amount"; "expansion beyond east
+   wing" to "10x the original size with new rooms and a zoom function", built
+   "downwards", where buying any new area unlocks moving machines between
+   rooms with installation time again, and selling the original stations; a
+   "submit delay function on orders" that adds a day before expiry with "a %
+   chance the customer refuses and the order is immediately expired", scrap
+   parts disappearing from wherever they are. Mid-task: "game state saving
+   somehow, i keep losing my progress it would be nice to continue in endless
+   mode".
+   - Interpretations, not confirmed with the creator: expedite is a free
+     toggle that reorders staff queues (it does not speed machines); a delay
+     can be asked more than once, each time riskier; the review line holds
+     quotes for the owner but lets them lapse as usual; the Covari limit is
+     measured on the list price, and Covari keeps its two-job limit; "10x" is
+     area (main building + wing + six halls ≈ 10 × the original room); moves
+     install at once after closing, like purchases.
+   - Deliberate change to the shared Covari rule, at the creator's request:
+     small jobs below the owner's limit may go to Covari without a capability
+     gap. Off by default.
+   - Net worth now counts the starting machines ($5,110 at resale). Without
+     it, selling them on a penultimate evening (or before retiring) would add
+     cash that was never counted, a free gain. Consequence: every score is
+     $5,110 higher than in round two, and a shop that goes bankrupt with
+     little debt now scores its equipment less its debt instead of $0.
+   - Balance by simulation: halls first cost +20% rent each, added two order
+     slots and cost $8k–12k. The hall policy then lasted 20 Endless days
+     against 22 and expired three times as many jobs (69 against 24): the board
+     grew faster than distant floor could be worked. Now +10% rent, one slot
+     and $6k–10k: 22 days, as many as the best policy without halls, with 432
+     jobs shipped against 364.
+   - Bugs found by the browser runs and fixed: an emptied starting bay gave
+     the camera fit an infinite box (NaN camera, nothing drawn); a hall plot
+     two rows away widened the fitted view until labels overlapped; the
+     docked evening ledger covered the wing's bays, so after-hours buying and
+     moving there needed panning; the starting machines' ⋯ stayed visible in
+     shift levels after a manager run; a contract-refusal toast was hidden by
+     the expiry toast; a Covari bid defaulting to 0% changed existing
+     behavior (now "Same" follows the standing bid).
 
 ## Evidence
 
@@ -394,9 +466,76 @@ The manager tests cover:
   quarter in menus and roughly a twelfth when paused. That is not measured on
   real hardware.
 
+### Round three
+
+**Simulations** (`node qa/manager-balance.mjs --seeds=8 --days=N`; not player
+data). Median net worth, now including the starting machines:
+
+| Policy | 3 days | 5 days | 7 days | Endless days (median) |
+| --- | ---: | ---: | ---: | ---: |
+| Solo, never buys | $10,175 | $13,360 | $17,410 | 14 |
+| Machines only | $10,575 | $17,445 | $23,425 | 17 |
+| Machines + staff | $13,300 | $30,330 | $53,605 | 22 |
+| Full manager | $14,775 | $31,625 | $67,045 | 22 |
+| South halls (full manager, then halls A and B) | $14,775 | $31,625 | $59,055 | 22 |
+| Never services | $14,140 | $28,395 | $46,630 | 21 |
+| Accepts everything | $4,960 (4/8 bankrupt) | $4,250 (8/8) | $4,250 (8/8) | 3 |
+| No Covari | $9,990 | $16,220 | $22,570 | 17 |
+
+- **Unchanged play:** with the new features unused, every round-two policy
+  plays identically to `HEAD` (same shipments and days for three seeds × three
+  lengths); net worth differs only by the $5,110 of starting machines, or where
+  a bankrupt run used to floor at $0.
+- **Halls** are a long-run investment: bought late in a 7-day run they do not
+  pay back ($59k against $67k); in Endless they match the best policy's 22
+  days and ship 19% more. The scripted owner never moves machines, so routes
+  into the halls stay long; it never uses expedite, delays or the new sales
+  rules.
+
+**Automated checks:** `node --test qa/*.test.mjs` passes 271 tests (229
+released levels, 39 manager, 3 performance). `pnpm build` and `git diff
+--check` pass. The released levels' simulation traces are byte-identical to
+`HEAD` for the six profile sets, and `--rush --ignore-calls --expert --assert`
+passes. New tests cover:
+
+- expedite order in queues, contracts and toggling
+- delays: an extra day, rising risk, no tip, and refusals that scrap a part in
+  a machine, in the owner's hands and in a runner's hands; contracts as a whole
+- the review line, Covari bid, Covari for small jobs (by the sales manager and
+  by hand), Covari full falling back to the floor
+- halls: wing first, adjacency, overnight opening, rent, slots, staff, quotes,
+  bay sizes and closed halls
+- moving machines: unlock, sizes, wear, reinstall time, busy machines, evening
+- selling and replacing the starting machines with net worth unchanged
+- saved runs replaying identically after restore, evenings, and nine malformed
+  saves refused
+- a three-seed stress run with halls, moves, delays, expedites and mid-run
+  save-restore asserting every part is in exactly one place after every tick
+- every bay reachable on four floors (no halls, wing, B + D, all six), access
+  points at least 1.3 m apart, closed halls solid
+
+**Browser (headless Chrome, SwiftShader, Playwright-core 1.56; QA hook for
+cash and clocks only):** 30 scenario checks pass with no page errors:
+
+- sales strip rules and a +50% bid; expedite and +1 day on a card
+- wing, then Hall A from its floor sign; Hall C offered next to it
+- moving the starting lathe into the wing after hours
+- Hall A opening with its eight bays
+- wheel zoom, drag pan without walking, ⤢ and keys
+- buying a mill into a hall bay; walking through the doorway into the hall
+- reload → card and briefing offer Continue → mid-day resume paused with the
+  hall and machines in place; an evening save resuming at the ledger
+- a shift afterwards with no zoom controls, halls or signs
+
+Against `HEAD` (served from a worktree on a second port), the menu and all four
+shifts match on draw calls, triangles and visible labels, fresh and after a
+manager run. Screen positions differ by up to 9 px; `HEAD` against itself
+differs by up to 30 px in the same sampling, so this is camera-ease timing. A
+390×844 touch layout has no horizontal scroll and card actions fit.
+
 ## Known limitations, not tested
 
-The creator has played round one; round two is unplayed by a human. Difficulty and fun are unmeasured. Fan noise and frame rate after the performance work have not been measured on the creator's MacBook. The extension-driven Chrome could not run the game (hidden window), so all browser evidence is headless software rendering. A fully built wing with ten staff renders about 770 to 920 draw calls (shift levels: 277 to 324), now at most 60 frames a second; it is untested on low-end GPUs. Station labels crowd on phone screens, as in Night Shift. Software rendering
+The creator has played round one; rounds two and three are unplayed by a human. With all six halls open, the fitted view is small and labels crowd until zoomed; on phones the zoom buttons sit over the floor's left edge. Hall floors, the 48 extra bays and long staff routes are unmeasured on a real GPU; the wide path search was only timed in headless Chrome. Expedite, delays and the new sales rules are not used by the simulator. Difficulty and fun are unmeasured. Fan noise and frame rate after the performance work have not been measured on the creator's MacBook. The extension-driven Chrome could not run the game (hidden window), so all browser evidence is headless software rendering. A fully built wing with ten staff renders about 770 to 920 draw calls (shift levels: 277 to 324), now at most 60 frames a second; it is untested on low-end GPUs. Station labels crowd on phone screens, as in Night Shift. Software rendering
 means the scripted player reacts faster relative to game time than a person.
 The new models and the Shop panel have not been judged on a real GPU display,
 on touch devices or by the creator. No new music. The hosted Worker and D1 were

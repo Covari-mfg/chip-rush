@@ -1,5 +1,5 @@
 import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
-import { MANAGER_ROLE, DAY_SECONDS, START_CASH, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
+import { MANAGER_ROLE, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 const fail=(message,status=400)=>json({error:message},status);
@@ -68,7 +68,8 @@ export function validateManagerResult(value,run,now=Date.now()){
   const played=value.finishReason==='bankrupt'?value.days+1:value.days;
   if(!Number.isFinite(value.elapsed)||Math.abs(value.elapsed-played*DAY_SECONDS)>1||wallSeconds<value.elapsed-5)return 'That finish time does not match this run.';
   if(value.sourced>value.shipped||value.shipped>Math.ceil(value.elapsed/4)+4||value.missed>Math.ceil(value.elapsed/4)+4)return 'That score does not match the completed work.';
-  if(value.score>START_CASH+value.shipped*maxPayout(Math.max(1,played)))return 'That score does not match the completed work.';
+  // Net worth counts the starting lathe, mill and QC bench at resale.
+  if(value.score>START_CASH+START_ASSETS+value.shipped*maxPayout(Math.max(1,played)))return 'That score does not match the completed work.';
   return null;
 }
 

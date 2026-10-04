@@ -12,6 +12,7 @@ import {
   QUOTE_WINDOW, MAX_QUOTES, QUOTE_CUTOFF, COVARI_SHARE, COVARI_SLOTS, COVARI_DELIVERY, INSTALL_SECONDS, RESALE, LATE_PENALTY, AD, MAX_DAYS, BIDS,
   SALES_DELAY, CONTRACT_BONUS, CONTRACT_PENALTY, BREAK_FROM, SERVICE_FROM, REPAIR, SERVICE, TECH_SERVICE_AT,
   rentFor, maxPayout, boardId, parseBoard, deadlineFor, opInfo, winChance, quoteInterval,
+  START_ASSETS, HALLS, HALL_BAYS, HALL_RENT, REVIEW_LEVELS, COVARI_BELOW, DELAY_RISK, hallAdjacent,
 } from '../dist/manager.js';
 import { parseChallenge, challengeURL } from '../dist/social.js';
 import worker, { validateManagerResult, validateResult } from '../server/worker.js';
@@ -170,9 +171,10 @@ test('bids trade price against the chance the customer says yes', () => {
   assert.equal(game.bidQuote(q.id, -1), true);
   assert.equal(game.bidQuote(q.id, -1), false, 'A bid cannot go below −10%');
   assert.equal(q.price, Math.round(q.basePrice * .9 / 10) * 10);
-  for (let i = 0; i < 6; i++) game.bidQuote(q.id, 1);
+  for (let i = 0; i < BIDS.length + 1; i++) game.bidQuote(q.id, 1);
   assert.equal(q.markup, BIDS.at(-1));
-  assert.equal(q.price, Math.round(q.basePrice * 1.3 / 10) * 10);
+  assert.equal(BIDS.at(-1), .5, 'Bids reach +50%');
+  assert.equal(q.price, Math.round(q.basePrice * 1.5 / 10) * 10);
   assert.ok(q.price > list && q.chance < 1);
   game.rng = () => .999;
   assert.equal(game.acceptQuote(q.id), true);
@@ -495,11 +497,11 @@ test('fixed runs finish on their last day; bankruptcy ends early; Endless retire
   const broke = fresh({length:0});broke.cash = rentFor(1) - 1;
   advance(broke, DAY_SECONDS + .1);
   assert.equal(broke.finishReason, 'bankrupt');
-  assert.equal(broke.score, 0);
+  assert.equal(broke.score, broke.cash + START_ASSETS, 'A bankrupt shop is worth its machines less its debt');
   const banked = fresh({length:0});banked.cash = 9000;banked.buyMachine('bay-4', 'laser');
   advance(banked, DAY_SECONDS + .1);
   assert.equal(banked.retire(), true);
-  assert.equal(banked.score, banked.cash + Math.round(MACHINES.laser.cost * RESALE));
+  assert.equal(banked.score, banked.cash + START_ASSETS + Math.round(MACHINES.laser.cost * RESALE));
   const unfinished = fresh({length:3});unfinished.day = 3;
   advance(unfinished, DAY_SECONDS - 10);
   const q = quoteFor(unfinished, 'spacer');unfinished.acceptQuote(q.id);
@@ -584,7 +586,7 @@ test('the server bounds manager results by the run’s own economy', () => {
   bad({}, /finish time/, START + 1000 * 100);
   bad({}, /expired/, START + 4 * 86400_000);
   bad({sourced:41}, /does not match/);
-  bad({score:START_CASH + 40 * maxPayout(5) + 1}, /does not match/);
+  bad({score:START_CASH + START_ASSETS + 40 * maxPayout(5) + 1}, /does not match/);
   bad({shipped:10_000}, /does not match/);
   const bankrupt = {...ok, days:2, elapsed:3 * DAY_SECONDS, finishReason:'bankrupt', score:0};
   assert.equal(validateManagerResult(bankrupt, run, at), null);
@@ -677,16 +679,300 @@ test('manager records load safely beside shift progress in the v8 save', async (
   }
 });
 
-test('both owner maps place every bay where the door can reach it', () => {
-  for (const map of ['owner-shop', 'owner-wing']) {
+test('every owner floor places every bay where the door can reach it', () => {
+  const allHalls = HALLS.map(hall => hall.id);
+  for (const [map, halls] of [['owner-shop', []], ['owner-wing', []], ['owner-wing', ['hall-b', 'hall-d']], ['owner-wing', allHalls]]) {
+    navigation.setHalls(halls);
     navigation.activate(map);
-    const accesses = navigation.accessesFor(map), bays = navigation.layoutFor(map).filter(def => def.bay);
-    assert.equal(bays.length, map === 'owner-wing' ? BAYS.length : BAYS.filter(bay => !bay.wing).length);
+    const accesses = navigation.accessesFor(map), bays = navigation.layoutFor(map).filter(def => def.bay || def.baseBay);
+    const expected = BAYS.filter(bay => (map === 'owner-wing' || !bay.wing) && (!bay.hall || halls.includes(bay.hall)));
+    assert.deepEqual(Array.from(bays, def => def.id).sort(), expected.map(bay => bay.id).sort(), `${map} ${halls.join()}: bays match the engine`);
     for (const def of bays) {
-      assert.equal(def.bay, BAYS.find(bay => bay.id === def.id).size, `${def.id} size matches the engine`);
-      assert.ok(navigation.safe(accesses[def.id].x, accesses[def.id].z));
-      assert.ok(navigation.route(navigation.spawn, accesses[def.id]).length > 0, `${map}: ${def.id} is reachable from the door`);
+      assert.equal(def.bay ?? def.baseBay, BAYS.find(bay => bay.id === def.id).size, `${def.id} size matches the engine`);
+      assert.ok(navigation.safe(accesses[def.id].x, accesses[def.id].z), `${def.id} access is on open floor`);
+      assert.ok(navigation.route(navigation.spawn, accesses[def.id]).length > 0, `${map} ${halls.join()}: ${def.id} is reachable from the door`);
     }
+    // Operator points stay apart, so each bay is its own place to stand.
+    const points = Object.entries(accesses).filter(([id]) => id.startsWith('bay-'));
+    for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++)
+      assert.ok(Math.hypot(points[i][1].x - points[j][1].x, points[i][1].z - points[j][1].z) > 1.3, `${points[i][0]} and ${points[j][0]} access points are distinct`);
   }
+  // A closed hall is solid floor: its bays cannot be reached until it opens.
+  navigation.setHalls(['hall-a']);
+  navigation.activate('owner-wing');
+  const insideB = navigation.hallPlots.find(plot => plot.id === 'hall-b');
+  assert.equal(navigation.safe(insideB.cx, insideB.z0 + 5), false);
+  navigation.setHalls([]);
   navigation.activate('first-shop');
+});
+
+// Round three: expedite, delays, sales review and Covari rules, south halls,
+// moving and selling the starting machines, and saved runs.
+
+test('expedited work jumps every staff queue, for single jobs and whole contracts', () => {
+  const game = fresh();
+  const early = quoteFor(game, 'spacer'), late = quoteFor(game, 'plate');
+  game.acceptQuote(early.id); game.acceptQuote(late.id);
+  game.order(late.id).remaining += 30;
+  assert.equal(game.cadQueue()[0].id, early.id, 'Earliest due first by default');
+  assert.equal(game.expedite(late.id), true);
+  assert.equal(game.order(late.id).expedited, true);
+  assert.equal(game.cadQueue()[0].id, late.id, 'Expedited first');
+  evening(game, () => game.hire('programmer'));
+  game.tick(.05);
+  assert.equal(game.staff[0].orderId, late.id, 'The programmer starts on the expedited job');
+  assert.equal(game.expedite(late.id), true);
+  assert.equal(game.order(late.id).expedited, false, 'Expedite toggles off');
+  const contract = quoteFor(game, 'spacer', {contract:true});game.acceptQuote(contract.id);
+  assert.equal(game.expedite(contract.id), true);
+  assert.ok(game.contract(contract.id).expedited && game.orders.filter(o => o.contractId === contract.id).every(o => o.expedited), 'Every unit of a contract is expedited');
+  assert.equal(game.expedite(999), false);
+  game.mode = 'evening';assert.equal(game.expedite(early.id), false, 'Only during the working day');
+});
+
+test('a delay adds a day unless the customer refuses; a refusal scraps the part wherever it is', () => {
+  const game = fresh();
+  game.rng = () => .99;
+  const q = quoteFor(game, 'spacer');game.acceptQuote(q.id);
+  const order = game.order(q.id), remaining = order.remaining, deadline = order.deadline, first = game.delayRisk(q.id);
+  assert.ok(first > 0 && first < DELAY_RISK + .01, 'The first ask risks about a quarter, less with loyalty');
+  assert.equal(game.delayOrder(q.id), true);
+  assert.equal(order.remaining, remaining + DAY_SECONDS);
+  assert.equal(order.deadline, deadline + DAY_SECONDS);
+  assert.ok(game.delayRisk(q.id) > first, 'Each further ask is riskier');
+  assert.ok(game.drain().some(e => e.type === 'delayed'));
+  // A delayed job ships without an early tip.
+  cad(game, q.id);
+  assert.equal(game.interact(bin(order)), true);
+  runOn(game, 'lathe');runOn(game, 'inspect');
+  game.interact('ship');
+  const shipped = game.drain().find(e => e.type === 'shipped');
+  assert.equal(shipped.tip, 0);
+  // Refusals: in a machine, in the owner's hands, and in a runner's hands.
+  for (const where of ['machine', 'hands', 'runner']) {
+    const g = fresh();
+    if (where === 'runner') evening(g, () => { g.hire('programmer'); g.hire('runner'); });
+    const job = quoteFor(g, 'spacer');g.acceptQuote(job.id);
+    if (where === 'runner') { for (let t = 0; t < 60 && !g.staff.some(m => m.carry === job.id); t += .05) g.tick(.05); assert.ok(g.staff.some(m => m.carry === job.id)); }
+    else { cad(g, job.id); g.interact(bin(g.order(job.id))); if (where === 'machine') g.interact('lathe'); }
+    const cash = g.cash, missed = g.missed;
+    g.rng = () => 0;
+    assert.equal(g.delayOrder(job.id), true);
+    assert.equal(g.order(job.id), undefined, `${where}: the job is gone`);
+    assert.equal(g.missed, missed + 1, `${where}: counts as expired`);
+    assert.ok(g.cash < cash, `${where}: the expiry fee is charged`);
+    assert.equal(g.hand, null);assert.equal(g.stations.lathe.part, null);assert.ok(g.staff.every(m => m.carry !== job.id));
+    assert.ok(g.drain().some(e => e.type === 'delayRefused'));
+    assertIntegrity(g);
+  }
+  // Contracts move as a whole, and a refusal breaks the whole contract.
+  const c = fresh(), deal = quoteFor(c, 'spacer', {contract:true});c.acceptQuote(deal.id);
+  c.rng = () => .99;
+  const before = c.contract(deal.id).remaining;
+  assert.equal(c.delayOrder(deal.id), true);
+  assert.equal(c.contract(deal.id).remaining, before + DAY_SECONDS);
+  assert.ok(c.orders.filter(o => o.contractId === deal.id).every(o => o.remaining === before + DAY_SECONDS));
+  c.rng = () => 0;
+  assert.equal(c.delayOrder(deal.id), true);
+  assert.equal(c.contract(deal.id), undefined);
+  assert.equal(c.contractsFailed, 1);
+  assertIntegrity(c);
+  assert.equal(c.delayOrder(deal.id), false, 'A closed job cannot be delayed');
+});
+
+test('sales rules: a review line for big quotes, a Covari bid, and Covari for small jobs', () => {
+  const game = fresh();
+  evening(game, () => game.hire('sales'));
+  game.rng = () => 0;
+  assert.equal(game.setPolicy('review', 800), true);
+  assert.equal(game.setPolicy('review', 750), false);
+  const big = quoteFor(game, 'shaft'), small = quoteFor(game, 'plate');
+  assert.ok(big.price >= 800 && small.price < 800);
+  advance(game, SALES_DELAY + .1);
+  assert.ok(game.quote(big.id), 'A quote over the review line waits for the owner');
+  assert.equal(game.quote(small.id), undefined, 'Smaller quotes are still answered');
+  advance(game, QUOTE_WINDOW);
+  assert.equal(game.quote(big.id), undefined, 'An unreviewed quote lapses like any other');
+  game.setPolicy('review', 0);
+  // Small jobs to Covari, even though the floor can make them, at the Covari bid.
+  assert.equal(game.setPolicy('covariBelow', 300), true);
+  assert.equal(game.setPolicy('covariMarkup', .2), true);
+  const spacer = quoteFor(game, 'spacer');
+  assert.ok(spacer.basePrice < 300 && game.covariEligible(spacer));
+  advance(game, SALES_DELAY + .1);
+  const placed = game.order(spacer.id);
+  assert.ok(placed?.outsourced, 'Sent to Covari');
+  assert.equal(placed.price, Math.round(spacer.basePrice * 1.2 / 10) * 10, 'At the Covari bid');
+  assert.equal(placed.price - game.totals.covari, placed.price - spacer.covariCost);
+  // With Covari full, a small job the floor can make is accepted in-house at the standing bid.
+  const second = quoteFor(game, 'spacer');advance(game, SALES_DELAY + .1);
+  assert.ok(game.order(second.id)?.outsourced);
+  const third = quoteFor(game, 'spacer');advance(game, SALES_DELAY + .1);
+  assert.equal(game.order(third.id)?.outsourced, false, 'Covari full: made in-house');
+  assert.equal(game.order(third.id).markup, game.policy.markup);
+  // Same (null) follows the standing bid.
+  assert.equal(game.setPolicy('covariMarkup', null), true);
+  // The owner can send small jobs by hand too, but not larger ones the floor can make.
+  const owner = fresh();owner.setPolicy('covariBelow', 300);
+  assert.equal(owner.outsourceQuote(quoteFor(owner, 'housing').id), false);
+  assert.match(owner.drain().find(e => e.type === 'hint')?.message ?? '', /Covari limit/);
+  assert.equal(owner.outsourceQuote(quoteFor(owner, 'spacer').id), true);
+  assert.equal(owner.setPolicy('covariBelow', 333), false);
+  assert.ok(REVIEW_LEVELS.includes(0) && COVARI_BELOW.includes(0), 'Both rules can be switched off');
+});
+
+test('south halls open overnight next to owned floor, add bays, slots, staff room and rent', () => {
+  const game = fresh({length:0});
+  game.cash = 100000;
+  evening(game, () => assert.equal(game.buildHall('hall-a'), false));
+  assert.match(game.drain().find(e => e.type === 'hint').message, /east wing/);
+  evening(game, () => game.buildWing());
+  advance(game, DAY_SECONDS + .1);game.openDay();
+  assert.equal(HALLS.length * HALL_BAYS.length + 13, BAYS.length, 'Ten original bays, three starting machines and the halls');
+  assert.equal(game.hallBuyable('hall-c'), false, 'Hall C needs a neighbour first');
+  assert.equal(game.hallBuyable('hall-a'), true);
+  const rent = game.rentTomorrow(), limit = game.orderLimit, runners = game.staffMax('runner'), worth = game.netWorth();
+  assert.equal(game.buildHall('hall-a'), true, 'Halls can be ordered during the day');
+  assert.equal(game.netWorth(), worth - HALLS[0].cost + Math.round(HALLS[0].cost * WING.resale));
+  assert.ok(game.hallBuyable('hall-c') && game.hallBuyable('hall-b'), 'A hall ordered tonight counts as a neighbour');
+  assert.equal(game.buyMachine('bay-11', 'lathe'), false, 'Not open until morning');
+  assert.ok(game.rentTomorrow() > rent);
+  assert.equal(game.buildHall('hall-a'), false, 'Bought once');
+  advance(game, DAY_SECONDS + .1);
+  assert.equal(game.history.at(-1).rent, rentFor(2, true), 'Tonight’s rent is unchanged');
+  game.openDay();
+  assert.deepEqual(game.halls, ['hall-a']);
+  assert.equal(game.rentToday(), rentFor(3, true, 1));
+  assert.equal(game.rentToday(), Math.round(rentFor(3, true) * (1 + HALL_RENT) / 10) * 10);
+  assert.equal(game.orderLimit, limit + 1);
+  assert.equal(game.staffMax('runner'), runners + 1);
+  assert.equal(game.staffMax('programmer'), STAFF.programmer.maxWing, 'CAD seats do not grow');
+  assert.ok(quoteInterval(3, 3, true, 1) < quoteInterval(3, 3, true, 0), 'A hall draws more quotes');
+  assert.ok(game.drain().some(e => e.type === 'hallOpened'));
+  assert.equal(game.buyMachine('bay-11', 'lathe'), true);
+  assert.equal(game.buyMachine('bay-17', 'lathe'), false, 'Small hall bays take small machines');
+  assert.equal(game.buyMachine('bay-17', 'laser'), true);
+  assert.equal(game.buyMachine('bay-19', 'lathe'), false);
+  assert.match(game.drain().filter(e => e.type === 'hint').at(-1).message, /Hall B/);
+  assert.ok(hallAdjacent(HALLS[0], HALLS[2]) && hallAdjacent(HALLS[0], HALLS[1]) && !hallAdjacent(HALLS[0], HALLS[3]));
+});
+
+test('with a hall bought, idle machines move between bays and reinstall', () => {
+  const game = fresh({length:0});
+  game.cash = 100000;
+  assert.equal(game.moveMachine('lathe', 'bay-1'), false);
+  assert.match(game.drain().find(e => e.type === 'hint').message, /south hall/);
+  evening(game, () => game.buildWing());
+  advance(game, DAY_SECONDS + .1);game.openDay();
+  evening(game, () => game.buildHall('hall-b'));
+  assert.equal(game.canMove(), true, 'Buying a hall unlocks moving');
+  game.stations.lathe.wear = 30;
+  assert.equal(game.moveMachine('lathe', 'bay-3'), false, 'A lathe needs a large bay');
+  assert.equal(game.moveMachine('lathe', 'bay-5'), true);
+  assert.equal(game.stations.lathe, undefined);
+  assert.equal(game.stations['bay-5'].op, 'lathe');
+  assert.equal(game.stations['bay-5'].wear, 30, 'Wear travels with the machine');
+  assert.equal(game.installing['bay-5'], INSTALL_SECONDS, 'Moving reinstalls');
+  assert.equal(game.hasMachine('lathe'), false, 'Out of use while it reinstalls');
+  advance(game, INSTALL_SECONDS + .1);
+  assert.equal(game.hasMachine('lathe'), true);
+  assert.equal(game.moves, 1);
+  // A machine with a part inside cannot move.
+  const q = quoteFor(game, 'plate');game.acceptQuote(q.id);cad(game, q.id);game.interact(bin(game.order(q.id)));game.interact('mill');
+  assert.equal(game.moveMachine('mill', 'lathe'), false);
+  assert.match(game.drain().filter(e => e.type === 'hint').at(-1).message, /Empty/);
+  // After closing, a move installs at once.
+  advance(game, DAY_SECONDS);
+  assert.equal(game.mode, 'evening');
+  game.clearStation('mill');
+  assert.equal(game.moveMachine('mill', 'lathe'), true, 'The old lathe bay takes a mill');
+  assert.equal(game.installed('lathe'), true);
+});
+
+test('the starting machines can be sold or replaced, and net worth counts them', () => {
+  const game = fresh();
+  assert.equal(game.netWorth(), START_CASH + START_ASSETS);
+  game.cash = 10000;
+  const worth = game.netWorth();
+  assert.equal(game.sellMachine('lathe'), true);
+  assert.equal(game.netWorth(), worth, 'Selling turns a machine into its resale value, nothing more');
+  assert.equal(game.cash, 10000 + Math.round(MACHINES.lathe.cost * RESALE));
+  assert.deepEqual(game.gapsFor(['lathe', 'inspect', 'ship']), ['lathe']);
+  assert.equal(game.buyMachine('lathe', 'mill'), true, 'The old lathe bay is a large bay');
+  assert.equal(game.sellMachine('inspect'), true);
+  assert.equal(game.buyMachine('inspect', 'lathe'), false, 'The QC spot is a bench bay');
+  assert.equal(game.buyMachine('inspect', 'deburr'), true);
+  assert.equal(game.config.unlocks.includes('inspect'), false);
+});
+
+test('a saved run resumes exactly where it was, mid-day or in the evening', () => {
+  const play = (game, seconds) => {
+    for (let left = seconds; left > 1e-8 && ['playing', 'evening'].includes(game.mode); left -= .05) {
+      if (game.mode === 'evening') { game.openDay(); continue; }
+      for (const q of [...game.quotes]) if (!game.gapsFor(q.route).length && !game.boardFull()) game.acceptQuote(q.id); else game.declineQuote(q.id);
+      game.tick(.05);
+    }
+  };
+  const a = new ManagerGame();a.distance = (x, y) => x === y ? 0 : 6;a.start({length:0, seed:11});
+  evening(a, () => { a.cash += 5000; a.hire('programmer'); a.hire('runner'); a.hire('sales'); a.purchase('cam'); a.buyMachine('bay-1', 'deburr'); });
+  a.setPolicy('covariBelow', 300);
+  play(a, 80);
+  const order = a.orders.find(o => !o.contractId);if (order) { a.expedite(order.id); }
+  const text = a.serialize();
+  const b = new ManagerGame();b.distance = a.distance;
+  assert.equal(b.restore(text), true);
+  assert.equal(b.mode, 'paused', 'A mid-day save comes back paused');
+  b.mode = 'playing';
+  assert.ok(b.upgrades instanceof Set && b.upgrades.has('cam'));
+  assert.equal(b.nextArrival, Infinity);
+  a.drain();
+  play(a, 300);play(b, 300);
+  assert.equal(b.serialize(), a.serialize(), 'The restored run plays out identically');
+  // Evening saves come back to the evening.
+  const closed = new ManagerGame();closed.distance = a.distance;closed.start({length:3, seed:2});advance(closed, DAY_SECONDS + .1);
+  const restored = new ManagerGame();assert.equal(restored.restore(closed.serialize()), true);
+  assert.equal(restored.mode, 'evening');assert.equal(restored.day, 1);
+  // Anything else is refused and leaves the game alone.
+  for (const bad of ['', 'x', '{}', '[]', JSON.stringify({version:99, ruleset:'manager-v1', data:{}}), JSON.stringify({version:1, ruleset:'manager-v1', data:[]}),
+    JSON.stringify({version:1, ruleset:'manager-v1', data:{...JSON.parse(text).data, orders:'nope'}}), JSON.stringify({version:1, ruleset:'manager-v1', data:{...JSON.parse(text).data, mode:'results'}}),
+    JSON.stringify({version:1, ruleset:'manager-v1', data:{...JSON.parse(text).data, length:4}})]) {
+    const c = new ManagerGame();assert.equal(c.restore(bad), false, bad.slice(0, 40));assert.equal(c.mode, 'menu');
+  }
+});
+
+test('random play with halls, moves, delays, expedites and save-restore keeps every part in one place', () => {
+  for (const seed of [5, 6, 7]) {
+    let game = new ManagerGame();
+    game.start({length:0, seed});
+    let rng = seed * 104729;
+    const random = () => (rng = (rng * 48271) % 2147483647) / 2147483647;
+    const keys = ['office', 'material-round', 'material-plate', 'material-block', 'ship', 'buffer', 'receiving', ...BAYS.map(bay => bay.id)];
+    evening(game, () => {
+      game.cash += 60000;
+      game.buyMachine('bay-1', 'deburr'); game.buyMachine('bay-2', 'anodize'); game.buyMachine('bay-3', 'heat'); game.buyMachine('bay-4', 'laser');
+      game.buildWing();
+      for (const role of ['runner', 'runner', 'clerk', 'programmer', 'technician', 'sales']) game.hire(role);
+    });
+    game.setPolicy('gaps', 'covari');game.setPolicy('covariBelow', 400);game.setPolicy('review', 1600);
+    let ticks = 0;
+    while (game.mode !== 'results' && game.day < 5 && ticks++ < 30000) {
+      if (game.mode === 'evening') {
+        if (game.expanded && !game.hallOwned('hall-a')) { game.buildHall('hall-a'); game.buildHall('hall-c'); }
+        if (game.halls.length && !game.stations['bay-11']) { game.buyMachine('bay-11', 'lathe'); game.buyMachine('bay-12', 'mill'); game.buyMachine('bay-27', 'inspect'); game.hire('runner'); }
+        game.openDay(); continue;
+      }
+      for (const q of [...game.quotes]) { const r = random(); if (r < .3) game.acceptQuote(q.id); else if (r < .4) game.outsourceQuote(q.id); }
+      for (const o of [...game.orders]) { const r = random(); if (r < .002) game.delayOrder(o.contractId ?? o.id); else if (r < .004) game.expedite(o.contractId ?? o.id); }
+      game.setOfficePresence(random() < .2);
+      const spot = keys[Math.floor(random() * keys.length)];
+      game.setPlayerStation(random() < .5 ? spot : null);
+      if (random() < .3) game.interact(spot);
+      if (random() < .003) { const from = Object.keys(game.stations)[Math.floor(random() * Object.keys(game.stations).length)], to = BAYS[Math.floor(random() * BAYS.length)].id; game.moveMachine(from, to); }
+      if (random() < .001) { const restored = new ManagerGame(); assert.equal(restored.restore(game.serialize()), true); restored.mode = 'playing'; game = restored; }
+      game.tick(.05);
+      assertIntegrity(game);
+    }
+    assert.ok(game.day >= 3 || game.mode === 'results', `seed ${seed} plays several days`);
+    assert.ok(game.halls.length > 0 || game.mode === 'results', `seed ${seed} opens a hall`);
+  }
 });

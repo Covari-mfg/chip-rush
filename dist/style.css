@@ -547,3 +547,27 @@ body.manager-mode .action-controls{grid-template-columns:1fr 1fr 1fr}
 .store-hint{font-size:12px;color:#c9c6a6;background:#ffd16914;border:1px solid #ffd16933;border-radius:7px;padding:8px 10px;margin:10px 0 2px;line-height:1.4}
 body.manager-mode #shop-sidebar #orders{height:176px}
 @media(max-width:759px){body.manager-mode #shop-sidebar #orders{height:204px}.sales-strip{width:184px}}
+
+/* Open for Business, round three: expedite, delay, sales review, halls, zoom, saved runs. */
+.work-actions{display:flex;gap:4px;margin-top:5px}
+.work-actions button{font-family:inherit;font-size:10px;font-weight:800;line-height:12px;min-height:22px;padding:3px 6px;border-radius:4px;border:1px solid #c2d2c5;background:transparent;color:#2b5b56;white-space:nowrap;display:flex;align-items:center;gap:3px}
+.work-actions button:hover{border-color:#2b5b56}
+.work-actions button[aria-pressed="true"]{background:#e2a33a;border-color:#b47a1c;color:#2a1a00}
+.work-actions .delay{margin-left:auto}
+.work-actions .risk{font-weight:700;color:#a43c22}
+#orders .order-ticket.expedited{border-color:#e2a33a;box-shadow:0 0 0 2px #e2a33a55,0 5px 14px #00172142}
+#orders .quote-ticket.review{border-color:#e2a33a;border-style:solid}
+#orders .quote-ticket.review .due{color:#a3601a}
+.sales-strip{width:392px;display:grid;grid-template-columns:1fr 1fr;column-gap:12px;row-gap:3px;align-content:start}
+.sales-strip .sales-head{grid-column:1/-1}
+.sales-row>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:759px){.sales-strip{width:340px}}
+.station-label.move-target{border-style:dashed;border-color:#7af0c0;background:#14473fe8}
+.station-label.move-target .station-time{color:#a2ffc4}
+.station-label.moving{border-color:var(--gold);box-shadow:0 0 0 2px #e6bd4d66}
+.zoom-controls{position:absolute;left:16px;top:50%;transform:translateY(-50%);z-index:12;display:flex;flex-direction:column;gap:6px}
+.zoom-controls button{width:36px;height:36px;border-radius:9px;border:1px solid #6eb2a68a;background:#132f38e8;color:var(--paper);font-size:18px;font-weight:800;line-height:1;box-shadow:0 4px 10px #0004}
+.zoom-controls button:hover{border-color:var(--gold)}
+.briefing-replace{font-size:11px!important;color:#a9c0bd!important;margin:8px 0 0!important;text-align:center}
+#briefing-continue{margin-bottom:10px}
+.primary-button.secondary{background:transparent;color:var(--gold);border:1px solid #ffd16999;box-shadow:none}
