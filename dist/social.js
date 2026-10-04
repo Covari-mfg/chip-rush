@@ -1,6 +1,10 @@
 import { RULESET, SHIFTS } from './core.js';
 import { createGameAnalytics } from './analytics.js';
 
+// Open for Business boards. Kept beside the shift board, never mixed with it.
+const MANAGER_BOARDS = [['manager-v1-d3','3 days'],['manager-v1-d5','5 days'],['manager-v1-d7','7 days'],['manager-v1-endless','Endless']];
+const isManagerBoard = board => MANAGER_BOARDS.some(([id]) => id === board);
+
 export function parseChallenge(search) {
   const p=new URLSearchParams(search);
   if(p.get('challenge')!=='1')return null;
@@ -22,7 +26,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
-  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,skipped=false;
+  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,skipped=false,board='';
   const BOARD_KEY='chip-rush-board';
   function readBoardName(){
     try{
@@ -40,25 +44,36 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     let value;try{value=await response.json();}catch{throw new Error('The shared board is unavailable here. You can still play and share a challenge.');}
     if(!response.ok)throw new Error(value.error||'The board is unavailable. Try again.');return value;
   };
-  const summary=value=>`${value.stars} ★ · ${value.shipped} shipped · ${value.score.toLocaleString()} points`;
+  const money=value=>`$${value.toLocaleString()}`;
+  const summary=value=>value.board?`${value.days} day${value.days===1?'':'s'} · ${value.shipped} shipped · ${money(value.score)} net worth`:`${value.stars} ★ · ${value.shipped} shipped · ${value.score.toLocaleString()} points`;
   if(challenge){$('friend-challenge').hidden=false;$('friend-target').textContent=summary(challenge);$('accept-challenge').onclick=()=>onChallenge(challenge.role);}
   function renderScores(id,entries){
     const list=$(id);list.replaceChildren();
     for(const [index,row] of entries.entries()){
       const li=document.createElement('li'),rank=document.createElement('span'),identity=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small'),score=document.createElement('b');
       rank.className='score-rank';rank.textContent=String(index+1).padStart(2,'0');
-      name.textContent=row.name;detail.textContent=`${row.shipped} shipped · ${row.stars} ★`;identity.append(name,detail);
-      score.className='score-points';score.textContent=row.score.toLocaleString();li.append(rank,identity,score);list.append(li);
+      const manager=row.days!==undefined;
+      name.textContent=row.name;detail.textContent=manager?`${row.days} day${row.days===1?'':'s'} · ${row.shipped} shipped`:`${row.shipped} shipped · ${row.stars} ★`;identity.append(name,detail);
+      score.className='score-points';score.textContent=manager?money(row.score):row.score.toLocaleString();li.append(rank,identity,score);list.append(li);
     }
   }
+  function renderTabs(){
+    const tabs=$('board-tabs');if(!tabs)return;tabs.replaceChildren();
+    for(const [id,label] of [['','Shifts'],...MANAGER_BOARDS]){
+      const b=document.createElement('button');b.type='button';b.role='tab';b.ariaSelected=String(id===board);b.textContent=label;
+      b.onclick=()=>{if(board===id)return;board=id;renderTabs();loadBoard();};tabs.append(b);
+    }
+    const manager=isManagerBoard(board);
+    $('board-note').textContent=manager?'Open for Business. Each run length has its own board.':'One leaderboard for every shift. More complex work. Faster shipping. Higher scores.';
+    $('board-scoring').textContent=manager?(board.endsWith('endless')?'Most days survived, then net worth: cash plus equipment at resale.':'Net worth at closing: cash plus equipment at resale.'):'Part complexity + early shipping + streaks. CAD, customer calls and rush deliveries earn extra. Missed accepted rushes deduct points.';
+  }
   async function loadBoard(showFull=true){
-    const token=++boardGeneration;
+    const token=++boardGeneration,shown=showFull?board:'';
     if(showFull){$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';}
-    try{const data=await api('leaderboard');if(token!==boardGeneration)return;
-      $('board-status').textContent=data.entries.length?'Top 30 · all shifts · points':'No scores yet. Set the first one.';
-      $('home-board-status').textContent=data.entries.length?'All shifts. One leaderboard.':'No scores yet. Your shift could be first.';
-      renderScores('board-list',data.entries);renderScores('home-board-list',data.entries.slice(0,10));
-    }catch(error){if(token!==boardGeneration)return;$('board-status').textContent=error.message;$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
+    try{const data=await api('leaderboard'+(shown?`?board=${encodeURIComponent(shown)}`:''));if(token!==boardGeneration)return;
+      if(showFull||!board){$('board-status').textContent=data.entries.length?(shown?`Top 30 · ${MANAGER_BOARDS.find(([id])=>id===shown)[1]}`:'Top 30 · all shifts · points'):'No scores yet. Set the first one.';renderScores('board-list',data.entries);}
+      if(!shown){$('home-board-status').textContent=data.entries.length?'All shifts. One leaderboard.':'No scores yet. Your shift could be first.';renderScores('home-board-list',data.entries.slice(0,10));}
+    }catch(error){if(token!==boardGeneration)return;if(showFull)$('board-status').textContent=error.message;if(!shown)$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
   }
   function syncPostControls(){
     if(posting&&posting.token===generation)return;
@@ -101,8 +116,9 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     $('leaderboard-dialog').close();
   }
   function openBoard(withResult=false){
+    board=withResult&&result?.board?result.board:withResult?'':board;renderTabs();
     $('post-form').hidden=!withResult||!result;
-    $('post-result-summary').textContent=result?`Your shift · ${summary(result)}`:'';
+    $('post-result-summary').textContent=result?`Your ${result.board?'run':'shift'} · ${summary(result)}`:'';
     syncPostControls();
     $('leaderboard-dialog').showModal();loadBoard();
   }
@@ -125,13 +141,14 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role){const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset:RULESET}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role,ruleset=RULESET){const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
     finish(value){
       if(generation>0&&finishedGeneration===generation)return;
       finishedGeneration=generation;
-      result=Object.freeze({...value,stars:SHIFTS[value.role].stars.filter(n=>value.shipped>=n).length});
+      // Manager runs carry their own stars (days survived); shift stars come from the level.
+      result=Object.freeze({...value,stars:value.board?value.stars:SHIFTS[value.role].stars.filter(n=>value.shipped>=n).length});
       analytics.track('chip_rush.shift_completed',{role:value.role,score:value.score,shipped:value.shipped,sourced:value.sourced});
-      $('social-results').hidden=false;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;
+      $('social-results').hidden=false;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;$('challenge-friend').hidden=!!value.board;
       $('friend-result').hidden=!challenge;
       if(challenge){$('friend-result').textContent=value.score>challenge.score?'Challenge won. Your friend has a new score to chase.':value.score===challenge.score?'A tie! One more shift to take the lead?':`${(challenge.score-value.score).toLocaleString()} points to catch your friend. One more shift?`;}
       maybePost();

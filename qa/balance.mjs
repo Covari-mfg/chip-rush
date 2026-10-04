@@ -23,14 +23,14 @@ const section = (from, to) => {
   return source.slice(start, end);
 };
 const layoutCode = section('const STATION_LAYOUT=', '\nlet renderer');
-const boundsCode = section('const bounds=', '\nfunction save');
+const boundsCode = section('const BASE_BOUNDS=', '\nfunction save');
 const safeCode = section('function safeSpot(', '\nfunction moveBy(');
 const moveCode = section('function moveBy(', '\n// A* routing');
 const pathCode = section('function routeSegmentClear(', '\nfunction goToStation(');
 const walkingSpeed = Number(source.match(/let speed=([\d.]+)/)?.[1]);
 assert.equal(walkingSpeed, 4.4, 'Revisit balance if production walking speed changes');
 const context = vm.createContext({ Math });
-vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,MAPS};`, context);
+vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,placed,accessOf,MAPS};`, context);
 const nav = context.nav;
 const accesses = Object.fromEntries(nav.layout.map(s => [s.id, s.access ?? { x:s.x, z:s.z+s.d/2+.63 }]));
 assert.ok(accesses.office, 'Office must have a production access point');
@@ -46,6 +46,9 @@ export const navigation = {
   activate:nav.activateMap,
   has:nav.mapHas,
   maps:nav.MAPS,
+  // Where each station really stands on a map, after that map's placement overrides.
+  layoutFor(mapId) { return nav.layout.filter(def => nav.mapHas(def, mapId)).map(def => nav.placed(def, mapId)); },
+  accessesFor(mapId) { return Object.fromEntries(this.layoutFor(mapId).map(def => [def.id, nav.accessOf(def)])); },
   route(from,to) {nav.player.x=from.x;nav.player.z=from.z;return nav.findPath(to.x,to.z);},
   clear:nav.routeSegmentClear,
   safe:nav.safeSpot,
