@@ -169,7 +169,7 @@ const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 const section=(from,to)=>main.slice(main.indexOf(from),main.indexOf(to,main.indexOf(from)));
 function movementProbe({position={...navigation.spawn},route=[],dash=.2,direction={x:1,z:0}}={}) {
   const ctx=vm.createContext({
-    Math,HALLS,THREE:{Vector3,MathUtils},keys:new Set(),touchVector:{x:0,y:0},
+    Math,HALLS,THREE:{Vector3,MathUtils},keys:new Set(),
     game:{mode:'playing',call:null,office:{orderId:null},setOfficePresence(){},interact(){}},
     character:{userData:{},position:new Vector3(),rotation:{y:0},scale:{y:1}},
     playerRing:{position:new Vector3()},targetRing:{visible:true},

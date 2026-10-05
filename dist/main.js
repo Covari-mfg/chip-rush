@@ -6,15 +6,23 @@ import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
 import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, REVIEW_LEVELS, COVARI_BELOW, INSTALL_SECONDS, rentFor, opInfo, boardId } from './manager.js';
+import { deviceInterface, isPhoneDevice } from './device.js';
+import { createTapNavigation } from './tap-navigation.js';
 
+const interfaceMode=deviceInterface(navigator);
+document.documentElement.dataset.interface=interfaceMode;
+const phoneDevice=isPhoneDevice(navigator);
+document.documentElement.dataset.phone=String(phoneDevice);
 const $=id=>document.getElementById(id);
+if(interfaceMode==='mobile'){$('scene').setAttribute('aria-label','3D workshop. Tap a station to walk over and use it. Tap Dash while walking to move faster.');$('briefing-touch').hidden=false;$('touch-help').hidden=false;$('mobile-tap-hint').hidden=false;$('mobile-dash').hidden=false;document.querySelector('.help-keys').hidden=true;}
+const mobileTaps=createTapNavigation();
 // Shifts and Open for Business share one renderer; game points at the active rules.
 const classicGame=new ShopGame(),managerGame=new ManagerGame(),audio=new ShopAudio();let game=classicGame;
 let challengeRun=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const keys=new Set();let touchVector={x:0,y:0},selectedShift=0,unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);
+const keys=new Set();let selectedShift=0,unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);
 const SAVE_KEY='chip-rush-roles-v8';
 function readRoleSave(key){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'&&!Array.isArray(value)?value:null;}catch{return null;}}
 function readUnlocked(value){return Math.max(0,Math.min(SHIFTS.length-1,Math.trunc(Number(value))||0));}
@@ -103,7 +111,6 @@ let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=f
 let renderedSelection=null, nextPhoneRing=0;
 const stations={},bays={},staffViews=new Map(),routeCache=new Map(),parts=new Map(),particles=[],hallShells=new Map(),hallSigns=new Map();const player={...SPAWN,angle:Math.PI};
 let viewport={w:innerWidth,h:innerHeight};
-// Align the floor with the screen and look down into the working aisles.
 const cameraOffset=new THREE.Vector3(0,23,17);
 const right=new THREE.Vector3(cameraOffset.z,0,-cameraOffset.x).normalize();
 const down=new THREE.Vector3(cameraOffset.x,0,cameraOffset.z).normalize();
@@ -210,9 +217,38 @@ function onPhone(){return ['answering','offer'].includes(game.call?.state);}
 function useStation(id){game.setOfficePresence(atOffice());game.interact(id==='office'&&game.call?.state==='ringing'?'phone':id);}
 function atOffice(){const s=stations.office;return !!s&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<.78;}
 function goToStation(id){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=stations[id];if(!s||!s.model.visible||id==='receiving'&&!game.config.sourcing)return;path=findPath(s.access.x,s.access.z);pathStation=id;targetRing.position.set(s.access.x,.08,s.access.z);targetRing.visible=true;if(!path.length&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.3){useStation(id);pathStation=null;processEvents();}}
+function tapStation(id,event){
+  if(game.mode!=='playing')return;
+  if(onPhone())return toast('Finish the customer call first.');
+  if(interfaceMode==='mobile'){
+    const action=mobileTaps.consume({target:id,x:event?.clientX,y:event?.clientY,time:performance.now()});
+    if(action==='ignore')return;
+  }
+  goToStation(id);
+  if(interfaceMode==='mobile')updateMobileDash();
+}
+function tapFloor(point,event){
+  if(game.mode!=='playing')return;
+  if(onPhone())return toast('Finish the customer call first.');
+  if(interfaceMode==='mobile'){
+    const action=mobileTaps.consume({x:event.clientX,y:event.clientY,time:performance.now()});
+    if(action==='ignore')return;
+  }
+  path=findPath(point.x,point.z);pathStation=null;targetRing.position.set(point.x,.08,point.z);targetRing.visible=true;
+  if(interfaceMode==='mobile')updateMobileDash();
+}
 function nearestStation(){let chosen=null,dist=1.32;for(const s of Object.values(stations)){if(!s.model.visible||s.def.id==='receiving'&&!game.config.sourcing)continue;const d=Math.hypot(player.x-s.access.x,player.z-s.access.z);if(d<dist&&d<(s.def.id==='office'?.78:1.32)){chosen=s;dist=d;}}return chosen;}
 function interact(){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=nearestStation();if(s){path=[];pathStation=null;targetRing.visible=false;player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);useStation(s.def.id);processEvents();syncParts();updateUI(true);}else toast('Move closer to a station, or click its label.');}
 function dash(){if(game.mode!=='playing'||onPhone()||dashCooldown>0)return;dashCooldown=1.3;dashTime=.2;dashDirection.set(Math.sin(player.angle),0,Math.cos(player.angle));audio.event('dash');}
+// The phone's button boosts its current route, without changing destination.
+function mobileDash(){if(!path.length)return;dash();updateMobileDash();}
+function updateMobileDash(){
+  const button=$('mobile-dash'),calling=onPhone();
+  button.disabled=game.mode!=='playing'||calling||dashCooldown>0||!path.length;
+  button.querySelector('span').textContent=calling?'On call':'Dash';
+  button.querySelector('i').style.width=`${Math.max(0,1-dashCooldown/1.3)*100}%`;
+  button.setAttribute('aria-label',calling?'Dash unavailable during a customer call':dashCooldown>0?'Dash recharging':!path.length?'Tap a destination, then Dash':'Dash');
+}
 function screenPoint(v){const p=v.clone().project(camera);return {x:(p.x*.5+.5)*viewport.w,y:(-p.y*.5+.5)*viewport.h};}
 function floatText(text,station,small=false){const d=stations[station]?.def;if(!d)return;const p=screenPoint(new THREE.Vector3(d.x,d.height+.3,d.z));const el=document.createElement('div');el.className=`float-text${small?' small':''}`;el.textContent=text;el.style.left=p.x+'px';el.style.top=p.y+'px';$('floating-text').appendChild(el);el.addEventListener('animationend',()=>el.remove(),{once:true});setTimeout(()=>el.remove(),1800);}
 function createReceivingDock(){
@@ -309,7 +345,7 @@ function boot(){
   new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff});stations.receiving.model.userData.brandMark.material=material;});
   for(const def of STATION_LAYOUT){
     const model=def.id==='office'?world.userData.office:def.id==='receiving'?createReceivingDock():def.stock?createMaterialBin(def.stock):def.bay?new THREE.Group():createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
-    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);const machine=def.bay||OPS[def.id]&&def.id!=='ship';label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span class="station-name">${def.name}</span><span class="station-time"></span><i class="station-progress"></i>${machine?'<i class="station-wear" hidden></i>':''}${def.bay||def.baseBay?'<span class="label-more" role="button" tabindex="-1" aria-label="Machine options" hidden>⋯</span>':''}`;label.onclick=e=>{if(e.target.closest('.label-more'))return openPopover('machine',def.id);stationClick(def.id);};$('station-labels').appendChild(label);
+    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);const machine=def.bay||OPS[def.id]&&def.id!=='ship';label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span class="station-name">${def.name}</span><span class="station-time"></span><i class="station-progress"></i>${machine?'<i class="station-wear" hidden></i>':''}${def.bay||def.baseBay?'<span class="label-more" role="button" tabindex="-1" aria-label="Machine options" hidden>⋯</span>':''}`;label.onclick=e=>{if(e.target.closest('.label-more'))return openPopover('machine',def.id);stationClick(def.id,e);};$('station-labels').appendChild(label);
     stations[def.id]={def,base:def,model,label,access:accessOf(def),op:def.bay?null:def.id,height:def.height};if(def.bay||def.baseBay){bays[def.id]=createBay(def);scene.add(bays[def.id]);}
     if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
   }
@@ -347,10 +383,12 @@ function measureShopFrame(){
 }
 function measurePlayFrame(){
   const footer=$('game-footer').getBoundingClientRect(),orders=$('orders').getBoundingClientRect();
-  const left=10;let rightEdge=viewport.w-10;
-  // Orders reserve the top edge; controls reserve the bottom. Fit the shop
-  // across the full width, including after call controls change height.
-  const top=orders.bottom+12;let bottom=footer.top-12;
+  const landscapePhone=phoneDevice&&viewport.w>viewport.h;
+  const left=landscapePhone?orders.right+12:10;let rightEdge=viewport.w-10;
+  // Landscape phone orders sit beside the floor. Other layouts reserve
+  // their order strip above it; desktop controls reserve the bottom edge.
+  const top=landscapePhone?Math.max($('live-hud').getBoundingClientRect().bottom,$('pause-button').getBoundingClientRect().bottom)+8:orders.bottom+(interfaceMode==='mobile'?8:12);
+  let bottom=interfaceMode==='mobile'?viewport.h-26:footer.top-12;
   // After hours the ledger docks beside the floor (below it on phones); fit the floor into what it leaves.
   const ledger=$('evening-panel');if(!ledger.hidden&&$('overlay').classList.contains('evening')){const r=ledger.getBoundingClientRect();if(r.left>viewport.w/2)rightEdge=r.left-12;else bottom=Math.min(bottom,r.top-12);}
   const scale=Math.max((shopFrame.right-shopFrame.left)/Math.max(120,rightEdge-left),(shopFrame.top-shopFrame.bottom)/Math.max(100,bottom-top));
@@ -359,10 +397,24 @@ function measurePlayFrame(){
     .addScaledVector(cameraUp,(shopFrame.top+shopFrame.bottom)/2+(cy-viewport.h/2)*scale);
   return {halfHeight:viewport.h*scale/2,look};
 }
-function resize(){viewport={w:innerWidth,h:innerHeight};layoutDirty=true;renderer.setSize(viewport.w,viewport.h);if(!menuMode)revealSelectedTicket();updateCamera(0,true);}
+// Browsers on iPhone cannot reliably lock orientation. Require landscape
+// in the game itself and freeze an active shift as soon as it rotates back.
+function phonePortrait(){return phoneDevice&&innerHeight>innerWidth;}
+function syncPhoneOrientation(){
+  const blocked=phonePortrait();
+  $('phone-rotate-screen').hidden=!blocked;
+  $('game').inert=blocked;
+  if(blocked&&game.mode==='playing')pause();
+  $('phone-rotate-status').textContent=game.mode==='paused'?'Your shift is paused. Turn your phone, then resume.':'';
+}
+function resize(){
+  viewport={w:innerWidth,h:innerHeight};
+  syncPhoneOrientation();
+  shopFrame=measureShopFrame();layoutDirty=true;renderer.setSize(viewport.w,viewport.h);if(!menuMode)revealSelectedTicket();updateCamera(0,true);
+}
 function updateCamera(dt,instant=false){
   const desired=menuMode?0:1;cameraBlend=instant?desired:THREE.MathUtils.damp(cameraBlend,desired,4,dt);
-  const aspect=viewport.w/viewport.h,mobile=aspect<.85;
+  const aspect=viewport.w/viewport.h,mobile=interfaceMode==='mobile'&&aspect<.85;
   let halfHeight=mobile?12.8/Math.max(aspect,.48):9.1;
   if(!mobile&&aspect<1.45)halfHeight=11.8/aspect;
   // The title camera moves the little factory beside the clock-in card.
@@ -443,8 +495,8 @@ function syncParts(){
 }
 function updateMovement(dt){
   viewFollow=false;if(game.mode!=='playing'||onPhone())return;
-  let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touchVector.x;
-  let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+touchVector.y;
+  let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
+  let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0);
   const move=new THREE.Vector3();let speed=4.4,pathGoal=null;
   if(Math.hypot(sx,sy)>.1){path=[];pathStation=null;targetRing.visible=false;move.copy(right).multiplyScalar(sx).addScaledVector(down,sy);if(move.length()>1)move.normalize();}
   else if(path.length){
@@ -471,7 +523,7 @@ function animateOfficeSeat(dt){
   if(dt<=0)return;
   const u=character.userData,office=world.userData.office;
   if(!office?.userData.seatPoint)return;
-  const directionalInput=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight'].some(key=>keys.has(key))||Math.hypot(touchVector.x,touchVector.y)>.1;
+  const directionalInput=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight'].some(key=>keys.has(key));
   const leaving=!onPhone()&&(path.length>0||directionalInput);
   if(menuMode||!atOffice()||leaving)u.officeSeated=false;
   else if(game.manager&&game.staff.some(m=>m.role==='programmer'&&m.seat===0))u.officeSeated=false;
@@ -561,7 +613,10 @@ function updateUI(force=false){
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);if(game.manager)updateManagerTickets(force);else updateTickets(force);
   updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
-  for(const id of ['action-interact','touch-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
+  for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
+  const next=nextTarget(),target=nearby?.def.id;
+  $('mobile-tap-hint').textContent=onPhone()?'Finish the customer call':next?`Next: ${stations[next]?.def.name||'station'}`:'Tap a station to walk and use it';
+  updateMobileDash();
 
 }
 function updateSourceUI(){
@@ -615,7 +670,7 @@ function positionLabels(){
   for(const name of ['for-sale','installing','down','servicing','move-target','moving'])s.label.classList.remove(name);
   const more=s.label.querySelector('.label-more');if(more)more.hidden=true;
   const locked=id==='receiving'?!game.config.sourcing:id==='office'?!game.config.programming:id.startsWith('material-')?!game.config.stock.includes(id.slice(9)):!!opInfo(id)&&id!=='ship'&&!game.config.unlocks.includes(id);
-  s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('locked',!menuMode&&locked);
+  s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('nearby',!menuMode&&nearby?.def.id===id);s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
   s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:busy?`${100*(1-st.remaining/(st.duration||opInfo(id).duration))}%`:'0';s.label.style.opacity=menuMode?'.72':'';
 }
@@ -625,7 +680,7 @@ function positionLabels(){
     hallSign.hidden=!managing||!['playing','evening'].includes(game.mode)||!(pending||game.hallBuyable(h.id));
     if(!hallSign.hidden){const p=screenPoint(new THREE.Vector3(h.cx,1,h.z0+1.6));hallSign.style.left=p.x+'px';hallSign.style.top=p.y+'px';hallSign.querySelector('.station-time').textContent=pending?'TONIGHT':money(h.cost);}}
   positionStaffTags();positionPopover();}
-function updateMusic(){audio.update(!document.hidden&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
+function updateMusic(){audio.update(!document.hidden&&!phonePortrait()&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
 function unlockHomeMusic(){if(game.mode!=='menu'||document.hidden)return;audio.init();updateMusic();}
 // Frame budget: high-refresh displays would otherwise redraw the whole shop,
 // shadow map included, 120 times a second. Play needs 60; menus and evenings
@@ -649,17 +704,17 @@ function frame(now){
 const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5'};
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${credit?`<small class="shift-credit">${credit}</small>`:''}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
-function clearMovement(){keys.clear();touchVector={x:0,y:0};path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;$('joystick-knob').style.transform='';}
-function startShift(index){audio.init();game=classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;processEvents();updateUI(true);$('scene').focus();}
+function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
+function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
-function startManager(){audio.init();
+function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
   game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;game.start({length:managerRecord.length});closePopover();cancelMove();resetBays();salesStrip=null;social.start(MANAGER_ROLE,boardId(managerRecord.length));
   enterFloor();$('shift-number').textContent=managerHeading();$('shift-name').textContent=MANAGER_MODE.name;processEvents();updateUI(true);saveRun();$('scene').focus();}
 // A saved run comes back exactly where it was left: mid-day runs return
 // paused, evenings return to the ledger. The board run id travels with it.
 function resumeManager(){
-  const saved=readRun();if(!saved)return;audio.init();
+  const saved=readRun();if(!saved||phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
   game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;
   if(!game.restore(saved.game)){clearRun();game=classicGame;showManagerBriefing();toast('That saved run could not be loaded. Start a new one.',3.5);return;}
@@ -685,9 +740,9 @@ function savedRunSummary(){
   try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
-function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('touch-controls').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
 function pause(){if(game.mode!=='playing')return;closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
-function resume(){if(game.mode!=='paused')return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
+function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
   helpReturn={mode:game.mode,panel:['welcome','pause-panel','results-panel','briefing-panel'].find(id=>!$(id).hidden),centered:$('overlay').classList.contains('centered')};
@@ -697,9 +752,9 @@ function showHelp(){
 function closeHelp(){
   if(!helpReturn)return;const previous=helpReturn;helpReturn=null;game.mode=previous.mode;hidePanels();
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
-  document.body.classList.toggle('paused',game.mode==='paused');last=performance.now();
+  document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(){if(game.manager)saveRun();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
+function showMenu(){if(game.manager)saveRun();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
 function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
@@ -725,7 +780,7 @@ function buildModeCard(){
 }
 function showResults(){
   if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(SHIFTS.length-1,game.shiftIndex+1));
-  const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
+  const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   const stars=game.stars(),shiftMastery=stars===3;
   $('results-panel').classList.toggle('owner-mastery',shiftMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
@@ -1191,7 +1246,7 @@ function showManagerResults(){
   resultShown=true;audio.update(false);clearMovement();closeStore();closePopover();$('overlay').classList.remove('evening');
   const length=game.length,reason=game.finishReason,stars=game.stars(),key=String(length),previous=managerRecord.bests[key]||0;
   managerRecord.bests[key]=Math.max(previous,game.score);if(!length)managerRecord.days=Math.max(managerRecord.days,game.daysCompleted);save();clearRun();
-  hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('touch-controls').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
+  hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   $('results-panel').classList.toggle('owner-mastery',stars===3&&reason!=='bankrupt');
   $('result-kicker').textContent=`OPEN FOR BUSINESS · ${lengthName(length).toUpperCase()} · ${reason==='bankrupt'?'BANKRUPT':reason==='retired'?'RETIRED':'BOOKS CLOSED'}`;
   $('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
@@ -1209,6 +1264,7 @@ function showManagerResults(){
   social.finish({role:MANAGER_ROLE,board:boardId(length),stars,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,days:game.daysCompleted,elapsed:game.totalElapsed,finishReason:reason});
 }
 function bindControls(){
+  syncPhoneOrientation();
   addEventListener('pointerdown',unlockHomeMusic);
   addEventListener('keydown',unlockHomeMusic);
   addEventListener('resize',resize);$('scene').tabIndex=-1;
@@ -1242,9 +1298,9 @@ function bindControls(){
     if(e.code==='ShiftLeft'||e.code==='ShiftRight')dash();
   });
   addEventListener('pagehide',saveRun);
-  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();touchVector={x:0,y:0};if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
+  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){goToStation(chosen.def.id);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){path=findPath(p.x,p.z);pathStation=null;targetRing.position.set(p.x,.08,p.z);targetRing.visible=true;}};
+  const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){if(interfaceMode==='mobile')e.preventDefault();tapStation(chosen.def.id,e);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){if(interfaceMode==='mobile')e.preventDefault();tapFloor(p,e);}};
   // Shifts act on press, as they always have. In Open for Business a press
   // becomes a click only if it does not drag: dragging pans, two fingers pinch.
   const pointers=new Map();let drag=null,pinch=null;
@@ -1269,13 +1325,11 @@ function bindControls(){
   canvas.addEventListener('wheel',e=>{if(!managingView())return;e.preventDefault();zoomView(Math.exp(-e.deltaY*.0015),e.clientX,e.clientY);},{passive:false});
   canvas.addEventListener('contextmenu',e=>{if(managingView())e.preventDefault();});
   $('zoom-in').onclick=()=>zoomView(1.4);$('zoom-out').onclick=()=>zoomView(1/1.4);$('zoom-fit').onclick=resetView;
-  const joystick=$('joystick');let joystickPointer=null;
-  const joyMove=e=>{if(e.pointerId!==joystickPointer)return;const rect=joystick.getBoundingClientRect(),dx=e.clientX-rect.left-rect.width/2,dy=e.clientY-rect.top-rect.height/2;const len=Math.hypot(dx,dy),f=len>30?30/len:1;touchVector={x:dx*f/30,y:dy*f/30};$('joystick-knob').style.transform=`translate(${dx*f}px,${dy*f}px)`;};
-  joystick.onpointerdown=e=>{e.preventDefault();joystickPointer=e.pointerId;joystick.setPointerCapture(e.pointerId);joyMove(e);};joystick.onpointermove=joyMove;joystick.onpointerup=joystick.onpointercancel=()=>{joystickPointer=null;touchVector={x:0,y:0};$('joystick-knob').style.transform='';};for(const [id,action] of [['touch-interact',interact],['touch-dash',dash],['action-interact',interact],['action-dash',dash]]){
+  for(const [id,action] of [['mobile-dash',mobileDash],['action-interact',interact],['action-dash',dash]]){
     const button=$(id);
-    button.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();action();};
+    button.onpointerdown=e=>{if(e.button!==0||button.disabled)return;e.preventDefault();action();};
     // Pointer actions fire immediately; keyboard/assistive activation uses click.
-    button.onclick=e=>{if(e.detail===0)action();};
+    button.onclick=e=>{if(e.detail===0&&!button.disabled)action();};
   }
 }
 function registerTools(){
