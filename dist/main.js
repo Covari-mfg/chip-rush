@@ -998,7 +998,7 @@ const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Accept'},co
 const amountOrOff=n=>n?money(n):'Off';
 function salesStripHTML(){
   const stepper=(key,label)=>`<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}"></output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
-  return `<div class="sales-head"><small>SALES</small><strong class="sales-who"></strong></div>
+  return `<button type="button" class="sales-head" data-sales-toggle aria-expanded="false" aria-controls="sales-strip"><small>SALES RULES</small><strong class="sales-who"></strong><i class="sales-chevron" aria-hidden="true">▸</i></button>
   <div class="sales-row"><span>Standing bid</span>${stepper('markup','standing bid')}</div>
   <div class="sales-row" title="Quotes priced at or above this wait for you, even with a sales manager"><span>Review over</span>${stepper('review','review line')}</div>
   <div class="sales-row"><span>Missing process</span><button data-policy="gaps" data-show="gaps"></button></div>
@@ -1007,11 +1007,15 @@ function salesStripHTML(){
   <div class="sales-row" title="Jobs listed below this go to Covari even when your floor could make them"><span>Covari under</span>${stepper('covariBelow','Covari limit')}</div>
   <div class="sales-row"><span>Contracts</span><button data-policy="contracts" data-show="contracts"></button></div>`;
 }
-let salesStrip=null;
+// Collapsed by default so quotes, not settings, sit beside the jobs. One line
+// still shows who answers quotes and the standing bid.
+let salesStrip=null,salesOpen=false;
+function toggleSalesStrip(){salesOpen=!salesOpen;updateSalesStrip();}
 function updateSalesStrip(){
-  if(!salesStrip){salesStrip=document.createElement('article');salesStrip.id='sales-strip';salesStrip.className='sales-strip';salesStrip.setAttribute('aria-label','Sales rules');salesStrip.innerHTML=salesStripHTML();}
+  if(!salesStrip){salesStrip=document.createElement('article');salesStrip.id='sales-strip';salesStrip.className='sales-strip collapsed';salesStrip.setAttribute('aria-label','Sales rules');salesStrip.innerHTML=salesStripHTML();}
   const seller=game.staff.find(m=>m.role==='sales'),p=game.policy;
-  salesStrip.querySelector('.sales-who').textContent=seller?`${seller.name} answers quotes`:'You answer quotes';
+  salesStrip.querySelector('.sales-who').textContent=`${seller?`${seller.name} answers`:'You answer'} · bid ${pct(p.markup)}`;
+  salesStrip.classList.toggle('collapsed',!salesOpen);salesStrip.querySelector('[data-sales-toggle]').setAttribute('aria-expanded',String(salesOpen));
   salesStrip.classList.toggle('automatic',!!seller);
   salesStrip.querySelector('[data-show="markup"]').textContent=pct(p.markup);
   salesStrip.querySelector('[data-show="covariMarkup"]').textContent=p.covariMarkup===null?'Same':pct(p.covariMarkup);
@@ -1275,7 +1279,7 @@ function bindControls(){
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');
-  $('orders').addEventListener('click',e=>{if(!game.manager)return;const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
+  $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});
   $('action-manage').onclick=toggleStore;$('touch-shop').onclick=toggleStore;$('store-close').onclick=closeStore;

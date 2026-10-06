@@ -492,3 +492,15 @@ body.manager-mode #shop-sidebar #orders{height:176px}
   html[data-interface="mobile"][data-phone="true"] .quote-actions{flex-wrap:wrap}
   html[data-interface="mobile"][data-phone="true"] .zoom-controls{left:auto;right:calc(12px + var(--mobile-safe-right))}
 }
+
+/* The sales rules fold to one line; tap the heading to change them. */
+.sales-strip .sales-head{all:unset;box-sizing:border-box;display:flex;align-items:baseline;gap:6px;width:100%;cursor:pointer;min-height:22px}
+.sales-strip .sales-head strong{flex:1;text-align:right}
+.sales-strip .sales-head:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:3px}
+.sales-chevron{font-style:normal;color:var(--teal);transition:transform .15s}
+.sales-strip:not(.collapsed) .sales-chevron{transform:rotate(90deg)}
+.sales-strip.collapsed .sales-row{display:none}
+.sales-strip.collapsed{width:auto;min-width:184px;display:flex;align-self:flex-start}
+html[data-interface="mobile"][data-phone="true"] .sales-strip.collapsed .sales-head{min-height:36px;align-items:center}
+html[data-interface="mobile"][data-phone="true"] .sales-strip .sales-head{flex-wrap:wrap;row-gap:2px}
+html[data-interface="mobile"][data-phone="true"] .sales-strip .sales-head strong{white-space:normal;text-align:left;flex-basis:100%;order:3}
