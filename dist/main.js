@@ -323,8 +323,8 @@ function fitLights(wing){
 function createBay(def){
   const g=new THREE.Group(),tape=new THREE.MeshStandardMaterial({color:0xeac16b,roughness:.7}),dark=new THREE.MeshStandardMaterial({color:0x183441,roughness:.8});
   const w=def.w,d=def.d,t=.07;
-  for(const [x,z,sx,sz] of [[0,-d/2,w,t],[0,d/2,w,t],[-w/2,0,t,d],[w/2,0,t,d]]){const m=new THREE.Mesh(new THREE.BoxGeometry(sx,.012,sz),tape);m.position.set(x,.03,z);m.receiveShadow=true;g.add(m);}
-  for(let i=0;i<4;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.05,.013,w*.18),dark);m.position.set(-w*.3+i*w*.2,.032,0);m.rotation.y=.7;g.add(m);}
+  for(const [x,z,sx,sz] of [[0,-d/2,w,t],[0,d/2,w,t],[-w/2,0,t,d],[w/2,0,t,d]]){const m=new THREE.Mesh(new THREE.BoxGeometry(sx,.012,sz),tape);m.position.set(x,.03,z);m.castShadow=false;m.receiveShadow=true;g.add(m);}
+  for(let i=0;i<4;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.05,.013,w*.18),dark);m.position.set(-w*.3+i*w*.2,.032,0);m.rotation.y=.7;m.castShadow=false;m.receiveShadow=true;g.add(m);}
   g.visible=false;return g;
 }
 function boot(){
