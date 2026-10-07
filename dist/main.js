@@ -687,18 +687,29 @@ function unlockHomeMusic(){if(game.mode!=='menu'||document.hidden)return;audio.i
 // idle at 30; a paused, help or results screen behind its overlay needs 10.
 const FRAME_BUDGET={playing:60,menu:30,evening:30};
 function framesPerSecond(mode){return FRAME_BUDGET[mode]??10;}
+let moving=null,popover=null;
+const isPlanning=()=>Boolean(game?.manager&&game.mode==='playing'&&(!$('store-panel')?.hidden||popover!==null||moving!==null));
 let lastRender=-Infinity,shadowTick=0;
 function frame(now){
   requestAnimationFrame(frame);
   if(now-lastRender<1000/framesPerSecond(game.mode)-2)return;
   lastRender=now;
-  const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;clockTime+=dt;
-  updateMovement(dt);if(game.manager)syncBays();if(game.mode==='playing'){game.setOfficePresence(atOffice());if(game.manager)game.setPlayerStation(nearby?.def.id??null);game.tick(dt);processEvents();syncParts();if(game.manager&&game.mode==='playing'&&now-lastRunSave>5000)saveRun();}
-  animateShop(game.mode==='paused'||game.mode==='help'?0:dt);updateCamera(dt);positionLabels();updateMusic();
-  uiElapsed+=dt;if(uiElapsed>.09){uiElapsed=0;if(!menuMode)updateUI();}
+  const planning=isPlanning();
+  const renderDt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;
+  const dt=planning?0:renderDt;if(!planning)clockTime+=dt;
+  updateMovement(dt);if(game.manager)syncBays();
+  if(game.mode==='playing'&&!planning){
+    game.setOfficePresence(atOffice());
+    if(game.manager)game.setPlayerStation(nearby?.def.id??null);
+    game.tick(dt);processEvents();syncParts();
+    if(game.manager&&now-lastRunSave>5000)saveRun();
+  }
+  animateShop(game.mode==='paused'||game.mode==='help'||planning?0:renderDt);
+  updateCamera(renderDt);positionLabels();updateMusic();
+  uiElapsed+=renderDt;if(uiElapsed>.09){uiElapsed=0;if(!menuMode)updateUI();}
   if(toastUntil&&now>toastUntil){$('toast').classList.remove('visible');toastUntil=0;}
   // Shadows follow moving characters at up to 30 Hz; the slower modes redraw them every frame.
-  if(game.mode!=='playing'||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
+  if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
 const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5'};
@@ -828,7 +839,7 @@ function updateManagerHUD(){
   $('score-label').textContent='CASH';$('score').textContent=money(game.cash);$('score').classList.toggle('negative',game.cash<0);
   $('shipped-label').textContent='REPUTATION';$('shipped').textContent='★'+game.reputation.toFixed(1);
   const goal=`Reputation ${game.reputation.toFixed(1)} of 5. Higher reputation brings more quotes and better prices.`;$('shipment-progress').title=goal;$('shipment-progress').setAttribute('aria-label',goal);
-  $('timer-label').textContent=game.mode==='evening'?'CLOSED':`DAY ${game.day} ENDS`;
+  $('timer-label').textContent=isPlanning()?'PLANNING · PAUSED':game.mode==='evening'?'CLOSED':`DAY ${game.day} ENDS`;
   $('order-count').textContent=`${game.boardLoad()} / ${game.orderLimit}`;
   $('shift-number').textContent=managerHeading();
   if(!$('store-panel').hidden)renderStore();
@@ -867,15 +878,14 @@ function resetBays(){baySignature='~';syncBays();}
 // A bay's size, including the bays the starting machines stand in (manager runs only).
 function bayOf(id){const def=stations[id]?.def;return def?.bay??(game.manager&&!menuMode?def?.baseBay??null:null);}
 // Moving a machine: pick it from its popover, then click an empty bay that fits.
-let moving=null;
 function moveFits(id){const st=moving&&game.stations[moving];return !!st&&id!==moving&&!!bayOf(id)&&!game.stations[id]&&mapHas(stations[id].def,activeMapId())&&MACHINES[st.op].sizes.includes(bayOf(id));}
-function startMove(id){moving=id;closePopover();toast(`Click an empty bay for the ${machineLabel(id).toLowerCase()}. It reinstalls there. Esc cancels.`,4);}
-function cancelMove(){if(!moving)return;moving=null;$('toast').classList.remove('visible');}
+function startMove(id){moving=id;closePopover();toast(`Click an empty bay for the ${machineLabel(id).toLowerCase()}. It reinstalls there. Esc cancels.`,4);if(game.manager&&game.mode==='playing')updateUI(true);}
+function cancelMove(){if(!moving)return;moving=null;$('toast').classList.remove('visible');last=performance.now();if(game.manager&&game.mode==='playing')updateUI(true);}
 function stationClick(id){
   const s=stations[id];
   if(moving&&game.manager&&['playing','evening'].includes(game.mode)){
     if(id===moving)return cancelMove();
-    if(bayOf(id)&&!game.stations[id]){const from=moving;moving=null;game.moveMachine(from,id);processEvents();syncBays();updateUI(true);saveRun();if(game.mode==='evening')renderLedger();return;}
+    if(bayOf(id)&&!game.stations[id]){const from=moving;moving=null;game.moveMachine(from,id);processEvents();syncBays();last=performance.now();updateUI(true);saveRun();if(game.mode==='evening')renderLedger();return;}
   }
   if(game.manager&&!menuMode&&bayOf(id)&&['playing','evening'].includes(game.mode)){
     if(!game.stations[id])return openPopover('bay',id);
@@ -884,32 +894,32 @@ function stationClick(id){
   goToStation(id);
 }
 // Floor popovers anchor to a station or point and keep the shop in view.
-let popover=null;
 function openPopover(kind,id){
   if(!game.manager||!['playing','evening'].includes(game.mode))return;
   popover={kind,id};renderPopover();$('floor-popover').hidden=false;positionPopover();
   $('floor-popover').querySelector('button:not([disabled])')?.focus({preventScroll:true});
+  if(game.mode==='playing')updateUI(true);
 }
-function closePopover(){popover=null;$('floor-popover').hidden=true;}
+function closePopover(){popover=null;$('floor-popover').hidden=true;last=performance.now();if(game.manager&&game.mode==='playing')updateUI(true);}
 function renderPopover(){
   if(!popover)return;
-  const el=$('floor-popover'),evening=game.mode==='evening',note=evening?'Ready when you open tomorrow.':'Installs in 12 seconds.';
+  const el=$('floor-popover'),evening=game.mode==='evening',note=evening?'Ready when you open tomorrow.':'Installs in 12 seconds once work resumes.';
   const option=(attrs,title,sub,price,disabled)=>`<button ${attrs} ${disabled?'disabled':''}><span><b>${title}</b><small>${sub}</small></span>${price!==undefined?`<em>${money(price)}</em>`:''}</button>`;
   if(popover.kind==='bay'){
     const size=bayOf(popover.id);
-    el.innerHTML=`<header><small>${BAY_SIZES[size].toUpperCase()}</small><strong>Choose a machine</strong></header><div class="pop-list">${Object.entries(MACHINES).filter(([,m])=>m.sizes.includes(size)).map(([op,m])=>{
+    el.innerHTML=`<header><small>${BAY_SIZES[size].toUpperCase()}${evening?'':' · TIME STOPPED'}</small><strong>Choose a machine</strong></header><div class="pop-list">${Object.entries(MACHINES).filter(([,m])=>m.sizes.includes(size)).map(([op,m])=>{
       const count=game.stationsFor(op).length;return option(`data-pop="buy" data-op="${op}"`,m.name,count?`${m.blurb} You have ${count}.`:`${m.blurb} Opens new jobs.`,m.cost,game.cash<m.cost);}).join('')}</div><p class="pop-note">${note} ${size==='large'?'Large bays take any machine.':'Lathes, mills and QC benches need a large bay.'}</p>`;
   }else if(popover.kind==='machine'){
     const st=game.stations[popover.id];if(!st)return closePopover();
     const refund=Math.round(MACHINES[st.op].cost*RESALE),idle=!st.part&&!st.service&&!st.down,installing=popover.id in game.installing;
     const move=game.canMove()?option('data-pop="move"','Move to another bay',idle&&!installing?`Pick an empty bay it fits. It reinstalls there in ${INSTALL_SECONDS}s${evening?' (at once after closing)':''}.`:'Empty and repair it first.',undefined,!idle||installing):'';
-    el.innerHTML=`<header><small>${BAY_SIZES[bayOf(popover.id)].toUpperCase()} · WEAR ${Math.round(st.wear)}%</small><strong>${machineLabel(popover.id)}</strong></header><div class="pop-list">${move}${option('data-pop="sell"','Sell and free the bay',idle?'Rearrange the floor or change what it can make.':'Empty and repair it first.',refund,!idle)}</div>${game.canMove()?'':'<p class="pop-note">Buy a south hall to move machines between bays.</p>'}`;
+    el.innerHTML=`<header><small>${BAY_SIZES[bayOf(popover.id)].toUpperCase()}${evening?'':installing?' · INSTALLING':' · TIME STOPPED'} · WEAR ${Math.round(st.wear)}%</small><strong>${machineLabel(popover.id)}</strong></header><div class="pop-list">${move}${option('data-pop="sell"','Sell and free the bay',idle?'Rearrange the floor or change what it can make.':'Empty and repair it first.',refund,!idle)}</div>${game.canMove()?'':'<p class="pop-note">Buy a south hall to move machines between bays.</p>'}`;
   }else if(popover.kind==='hall'){
     const h=HALL_PLOTS.find(plot=>plot.id===popover.id),pending=game.hallsPending.includes(h.id),buyable=game.hallBuyable(h.id);
-    el.innerHTML=`<header><small>EXPANSION · SOUTH</small><strong>${h.name}</strong></header><p class="pop-note">Builders open it overnight: six large bays, two small bays, another order slot, more quotes and room for more staff. Owning any hall lets you move machines between bays. Each hall adds ${Math.round(100*HALL_RENT)}% to the base rent.</p><div class="pop-list">${option('data-pop="hall"',pending?'Builders arrive tonight':'Build overnight',pending?'Opens tomorrow morning.':`Rent becomes ${money(rentFor(game.day+1,true,game.halls.length+game.hallsPending.length+1))}/day from tomorrow.`,pending?undefined:h.cost,pending||!buyable||game.cash<h.cost)}</div>`;
+    el.innerHTML=`<header><small>EXPANSION · SOUTH${evening?'':' · TIME STOPPED'}</small><strong>${h.name}</strong></header><p class="pop-note">Builders open it overnight: six large bays, two small bays, another order slot, more quotes and room for more staff. Owning any hall lets you move machines between bays. Each hall adds ${Math.round(100*HALL_RENT)}% to the base rent.</p><div class="pop-list">${option('data-pop="hall"',pending?'Builders arrive tonight':'Build overnight',pending?'Opens tomorrow morning.':`Rent becomes ${money(rentFor(game.day+1,true,game.halls.length+game.hallsPending.length+1))}/day from tomorrow.`,pending?undefined:h.cost,pending||!buyable||game.cash<h.cost)}</div>`;
   }else if(popover.kind==='wing'){
     const pending=game.wingPending;
-    el.innerHTML=`<header><small>EXPANSION</small><strong>${WING.name}</strong></header><p class="pop-note">${WING.blurb}</p><div class="pop-list">${option('data-pop="wing"',pending?'Builders arrive tonight':'Build overnight',`Rent becomes ${money(rentFor(game.day+1,true))}/day from tomorrow.`,pending?undefined:WING.cost,pending||game.cash<WING.cost)}</div>`;
+    el.innerHTML=`<header><small>EXPANSION${evening?'':' · TIME STOPPED'}</small><strong>${WING.name}</strong></header><p class="pop-note">${WING.blurb}</p><div class="pop-list">${option('data-pop="wing"',pending?'Builders arrive tonight':'Build overnight',`Rent becomes ${money(rentFor(game.day+1,true))}/day from tomorrow.`,pending?undefined:WING.cost,pending||game.cash<WING.cost)}</div>`;
   }
 }
 function popoverAnchor(){
@@ -960,7 +970,7 @@ function customerTag(index){const c=game.customers[index];if(!c)return '';const 
 function quoteHTML(q){
   const stock=stockType(q),gap=gapText(q),technology=q.technology?technologyBadges([q.technology]):'',contract=q.type==='contract',covari=game.covariEligible(q);
   const note=gap||(contract?`Contract · ${q.units} parts · due end of tomorrow · ${money(q.unitPrice)} each`:`${q.deadline}s to deliver · stock ${money(q.material)}${q.tight?' · tight tolerance':''}`);
-  return `<div class="ticket-top">${customerTag(q.customer)}<span class="due"></span></div><div class="ticket-heading"><h3>${contract?`${q.units} × `:''}${q.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technology}</span><b class="price"></b></div><div class="route">${routeChips(q)}</div><small class="quote-note${gap?' gap':''}">${note}</small><div class="quote-actions"><span class="bid" role="group" aria-label="Bid"><button data-act="bid-down" data-id="${q.id}" aria-label="Lower the bid">◀</button><output class="bid-value"></output><button data-act="bid-up" data-id="${q.id}" aria-label="Raise the bid">▶</button></span><button data-act="accept" data-id="${q.id}" class="${gap?'risky':''}"><span class="accept-label">Bid</span> <small class="chance"></small></button>${covari?`<button data-act="covari" data-id="${q.id}" class="covari" aria-label="Outsource with Covari"><span class="source-logo"><img src="${$('covari-logo').src}" alt=""></span><span class="covari-keep"></span></button>`:''}<button data-act="decline" data-id="${q.id}" class="decline" aria-label="Turn quote ${q.id} away">No</button></div><div class="ticket-progress"><i></i></div>`;
+  return `<div class="ticket-top">${customerTag(q.customer)}<span class="due"></span></div><div class="ticket-heading"><h3>${contract?`${q.units} × `:''}${q.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technology}</span><b class="price"></b></div><div class="route">${routeChips(q)}</div><small class="quote-note${gap?' gap':''}">${note}</small><div class="quote-actions"><span class="bid" role="group" aria-label="Bid"><button data-act="bid-down" data-id="${q.id}" aria-label="Lower the bid">◀</button><output class="bid-value"></output><button data-act="bid-up" data-id="${q.id}" aria-label="Raise the bid">▶</button></span><button data-act="accept" data-id="${q.id}"><span class="accept-label">Bid</span> <small class="chance"></small></button>${covari?`<button data-act="covari" data-id="${q.id}" class="covari" aria-label="Outsource with Covari"><span class="source-logo"><img src="${$('covari-logo').src}" alt=""></span><span class="covari-keep"></span></button>`:''}<button data-act="decline" data-id="${q.id}" class="decline" aria-label="Turn quote ${q.id} away">No</button></div><div class="ticket-progress"><i></i></div>`;
 }
 function managerTicketState(o){
   if(o.outsourced)return o.location==='supplier'?`Covari delivery in ${Math.ceil(o.deliveryRemaining)}s`:o.location==='receiving'?'Waiting at Receiving':o.location==='hands'?`In your hands · ${opInfo(o.route[o.index]).name} next`:o.location.startsWith('staff-')?`${staffName(o.location)} is carrying it`:ticketState(o);
@@ -994,7 +1004,7 @@ function contractState(c){
 const customerName=index=>game.customers[index]?.name??'';
 function clock(seconds){const t=Math.max(0,Math.ceil(seconds));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;}
 // The sales strip: the rules your sales manager follows, and your standing bid.
-const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Accept'},contracts:{true:'Take',false:'Skip'}};
+const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Turn away'},contracts:{true:'Take',false:'Skip'}};
 const amountOrOff=n=>n?money(n):'Off';
 function salesStripHTML(){
   const stepper=(key,label)=>`<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}"></output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
@@ -1021,14 +1031,14 @@ function updateSalesStrip(){
   salesStrip.querySelector('[data-show="covariMarkup"]').textContent=p.covariMarkup===null?'Same':pct(p.covariMarkup);
   salesStrip.querySelector('[data-show="review"]').textContent=amountOrOff(p.review);
   salesStrip.querySelector('[data-show="covariBelow"]').textContent=amountOrOff(p.covariBelow);
-  salesStrip.querySelector('[data-show="gaps"]').textContent=POLICY_TEXT.gaps[p.gaps];
+  salesStrip.querySelector('[data-show="gaps"]').textContent=POLICY_TEXT.gaps[p.gaps]??'Turn away';
   salesStrip.querySelector('[data-show="reserve"]').textContent=String(p.reserve);
   salesStrip.querySelector('[data-show="contracts"]').textContent=POLICY_TEXT.contracts[p.contracts];
 }
 function policyAction(b){
   const key=b.dataset.policy,p=game.policy;
   const step=(list,value)=>list[Math.max(0,Math.min(list.length-1,list.indexOf(value)+Number(b.dataset.step)))];
-  const next=key==='markup'?step(BIDS,p.markup):key==='covariMarkup'?step([null,...BIDS],p.covariMarkup):key==='review'?step(REVIEW_LEVELS,p.review):key==='covariBelow'?step(COVARI_BELOW,p.covariBelow):key==='gaps'?{decline:'covari',covari:'accept',accept:'decline'}[p.gaps]:key==='reserve'?(p.reserve+1)%3:!p.contracts;
+  const next=key==='markup'?step(BIDS,p.markup):key==='covariMarkup'?step([null,...BIDS],p.covariMarkup):key==='review'?step(REVIEW_LEVELS,p.review):key==='covariBelow'?step(COVARI_BELOW,p.covariBelow):key==='gaps'?(p.gaps==='decline'?'covari':'decline'):key==='reserve'?(p.reserve+1)%3:!p.contracts;
   game.setPolicy(key,next);processEvents();updateUI(true);
 }
 let renderedManagerTickets='';
@@ -1054,9 +1064,11 @@ function updateManagerTickets(force){
     el.querySelector('.bid-value').textContent=pct(q.markup);
     el.querySelector('[data-act="bid-down"]').disabled=q.markup<=BIDS[0];el.querySelector('[data-act="bid-up"]').disabled=q.markup>=BIDS.at(-1);
     const accept=el.querySelector('[data-act="accept"]'),gap=game.gapsFor(q.route).length;
-    accept.querySelector('.accept-label').textContent=gap?'Risk it':q.markup>0?'Bid':'Accept';
+    accept.querySelector('.accept-label').textContent=q.markup>0?'Bid':'Accept';
     accept.querySelector('.chance').textContent=q.chance<1?`${Math.round(q.chance*100)}%`:'';
-    accept.disabled=full;accept.title=full?`The order board is full (${game.orderLimit})`:q.chance<1?`${Math.round(q.chance*100)}% chance the customer takes this bid`:'';
+    const missingOps=gap?game.gapsFor(q.route).map(k=>opInfo(k).name).join(', '):'';
+    accept.disabled=full||Boolean(gap);
+    accept.title=gap?`Requires ${missingOps} · buy the machine or outsource with Covari`:full?`The order board is full (${game.orderLimit})`:q.chance<1?`${Math.round(q.chance*100)}% chance the customer takes this bid`:'';
     const covari=el.querySelector('[data-act="covari"]');if(covari){covari.querySelector('.covari-keep').textContent=`+${money(q.price-q.covariCost)}`;covari.disabled=covariFull||game.cash<q.covariCost;covari.title=covariFull?`Covari is already placing ${COVARI_SLOTS} jobs`:game.cash<q.covariCost?`Covari needs ${money(q.covariCost)} up front`:`Pay ${money(q.covariCost)} now, collect ${money(q.price)} on shipping`;}}
   for(const c of game.contracts){const el=$('contract-'+c.id);if(!el)continue;const state=contractState(c);
     el.querySelector('.due').textContent=c.remaining>game.time?`${clock(c.remaining-game.time)} tomorrow`:clock(c.remaining);el.classList.toggle('urgent',c.remaining<25);
@@ -1068,6 +1080,10 @@ function quoteAction(act,id){
   if(game.mode!=='playing')return;
   if(act==='bid-up'||act==='bid-down'){game.bidQuote(id,act==='bid-up'?1:-1);processEvents();updateUI();return;}
   if(act==='expedite'||act==='delay'){if(act==='expedite')game.expedite(id);else game.delayOrder(id);processEvents();updateUI(true);return;}
+  if(act==='accept'){
+    const q=game.quotes.find(item=>item.id===id);
+    if(!q||game.gapsFor(q.route).length)return;
+  }
   const done=act==='accept'?game.acceptQuote(id):act==='covari'?game.outsourceQuote(id):game.declineQuote(id);
   processEvents();updateUI(true);if(done)$('scene').focus({preventScroll:true});
 }
@@ -1099,15 +1115,15 @@ let storeSignature='';
 function renderStore(force=false){
   const holder=game.mode==='evening'?$('evening-store'):$('store-list');
   const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.halls.join(),game.hallsPending.join(),game.staff.map(m=>m.id).join(),game.adDay,game.mode].join('|');
-  $('store-status').textContent=game.mode==='evening'?'AFTER HOURS':`CASH ${money(game.cash)}`;
+  $('store-status').textContent=game.mode==='evening'?'AFTER HOURS':`PLANNING · TIME STOPPED · CASH ${money(game.cash)}`;
   if(!force&&signature===storeSignature)return;storeSignature=signature;
   holder.innerHTML=storeRows();
 }
 function openStore(){
   if(!game.manager||game.mode!=='playing')return;closePopover();
-  $('store-panel').hidden=false;document.body.classList.add('store-open');layoutDirty=true;renderStore(true);$('store-close').focus({preventScroll:true});
+  $('store-panel').hidden=false;document.body.classList.add('store-open');layoutDirty=true;renderStore(true);$('store-close').focus({preventScroll:true});updateUI(true);
 }
-function closeStore(){if($('store-panel').hidden)return;$('store-panel').hidden=true;document.body.classList.remove('store-open');layoutDirty=true;$('scene').focus({preventScroll:true});}
+function closeStore(){if($('store-panel').hidden)return;$('store-panel').hidden=true;document.body.classList.remove('store-open');layoutDirty=true;$('scene').focus({preventScroll:true});last=performance.now();if(game.manager&&game.mode==='playing')updateUI(true);}
 function toggleStore(){if($('store-panel').hidden)openStore();else closeStore();}
 function storeAction(event){
   const b=event.target.closest('button');if(!b||b.disabled)return;
