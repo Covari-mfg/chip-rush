@@ -1093,13 +1093,9 @@ function quoteAction(act,id){
   const done=act==='accept'?game.acceptQuote(id):act==='covari'?game.outsourceQuote(id):game.declineQuote(id);
   processEvents();updateUI(true);if(done)$('scene').focus({preventScroll:true});
 }
-function covariBrand(logo, kicker, title){
-  return `<div class="covari-partner-brand"><span class="covari-partner-logo"><img src="${logo}" alt=""></span><div><small>${kicker}</small><strong>${title}</strong></div></div>`;
-}
-function covariPartnerCard(){
-  const logo=$('covari-logo').src;
-  if(game.covariPartner)return `<article class="covari-partner-card on">${covariBrand(logo,'COVARI IS ON','You are a partner')}<p>Missing processes go to Covari. Their price is on the quote. Your margin is what you add for the customer.</p><div class="covari-margin"><span>Your margin</span>${policyStepper('covariMargin','your margin',pct(game.policy.covariMargin))}</div></article>`;
-  return `<article class="covari-partner-card">${covariBrand(logo,'NOT CONNECTED','Turn on Covari')}<p>Outsource to a peer to peer network</p><button data-covari="1" class="primary-button" type="button">TURN ON COVARI <span>↗</span></button></article>`;
+function covariSwitch(){
+  const on=game.covariPartner;
+  return `<div class="covari-row"><button type="button" class="covari-switch" data-covari="1" aria-pressed="${on}" aria-label="Covari"><span class="covari-partner-logo"><img src="${$('covari-logo').src}" alt=""></span><b>Covari</b><span class="switch" aria-hidden="true"><i></i></span></button><p class="covari-note">Outsource to a peer to peer network</p><div class="covari-margin"><span>Your margin</span>${policyStepper('covariMargin','your margin',pct(game.policy.covariMargin))}</div></div>`;
 }
 function syncCovariBanner(){
   const banner=$('covari-partner-banner');
@@ -1111,7 +1107,7 @@ function storeRows(){
   const can=game.canManage(),evening=game.mode==='evening',rows=[];
   const row=(title,blurb,control,extra='')=>`<div class="store-row${extra}"><div><b>${title}</b><small>${blurb}</small></div>${control}</div>`;
   const buy=(attr,label,cost,disabled)=>`<button ${attr} ${disabled?'disabled':''}>${label}${cost!==undefined?` <span>${money(cost)}</span>`:''}</button>`;
-  rows.push(covariPartnerCard());
+  rows.push(covariSwitch());
   rows.push(`<p class="store-hint">Buy equipment, hire staff, and expand the shop from this menu. During evening hours, bays on the floor are also clickable to inspect or rearrange.${game.halls.length?' Scroll or pinch to zoom; drag the floor to look around.':''}</p>`);
   rows.push('<h4>Equipment <small>machines for your bays</small></h4>');
   const openBays=BAYS.filter(bay=>game.bayOpen(bay)&&!game.stations[bay.id]);
@@ -1158,7 +1154,7 @@ function toggleStore(){if($('store-panel').hidden)openStore();else closeStore();
 function storeAction(event){
   const b=event.target.closest('button');if(!b||b.disabled)return;
   if(b.dataset.policy){policyAction(b);renderStore(true);return;}
-  if(b.dataset.covari)game.partnerCovari();
+  if(b.dataset.covari)game.setCovariPartner(!game.covariPartner);
   else if(b.dataset.machine)game.buyMachine(b.dataset.bay,b.dataset.machine);
   else if(b.dataset.buy)game.purchase(b.dataset.buy);
   else if(b.dataset.hire)game.hire(b.dataset.hire);
@@ -1275,7 +1271,7 @@ function managerEvent(ev){
     case 'bidLost':audio.event('expired');toast(`${ev.customer} went elsewhere${ev.markup>0?` at ${pct(ev.markup)}`:''}.`,2.4);return true;
     case 'declined':case 'quoteLapsed':case 'dayStart':case 'staffCad':case 'expired':case 'fired':case 'bid':case 'policy':case 'serviceStart':return true;
     case 'failed':toast(ev.reason,3.2);return true;
-    case 'covariPartner':audio.event('finish');toast('Covari is on. Jobs this floor cannot make can go to them. Their price is on the quote. Your margin is what you add.',4.2);return true;
+    case 'covariPartner':return true;
     case 'outsourced':audio.event('programmed');floatText(`COVARI ${money(ev.cost)}`,'receiving',true);return true;
     case 'purchase':audio.event('ready');floatText(`−${money(ev.cost)} · ${(MACHINES[ev.key]?.name??UPGRADES[ev.key]?.name??'').toUpperCase()}`,ev.station??'office',true);syncBays();return true;
     case 'installed':{audio.event('ready');syncBays();floatText('INSTALLED ✓',ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.4,s.def.z,0x9effd4,16);return true;}
@@ -1331,7 +1327,7 @@ function bindControls(){
   addEventListener('resize',resize);$('scene').tabIndex=-1;
   $('source-accept').onclick=()=>{selectSourceJob();};$('source-decline').onclick=()=>{game.declineSource();updateUI(true);};
   $('source-collect').onclick=selectSourceCard;
-  $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=showManagerBriefing;$('briefing-back').onclick=showMenu;
+  $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=(event)=>{if(event.target.closest('a')){window.open(event.target.closest('a').href,'_blank','noopener,noreferrer');event.preventDefault();return;}showManagerBriefing();};$('briefing-back').onclick=showMenu;
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;

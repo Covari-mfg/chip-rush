@@ -523,14 +523,15 @@ export class ManagerGame extends ShopGame {
   covariEligible(quote) { return !!this.covariPartner && quote.type !== 'contract' && (this.gapsFor(quote.route).length > 0 || this.smallJob(quote)); }
   covariOpen(quote) { return this.covariEligible(quote) && this.covariOrders().length < COVARI_SLOTS && this.cash >= quote.covariCost; }
   covariCharge(quote) { return round10((quote?.covariCost ?? 0) * (1 + (this.policy.covariMargin ?? 0))); }
-  // One click from the shop menu or the floor banner. Missing processes then go to Covari.
-  partnerCovari() {
-    if (!this.canManage() || this.covariPartner) return false;
-    this.covariPartner = true;
-    this.policy.gaps = 'covari';
-    this.emit('covariPartner');
+  // The shop switch. On sends missing processes to Covari. Off turns them away again.
+  setCovariPartner(on) {
+    if (!this.canManage() || !!this.covariPartner === !!on) return false;
+    this.covariPartner = !!on;
+    this.policy.gaps = on ? 'covari' : 'decline';
+    this.emit('covariPartner', {on:this.covariPartner});
     return true;
   }
+  partnerCovari() { return this.setCovariPartner(true); }
   // Big quotes wait for the owner even when a sales manager is on staff.
   needsReview(quote) { return this.policy.review > 0 && quote.price >= this.policy.review; }
   outsourceQuote(id, {bySales = false} = {}) {

@@ -381,7 +381,9 @@ body.manager-mode .action-controls{grid-template-columns:1fr 1fr 1fr}
 .mode-tag{color:var(--gold)!important;font-size:9px!important;letter-spacing:1.3px;font-weight:800;margin:0 0 3px!important}
 .mode-best{color:var(--teal)!important}
 .mode-card .pick-mark{margin-left:auto;color:var(--gold);font-size:15px}
-@media(max-width:680px){.mode-section{margin-top:8px}.mode-card{padding:9px 10px;gap:10px}.mode-copy .mode-sub,.mode-copy .shift-credit{display:none}}
+.shift-credit a{color:var(--gold);text-decoration:underline;text-underline-offset:2px}
+.mode-card .shift-credit a:hover{color:#fff8e4}
+@media(max-width:680px){.mode-section{margin-top:8px}.mode-card{padding:9px 10px;gap:10px}.mode-copy .mode-sub{display:none}}
 .board-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
 .board-dialog .board-tabs button{font-size:12px;padding:6px 10px;min-height:0;background:transparent}
 .board-dialog .board-tabs button[aria-selected="true"]{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:800}
@@ -464,21 +466,24 @@ html[data-interface="mobile"] body:has(#overlay:not([hidden]):not(.evening)) #to
 .covari-partner-banner small{display:block;font-size:11px;letter-spacing:1.8px;font-weight:800;color:#0f6e5c}
 .covari-partner-banner strong{display:block;font-size:22px;letter-spacing:-.4px;line-height:1.1}
 .covari-partner-banner em{display:block;font-style:normal;font-size:13px;color:#315a59;margin-top:3px}
-.covari-partner-logo{width:42px;height:42px;border-radius:10px;overflow:hidden;background:#fff;flex:0 0 42px;position:relative}
-.covari-partner-logo img{position:absolute;width:90px;height:90px;max-width:none;left:50%;top:50%;transform:translate(-50%,-50%)}
+.covari-partner-banner .covari-partner-logo{width:42px;height:42px;border-radius:10px;flex:0 0 42px}
+.covari-partner-banner .covari-partner-logo img{width:90px;height:90px}
 .covari-partner-go{margin-left:auto;background:#123b40;color:#f4fff8;font-weight:900;font-size:14px;letter-spacing:.3px;border-radius:9px;padding:12px 14px;white-space:nowrap}
 .covari-partner-banner:hover{filter:brightness(1.04)}
-.covari-partner-card{margin:12px 0 8px;padding:14px;border-radius:14px;background:linear-gradient(145deg,#f7fff9,#b7f3dc);color:#123b40;box-shadow:0 0 0 3px #12866f}
-.covari-partner-card .covari-partner-brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.covari-partner-card small{display:block;font-size:11px;letter-spacing:1.6px;font-weight:800;color:#0f6e5c}
-.covari-partner-card strong{display:block;font-size:22px;letter-spacing:-.4px;line-height:1.05}
-.covari-partner-card p{margin:0 0 12px;font-size:13px;line-height:1.45;color:#244e4c}
-.covari-partner-card .primary-button{width:100%;font-size:15px;letter-spacing:.6px}
-.covari-partner-card.on{background:linear-gradient(145deg,#e7f8f2,#f4fff9);box-shadow:0 0 0 2px #1f8f78}
-.covari-margin{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800}
-.covari-margin .bid{display:flex;align-items:center;gap:6px}
-.covari-margin .bid button{min-width:32px;background:#123b40;color:#f4fff8;border:0;border-radius:6px;padding:6px 8px}
-.covari-margin output{min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
+.covari-row{display:flex;flex-direction:column;gap:4px;margin:6px 0 2px;padding:6px 0 8px;border-bottom:1px solid #ffffff14}
+.covari-switch{display:flex;align-items:center;gap:8px;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit}
+.covari-switch b{font-size:13px;font-weight:800}
+.covari-partner-logo{width:22px;height:22px;border-radius:6px;overflow:hidden;background:#fff;flex:0 0 22px;position:relative}
+.covari-partner-logo img{position:absolute;width:46px;height:46px;max-width:none;left:50%;top:50%;transform:translate(-50%,-50%)}
+.covari-switch .switch{margin-left:auto;width:34px;height:18px;border-radius:99px;background:#23424a;position:relative;flex:0 0 34px}
+.covari-switch .switch i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#d5e4e0}
+.covari-switch[aria-pressed="true"] .switch{background:#1f8f78}
+.covari-switch[aria-pressed="true"] .switch i{transform:translateX(16px);background:#f4fff8}
+.covari-note{margin:0;padding-left:30px;font-size:11px;line-height:1.35;color:#a9c0bd}
+.covari-margin{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-left:30px;font-size:12px;color:#a9c0bd}
+.covari-margin .bid{display:flex;align-items:center;gap:3px}
+.covari-margin .bid button{border:1px solid #6eb2a68a;border-radius:4px;background:#1d4148;color:var(--paper);font-size:11px;font-weight:700;padding:2px 7px;min-height:22px;min-width:0}
+.covari-margin .bid output{font:800 11px ui-monospace,monospace;min-width:36px;text-align:center;color:var(--paper)}
 body.manager-mode #shop-sidebar #orders{height:176px}
 @media(max-width:759px){body.manager-mode #shop-sidebar #orders{height:204px}.sales-strip{width:184px}}
 
