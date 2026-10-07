@@ -241,6 +241,52 @@ function makeAnodize(g) {
   beacon(g,.91,1.75,-.44);
   g.userData.workPoint=new THREE.Vector3(-.1,1.37,.15);
 }
+// Open for Business equipment. Both sit against the front wall with the
+// operator behind them, so their signs and glow read from either side.
+function makeFurnace(g) {
+  feet(g,1.42,.78);safetyMat(g,1.7,.4,.78);
+  const brick=0x8b4a3c,brickDark=0x5e2f28;
+  box(g,1.56,1.18,.98,0,.78,0,brick,.06);
+  for(let row=0;row<4;row++)for(let i=0;i<4;i++)box(g,.34,.012,.012,-.57+i*.38+(row%2)*.19,.36+row*.26,.495,brickDark,.002);
+  box(g,1.62,.12,1.04,0,1.42,0,C.cream,.035);
+  // Door with a glowing peep window; the glow pulses while a part soaks.
+  box(g,.86,.66,.06,0,.82,.51,C.navy,.03);
+  const heat=box(g,.5,.2,.03,0,.92,.55,0xff8a3d,.01,glow(0xff7a2f,.35));
+  box(g,.62,.05,.05,0,.6,.56,C.steel,.01);
+  // Load tray in front of the door, where finished parts wait.
+  box(g,.7,.05,.36,0,1.0,.66,C.steel,.012,mat(C.steel,.4,.5));
+  for(const x of [-.3,.3])box(g,.04,.42,.04,x,.78,.8,C.navy,.008);
+  // Flue and hood.
+  box(g,.62,.18,.5,-.38,1.57,-.18,C.creamDark,.03);
+  cyl(g,.13,.15,.9,-.38,2.1,-.18,C.steel,14);
+  cyl(g,.17,.17,.06,-.38,2.56,-.18,C.dark,14);
+  panel(g,.56,1.08,.53,.32,.42);
+  vent(g,.0,.62,-.5,.6,.3,5);
+  textPlate(g,'FURNACE',.9,.14,.05,1.42,.53,{color:'#fff1df',bg:'#5e2f28',size:46});
+  const back=textPlate(g,'FURNACE',.9,.14,.05,1.42,-.53,{color:'#fff1df',bg:'#5e2f28',size:46});back.rotation.y=Math.PI;
+  beacon(g,.55,1.48,-.3);
+  g.userData.spindle=heat;g.userData.heat=heat;g.userData.animated=[heat];
+  g.userData.workPoint=new THREE.Vector3(0,1.04,.66);
+}
+function makeLaser(g) {
+  bench(g,C.cream,1.3,.9);safetyMat(g,1.36,.36,.66);
+  box(g,1.06,.62,.72,0,1.43,-.02,C.tealDark,.05);
+  // Smoked window on the lid, readable from the overhead camera.
+  box(g,.78,.03,.44,0,1.755,.0,C.dark,.01,new THREE.MeshStandardMaterial({color:0x5b1f2e,emissive:0x3a0f1c,emissiveIntensity:.4,roughness:.2,transparent:true,opacity:.82}));
+  const head=new THREE.Group();head.position.set(0,1.62,-.02);g.add(head);
+  box(head,.14,.16,.14,0,0,0,C.steel,.02,mat(C.steel,.35,.6));
+  const beam=cyl(head,.012,.012,.42,0,-.28,0,0xff3d6e,8,glow(0xff3d6e,1.2));beam.visible=false;
+  g.userData.beam=beam;
+  box(g,.9,.05,.6,0,1.13,.04,C.dark,.01);
+  box(g,.07,.5,.5,.6,1.42,-.02,C.navy,.02);
+  cyl(g,.06,.06,.5,-.42,1.95,-.28,C.steel,10);
+  panel(g,.52,1.3,.36,.24,.36);
+  textPlate(g,'LASER',.62,.12,0,.97,.46,{color:'#ffe3ec',bg:'#5b1f2e',size:48});
+  const back=textPlate(g,'LASER',.62,.12,0,1.43,-.385,{color:'#ffe3ec',bg:'#5b1f2e',size:48});back.rotation.y=Math.PI;
+  beacon(g,-.52,1.15,.3);
+  g.userData.spindle=head;g.userData.animated=[head,beam];
+  g.userData.workPoint=new THREE.Vector3(0,1.17,.02);
+}
 function makeInspect(g) {
   bench(g,C.cream,2.3,1.35);safetyMat(g,2.4,.44,.88);
   box(g,1.16,.07,.87,-.22,1.15,.04,C.dark,.032);
@@ -371,7 +417,7 @@ function batchStatic(root) {
 }
 export function createMachine(type) {
   const g=new THREE.Group();g.name=`station-${type}`;g.userData.type=type;
-  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,anodize:makeAnodize,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
+  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
   return batchStatic(g);
 }
 export function createPart(stage=0,color=C.cyan,kind='shaft') {
@@ -669,4 +715,124 @@ export function createWorkshop() {
     box(g,.025,.045,1.82,-8.924,1.78,z,C.creamDark,.004);
   }
   return batchStatic(g);
+}
+// Staff share the machinist's build in their own colors. Materials are cloned
+// so recoloring a hire never touches the player or the shared cache.
+export function createWorker(coverall=0x4f8fd6,cap=0x183441) {
+  const g=createCharacter();g.name='staff';
+  const swap=new Map([[C.orange,coverall],[C.teal,cap]]);
+  g.traverse(node=>{
+    if(!node.isMesh||Array.isArray(node.material))return;
+    const color=node.material.color?.getHex();
+    if(!swap.has(color))return;
+    node.material=node.material.clone();node.material.color.setHex(swap.get(color));
+  });
+  return batchRig(g);
+}
+// Merge each group's own static meshes by material, keeping every pivot and
+// any mesh a script toggles. A rigged worker drops from 57 draws to about 20.
+function batchRig(root) {
+  const keep=new Set();
+  for(const value of Object.values(root.userData))if(value?.isObject3D)keep.add(value);
+  const groups=[];root.traverse(node=>{if(!node.isMesh)groups.push(node);});
+  for(const group of groups){
+    const buckets=new Map();
+    for(const child of group.children){
+      if(!child.isMesh||child.children.length||keep.has(child)||Array.isArray(child.material))continue;
+      const key=`${child.material.uuid}/${child.castShadow}/${child.receiveShadow}`;
+      if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(child);
+    }
+    for(const meshes of buckets.values()){
+      if(meshes.length<2)continue;
+      const parts=meshes.map(mesh=>{mesh.updateMatrix();const geo=(mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone());geo.applyMatrix4(mesh.matrix);return geo;});
+      const count=parts.reduce((n,geo)=>n+geo.attributes.position.count,0),merged=new THREE.BufferGeometry();
+      for(const [name,size] of [['position',3],['normal',3],['uv',2]]){
+        if(!parts.every(geo=>geo.attributes[name]))continue;
+        const data=new Float32Array(count*size);let offset=0;
+        for(const geo of parts){data.set(geo.attributes[name].array,offset);offset+=geo.attributes[name].array.length;}
+        merged.setAttribute(name,new THREE.BufferAttribute(data,size));
+      }
+      merged.computeBoundingSphere();
+      const mesh=new THREE.Mesh(merged,meshes[0].material);mesh.castShadow=meshes[0].castShadow;mesh.receiveShadow=meshes[0].receiveShadow;
+      for(const old of meshes)old.removeFromParent();
+      for(const geo of parts)geo.dispose();
+      group.add(mesh);
+    }
+  }
+  return root;
+}
+// Open for Business east wing: the same floor, wall and fixtures continued
+// past the original room's open right side, plus a small CAD desk.
+export function createAnnex() {
+  const g=new THREE.Group();g.name='east-wing';
+  const x0=8.15,x1=17.4,cx=(x0+x1)/2,w=x1-x0;
+  box(g,w,.42,10.10,cx,-.27,-1.20,C.navy,.16);
+  box(g,w-.2,.075,9.70,cx-.1,-.025,-1.20,0x4e6971,.02).castShadow=false;
+  const floorMats=[0x506b73,0x4d6971,0x526e75,0x4b676f].map(c=>mat(c,.93));
+  for(let x=0;x<6;x++)for(let z=0;z<7;z++)
+    box(g,1.397,.035,1.367,8.615+x*1.41,.021,-5.34+z*1.38,0,.006,floorMats[(x*7+z*3+5)%4]).castShadow=false;
+  box(g,w+.1,3.08,.20,cx,1.54,-6.12,C.tealDark,.035);
+  box(g,w+.2,.12,.26,cx,3.13,-6.12,C.navy,.015);
+  box(g,w,.17,.11,cx,.14,-5.968,C.navy,.008);
+  for(let i=0;i<5;i++){const x=8.9+i*1.9;box(g,.071,2.81,.061,x,1.59,-5.99,0x36616a,.004);box(g,1.73,.86,.055,x,1.93,-5.993,0x265560,.004);}
+  for(const x of [10.2,14.2]){box(g,2.0,.19,.27,x,2.81,-5.87,C.navy,.023);box(g,1.80,.07,.29,x,2.755,-5.84,C.creamLight,.015,glow(0xd8f6e7,.8));}
+  // A fresh gold perimeter, with the old room's edge left as a seam.
+  for(const z of [-5.47,3.26])box(g,8.6,.008,.055,12.4,.048,z,C.gold,.002).castShadow=false;
+  box(g,.055,.008,8.73,16.7,.048,-1.105,C.gold,.002).castShadow=false;
+  textPlate(g,'EAST WING',1.5,.2,12.2,2.84,-5.99,{color:'#e8dcb5',bg:'#294c57',size:46});
+  // CAD nook: desk, terminal and chair for a second programmer, facing west.
+  const desk=new THREE.Group();desk.position.set(16.3,0,-2.05);g.add(desk);
+  box(desk,.62,.08,1.1,0,.94,0,C.wood,.03);
+  for(const z of [-.45,.45])box(desk,.5,.9,.06,0,.47,z,C.navy,.01);
+  box(desk,.08,.5,.8,.22,1.32,0,C.navy,.03);
+  const screen=box(desk,.02,.4,.7,.17,1.32,0,C.cyan,.008,glow(0x5bd5d0,.55));screen.name='nook-screen';
+  box(desk,.22,.03,.5,-.1,1.0,0,C.creamDark,.01);
+  const chair=new THREE.Group();chair.position.set(-.56,0,0);desk.add(chair);
+  cyl(chair,.042,.048,.37,0,.39,0,C.steel,10);
+  box(chair,.56,.13,.57,0,.63,0,C.navy,.07);
+  box(chair,.11,.51,.55,-.31,.92,0,C.tealDark,.075);
+  g.userData.nookSeat=new THREE.Vector3(15.74,.335,-2.05);g.userData.nookYaw=Math.PI/2;
+  return batchStatic(g);
+}
+// A south hall for Open for Business, built like the east wing: slab and
+// tiles, a tall outer wall on the west column, low partitions with doorways
+// on the north edge (and the west edge of the east column) so the camera sees
+// over them, and a dashed plot outline shown while the hall is for sale.
+export function createHall({x0,z0,x1,z1,col,name,northDoors,westDoor}) {
+  const built=new THREE.Group();built.name='south-hall';
+  const w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
+  box(built,w,.42,d,cx,-.27,cz,C.navy,.16);
+  box(built,w-.2,.075,d-.2,cx,-.025,cz,0x4e6971,.02).castShadow=false;
+  const floorMats=[0x506b73,0x4d6971,0x526e75,0x4b676f].map(c=>mat(c,.93));
+  const nx=Math.floor((w-.2)/1.41),nz=Math.floor((d-.2)/1.38),tx=cx-(nx-1)*1.41/2,tz=cz-(nz-1)*1.38/2;
+  for(let x=0;x<nx;x++)for(let z=0;z<nz;z++)
+    box(built,1.397,.035,1.367,tx+x*1.41,.021,tz+z*1.38,0,.006,floorMats[(x*7+z*3+col*2+1)%4]).castShadow=false;
+  // Low partitions leave openings; doors carry gold posts.
+  const partition=(from,to,fixed,alongX)=>{
+    const length=to-from;if(length<.1)return;
+    const mid=(from+to)/2;
+    if(alongX){box(built,length,.55,.16,mid,.275,fixed,C.tealDark,.02);box(built,length,.06,.22,mid,.58,fixed,C.navy,.01);}
+    else{box(built,.16,.55,length,fixed,.275,mid,C.tealDark,.02);box(built,.22,.06,length,fixed,.58,mid,C.navy,.01);}
+  };
+  const gaps=(start,end,doors)=>{const runs=[];let at=start;for(const [a,b] of [...doors].sort((p,q)=>p[0]-q[0])){runs.push([at,a]);at=b;}runs.push([at,end]);return runs;};
+  for(const [a,b] of gaps(x0,x1,northDoors))partition(a,b,z0,true);
+  for(const [a,b] of northDoors)for(const x of [a,b])box(built,.12,.95,.12,x,.475,z0,C.gold,.02);
+  if(westDoor){
+    for(const [a,b] of gaps(z0,z1,[westDoor]))partition(a,b,x0,false);
+    for(const z of westDoor)box(built,.12,.95,.12,x0,.475,z,C.gold,.02);
+  }else{
+    // The west column continues the main building's outer wall.
+    box(built,.20,2.46,d,x0+.13,1.23,cz,C.tealDark,.035);
+    box(built,.26,.12,d+.1,x0+.13,2.50,cz,C.navy,.015);
+    for(let i=0;i<Math.floor(d/1.94);i++)box(built,.065,2.15,.065,x0+.26,1.30,z0+1+i*1.94,0x36616a,.004);
+  }
+  box(built,w-.9,.008,.055,cx,.048,z1-.35,C.gold,.002).castShadow=false;
+  textPlate(built,name.toUpperCase(),1.5,.2,cx-w/2+1.4,.33,z0+.09,{color:'#e8dcb5',bg:'#294c57',size:46});
+  const plot=new THREE.Group();plot.name='hall-plot';
+  const dash=(ax,az,bx,bz)=>{
+    const length=Math.hypot(bx-ax,bz-az),count=Math.floor(length/1.3);
+    for(let i=0;i<count;i++){const t=(i+.3)/count,x=ax+(bx-ax)*t,z=az+(bz-az)*t;box(plot,ax===bx?.09:.75,.02,ax===bx?.75:.09,x,-.5,z,C.gold,.004).castShadow=false;}
+  };
+  dash(x0+.2,z0+.2,x1-.2,z0+.2);dash(x0+.2,z1-.2,x1-.2,z1-.2);dash(x0+.2,z0+.2,x0+.2,z1-.2);dash(x1-.2,z0+.2,x1-.2,z1-.2);
+  return {built:batchStatic(built),plot:batchStatic(plot)};
 }

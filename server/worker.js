@@ -1,4 +1,5 @@
 import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
+import { MANAGER_ROLE, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 const fail=(message,status=400)=>json({error:message},status);
@@ -50,6 +51,28 @@ export function validateResult(value,run,now=Date.now()){
   return null;
 }
 
+// Open for Business posts net worth for one run length. Like shift scores
+// these are self-reported; the checks bound them by the game's own economy.
+export function validateManagerResult(value,run,now=Date.now()){
+  const length=parseBoard(run?.ruleset);
+  if(!run||length===null||run.role!==MANAGER_ROLE||value.role!==MANAGER_ROLE||(value.board!==undefined&&value.board!==run.ruleset))return 'Start a new run before posting.';
+  const wallSeconds=(now-run.started_at)/1000;
+  if(wallSeconds>3*86400)return 'This score submission has expired. Play another run.';
+  const maxDays=length||MAX_DAYS;
+  for(const key of ['score','shipped','missed','sourced','days'])if(!Number.isInteger(value[key])||value[key]<0)return 'That result is outside this run’s limits.';
+  if(value.days>maxDays)return 'That result is outside this run’s limits.';
+  if(!['complete','bankrupt','retired'].includes(value.finishReason))return 'Finish this run before posting.';
+  if(value.finishReason==='complete'&&(!length||value.days!==length))return 'That run did not finish its days.';
+  if(value.finishReason==='retired'&&length)return 'Only an Endless run can retire early.';
+  if(value.finishReason==='bankrupt'&&length&&value.days>=length)return 'That run did not finish its days.';
+  const played=value.finishReason==='bankrupt'?value.days+1:value.days;
+  if(!Number.isFinite(value.elapsed)||Math.abs(value.elapsed-played*DAY_SECONDS)>1||wallSeconds<value.elapsed-5)return 'That finish time does not match this run.';
+  if(value.sourced>value.shipped||value.shipped>Math.ceil(value.elapsed/4)+4||value.missed>Math.ceil(value.elapsed/4)+4)return 'That score does not match the completed work.';
+  // Net worth counts the starting lathe, mill and QC bench at resale.
+  if(value.score>START_CASH+START_ASSETS+value.shipped*maxPayout(Math.max(1,played)))return 'That score does not match the completed work.';
+  return null;
+}
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
@@ -57,6 +80,13 @@ export default {
     if(!env.DB)return fail('The community board is unavailable. Your game still works.',503);
     if(request.method==='POST'&&request.headers.get('origin')!==url.origin)return fail('Use the game page to post.',403);
     try{
+      if(url.pathname==='/api/leaderboard'&&request.method==='GET'&&url.searchParams.has('board')){
+        const board=url.searchParams.get('board'),length=parseBoard(board);
+        if(length===null)return fail('Choose a leaderboard.',404);
+        const order=length?'points DESC,days DESC,created_at ASC':'days DESC,points DESC,created_at ASC';
+        const data=await env.DB.prepare(`SELECT name,points AS score,shipped,missed,sourced,days,created_at FROM scores WHERE ruleset=? ORDER BY ${order} LIMIT 30`).bind(board).all();
+        return json({ruleset:board,entries:data.results||[]});
+      }
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
@@ -64,14 +94,16 @@ export default {
         return json({ruleset:RULESET,entries:(data.results||[]).map(({role,...row})=>({...row,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
-        const value=await body(request);if(!validRole(value.role)||value.ruleset!==RULESET)return fail('Reload the game to start a current shift.');
+        const value=await body(request);
+        const managerRun=value.role===MANAGER_ROLE&&parseBoard(value.ruleset)!==null;
+        if(!managerRun&&(!validRole(value.role)||value.ruleset!==RULESET))return fail('Reload the game to start a current shift.');
         const player=playerId(request)||crypto.randomUUID(),now=Date.now();
         const recent=await env.DB.prepare('SELECT COUNT(*) AS count FROM runs WHERE player=? AND started_at>?').bind(player,now-60000).first();
         if(recent.count>=10)return fail('Too many restarts. Try again in a minute.',429);
         const id=crypto.randomUUID();
         await env.DB.batch([
           env.DB.prepare('DELETE FROM runs WHERE started_at<?').bind(now-86400000),
-          env.DB.prepare('INSERT INTO runs(id,player,role,ruleset,started_at) VALUES(?,?,?,?,?)').bind(id,player,value.role,RULESET,now),
+          env.DB.prepare('INSERT INTO runs(id,player,role,ruleset,started_at) VALUES(?,?,?,?,?)').bind(id,player,value.role,value.ruleset,now),
         ]);
         return json({id},201,{'set-cookie':`chip_player=${player}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${url.protocol==='https:'?'; Secure':''}`});
       }
@@ -79,10 +111,12 @@ export default {
         const value=await body(request),player=playerId(request);
         if(typeof value.runId!=='string'||!player)return fail('This shift was not connected to the community board. Try another shift.');
         const run=await env.DB.prepare('SELECT * FROM runs WHERE id=? AND player=?').bind(value.runId,player).first();
-        const error=validateResult(value,run);if(error)return fail(error);
+        const manager=parseBoard(run?.ruleset)!==null;
+        const error=manager?validateManagerResult(value,run):validateResult(value,run);if(error)return fail(error);
         const name=typeof value.name==='string'?value.name.trim().replace(/\s+/g,' '):'';
         if(!/^[\p{L}\p{N} ._'-]{2,24}$/u.test(name))return fail('Use a display name with 2–24 letters, numbers, spaces or . _ - apostrophe.');
-        await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,RULESET,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Date.now()).run();
+        if(manager)await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,days,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,run.ruleset,value.score,value.score,value.shipped,value.missed,value.sourced,0,value.days,Date.now()).run();
+        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,RULESET,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Date.now()).run();
         return json({posted:true,id:run.id});
       }
       return fail('Not found.',404);

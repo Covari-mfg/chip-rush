@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import { Vector3, MathUtils } from '../dist/vendor/three.module.js';
 import { SHIFTS } from '../dist/core.js';
 import { Driver, simulateShift, navigation } from './balance.mjs';
+import { HALLS } from '../dist/manager.js';
 
 test('a slow Operator can pass while handling one order at a time', () => {
   const result=simulateShift(0,{strategy:'serial',reaction:3});
@@ -140,8 +141,11 @@ test('simulated dash cooldown follows the production conversation lock', () => {
 });
 
 test('smoothed station routes preserve destinations and clear every collision boundary', () => {
-  const starts={spawn:navigation.spawn,...navigation.accesses};
-  for (const [from,origin] of Object.entries(starts)) for (const [to,target] of Object.entries(navigation.accesses)) {
+  // Each released map, with the stations that stand on it.
+  for (const mapId of ['first-shop','night-shop']) {
+  navigation.activate(mapId);
+  const accesses=navigation.accessesFor(mapId),starts={spawn:navigation.spawn,...accesses};
+  for (const [from,origin] of Object.entries(starts)) for (const [to,target] of Object.entries(accesses)) {
     assert.ok(navigation.safe(origin.x,origin.z),from+' starts on an unobstructed floor position');
     assert.ok(navigation.safe(target.x,target.z),to+' access point is outside every collider');
     const path=navigation.route(origin,target);
@@ -153,6 +157,8 @@ test('smoothed station routes preserve destinations and clear every collision bo
       previous=point;
     }
   }
+  }
+  navigation.activate('first-shop');
   assert.ok(navigation.route(navigation.accesses.ship,navigation.accesses['material-round']).length<8, 'Open travel no longer retains every grid waypoint');
 });
 
@@ -163,7 +169,7 @@ const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 const section=(from,to)=>main.slice(main.indexOf(from),main.indexOf(to,main.indexOf(from)));
 function movementProbe({position={...navigation.spawn},route=[],dash=.2,direction={x:1,z:0}}={}) {
   const ctx=vm.createContext({
-    Math,THREE:{Vector3,MathUtils},keys:new Set(),
+    Math,HALLS,THREE:{Vector3,MathUtils},keys:new Set(),
     game:{mode:'playing',call:null,office:{orderId:null},setOfficePresence(){},interact(){}},
     character:{userData:{},position:new Vector3(),rotation:{y:0},scale:{y:1}},
     playerRing:{position:new Vector3()},targetRing:{visible:true},
@@ -171,7 +177,7 @@ function movementProbe({position={...navigation.spawn},route=[],dash=.2,directio
     nearestStation:()=>null,processEvents(){},
   });
   vm.runInContext(`${section('const STATION_LAYOUT=','\nlet renderer')}
-    ${section('const bounds=','\nfunction save')}
+    ${section('const BASE_BOUNDS=','\nfunction save')}
     const player=${JSON.stringify({...position,angle:0})};
     let path=${JSON.stringify(route)},pathStation=null,dashTime=${dash},dashCooldown=1.3,
       dashDirection=new THREE.Vector3(${direction.x},0,${direction.z}),walkPhase=0,clockTime=0,nearby=null;

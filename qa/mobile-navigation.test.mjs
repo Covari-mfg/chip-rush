@@ -46,7 +46,9 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
     targetRing:{visible:false,position:{set(){}}},dashDirection:{set(){}},
     useStation:id=>interactions.push(id),processEvents(){},toast:message=>events.push(message),
     audio:{event:name=>events.push(name),update:value=>events.push(`audio:${value}`),init:()=>events.push('audio:init')},
-    hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel'])$(id).hidden=true;},
+    hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;},
+    // Open for Business hooks that pause() calls; none matter for phone navigation.
+    closeStore(){},closePopover(){},cancelMove(){},saveRun(){},
     document:{body:{classList:classes()}},
   });
   vm.runInContext(behavior,context);

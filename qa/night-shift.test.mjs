@@ -236,16 +236,16 @@ test('every map is registered and offers the stations its levels use', () => {
 test('each map keeps every station reachable, uncluttered and collision-safe', () => {
   for (const [mapId, map] of Object.entries(navigation.maps)) {
     navigation.activate(mapId);
-    const defs = navigation.layout.filter(def => navigation.has(def, mapId));
+    const defs = navigation.layoutFor(mapId), accesses = navigation.accessesFor(mapId);
     assert.ok(navigation.safe(navigation.spawn.x, navigation.spawn.z), `${mapId}: spawn is on open floor`);
     const solid = defs.filter(def => def.collidable !== false);
     for (const [index, a] of solid.entries()) for (const b of solid.slice(index + 1)) {
       const overlapX = Math.abs(a.x - b.x) < (a.w + b.w) / 2, overlapZ = Math.abs(a.z - b.z) < (a.d + b.d) / 2;
       assert.equal(overlapX && overlapZ, false, `${mapId}: ${a.id} and ${b.id} do not overlap`);
     }
-    const starts = { spawn: navigation.spawn, ...Object.fromEntries(defs.map(def => [def.id, navigation.accesses[def.id]])) };
+    const starts = { spawn: navigation.spawn, ...accesses };
     for (const [from, origin] of Object.entries(starts)) for (const def of defs) {
-      const target = navigation.accesses[def.id];
+      const target = accesses[def.id];
       assert.ok(navigation.safe(target.x, target.z), `${mapId}: ${def.id} access is outside every collider`);
       const path = navigation.route(origin, target);
       assert.ok(path.length || Math.hypot(origin.x - target.x, origin.z - target.z) < 1.4, `${mapId}: ${from} reaches ${def.id}`);
@@ -254,8 +254,8 @@ test('each map keeps every station reachable, uncluttered and collision-safe', (
     }
     assert.ok(map.theme, `${mapId} names a theme`);
     for (const def of defs) for (const other of defs) {
-      if (def.id === other.id || !['deburr', 'anodize', 'receiving'].includes(def.id)) continue;
-      const a = navigation.accesses[def.id], b = navigation.accesses[other.id];
+      if (def.id === other.id || !(['deburr', 'anodize', 'receiving'].includes(def.id) || def.bay)) continue;
+      const a = accesses[def.id], b = accesses[other.id];
       assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 1.3, `${mapId}: ${def.id} and ${other.id} have distinct access points`);
     }
   }
