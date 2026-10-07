@@ -5,7 +5,7 @@ import { ShopAudio } from './audio.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
-import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, REVIEW_LEVELS, COVARI_BELOW, INSTALL_SECONDS, rentFor, opInfo, boardId } from './manager.js';
+import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, REVIEW_LEVELS, COVARI_BELOW, INSTALL_SECONDS, rentFor, opInfo, boardId } from './manager.js';
 import { deviceInterface, isPhoneDevice } from './device.js';
 import { createTapNavigation } from './tap-navigation.js';
 
@@ -123,7 +123,7 @@ const fixedObstacles=[{minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,m
 let obstacles=[];
 function activateMap(mapId){
   Object.assign(bounds,BASE_BOUNDS,MAPS[mapId].bounds);
-  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...fixedObstacles,...hallObstacles(mapId)];
+  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({id:s.id,bay:Boolean(s.bay||s.baseBay),minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...fixedObstacles,...hallObstacles(mapId)];
 }
 // Open halls stretch the floor south. Closed plots inside that span are
 // solid, and partitions block everything but their doorways.
@@ -144,7 +144,7 @@ activateMap('first-shop');
 
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades,manager:managerRecord}));}catch{}}
 function toast(message,duration=2.6){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+duration*1000;}
-function safeSpot(x,z){return x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ&&!obstacles.some(o=>x>o.minX&&x<o.maxX&&z>o.minZ&&z<o.maxZ);}
+function safeSpot(x,z){return x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ&&!obstacles.some(o=>{if(o.bay&&(typeof game!=='undefined'&&game?.manager)&&!game.stations[o.id])return false;return x>o.minX&&x<o.maxX&&z>o.minZ&&z<o.maxZ;});}
 function movePosition(position,dx,dz){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.12));for(let i=0;i<steps;i++){if(safeSpot(position.x+dx/steps,position.z))position.x+=dx/steps;if(safeSpot(position.x,position.z+dz/steps))position.z+=dz/steps;}}
 function moveBy(dx,dz){movePosition(player,dx,dz);}
 
@@ -237,7 +237,7 @@ function tapFloor(point,event){
   path=findPath(point.x,point.z);pathStation=null;targetRing.position.set(point.x,.08,point.z);targetRing.visible=true;
   if(interfaceMode==='mobile')updateMobileDash();
 }
-function nearestStation(){let chosen=null,dist=1.32;for(const s of Object.values(stations)){if(!s.model.visible||s.def.id==='receiving'&&!game.config.sourcing)continue;const d=Math.hypot(player.x-s.access.x,player.z-s.access.z);if(d<dist&&d<(s.def.id==='office'?.78:1.32)){chosen=s;dist=d;}}return chosen;}
+function nearestStation(){let chosen=null,dist=1.32;for(const s of Object.values(stations)){if(!s.model.visible||s.def.id==='receiving'&&!game.config.sourcing||(game.manager&&bayOf(s.def.id)&&!game.stations[s.def.id]))continue;const d=Math.hypot(player.x-s.access.x,player.z-s.access.z);if(d<dist&&d<(s.def.id==='office'?.78:1.32)){chosen=s;dist=d;}}return chosen;}
 function interact(){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=nearestStation();if(s){path=[];pathStation=null;targetRing.visible=false;player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);useStation(s.def.id);processEvents();syncParts();updateUI(true);}else toast('Move closer to a station, or click its label.');}
 function dash(){if(game.mode!=='playing'||onPhone()||dashCooldown>0)return;dashCooldown=1.3;dashTime=.2;dashDirection.set(Math.sin(player.angle),0,Math.cos(player.angle));audio.event('dash');}
 // The phone's button boosts its current route, without changing destination.
@@ -665,7 +665,7 @@ function positionLabels(){
   }
   const target=nextTarget(),managing=!!game.manager&&!menuMode;for(const [id,s] of Object.entries(stations)){
   const p=screenPoint(new THREE.Vector3(s.def.x,(managing?s.height:s.def.height)+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
-  if(managing){s.label.hidden=!mapHas(s.def,activeMapId())||id==='material-block'&&!game.config.stock.includes('block');s.label.classList.toggle('target',target===id||nearby?.def.id===id);s.label.style.opacity='';managerLabel(id,s);continue;}
+  if(managing){const bayEmpty=bayOf(id)&&!game.stations[id],hideEmptyBay=game.mode==='playing'&&bayEmpty&&!moveFits(id);s.label.hidden=!mapHas(s.def,activeMapId())||(id==='material-block'&&!game.config.stock.includes('block'))||hideEmptyBay;s.label.classList.toggle('target',target===id||nearby?.def.id===id);s.label.style.opacity='';managerLabel(id,s);continue;}
   const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,ready=id==='receiving'?!!game.receiving:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state);
   for(const name of ['for-sale','installing','down','servicing','move-target','moving'])s.label.classList.remove(name);
   const more=s.label.querySelector('.label-more');if(more)more.hidden=true;
@@ -674,10 +674,10 @@ function positionLabels(){
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
   s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:busy?`${100*(1-st.remaining/(st.duration||opInfo(id).duration))}%`:'0';s.label.style.opacity=menuMode?'.72':'';
 }
-  const sign=$('wing-sign');sign.hidden=!managing||game.expanded||!['playing','evening'].includes(game.mode);
+  const sign=$('wing-sign');sign.hidden=!managing||game.expanded||game.mode!=='evening';
   if(!sign.hidden){const p=screenPoint(new THREE.Vector3(7.25,1.6,-.78));sign.style.left=p.x+'px';sign.style.top=p.y+'px';sign.querySelector('.station-time').textContent=game.wingPending?'TONIGHT':money(WING.cost);}
   for(const h of HALL_PLOTS){const hallSign=hallSigns.get(h.id),pending=managing&&game.hallsPending.includes(h.id);
-    hallSign.hidden=!managing||!['playing','evening'].includes(game.mode)||!(pending||game.hallBuyable(h.id));
+    hallSign.hidden=!managing||game.mode!=='evening'||!(pending||game.hallBuyable(h.id));
     if(!hallSign.hidden){const p=screenPoint(new THREE.Vector3(h.cx,1,h.z0+1.6));hallSign.style.left=p.x+'px';hallSign.style.top=p.y+'px';hallSign.querySelector('.station-time').textContent=pending?'TONIGHT':money(h.cost);}}
   positionStaffTags();positionPopover();}
 function updateMusic(){audio.update(!document.hidden&&!phonePortrait()&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
@@ -855,6 +855,7 @@ let baySignature='';
 function syncBays(){
   const signature=game.manager?Object.keys(game.stations).map(key=>key+':'+game.stations[key].op).join():'';
   if(signature===baySignature)return;baySignature=signature;
+  routeCache.clear();
   for(const id of Object.keys(bays)){
     const s=stations[id],op=game.manager?game.stations[id]?.op??null:s.def.baseBay?id:null;
     if(s.op!==op){
@@ -887,9 +888,12 @@ function stationClick(id){
     if(id===moving)return cancelMove();
     if(bayOf(id)&&!game.stations[id]){const from=moving;moving=null;game.moveMachine(from,id);processEvents();syncBays();last=performance.now();updateUI(true);saveRun();if(game.mode==='evening')renderLedger();return;}
   }
-  if(game.manager&&!menuMode&&bayOf(id)&&['playing','evening'].includes(game.mode)){
-    if(!game.stations[id])return openPopover('bay',id);
-    if(game.mode==='evening')return openPopover('machine',id);
+  if(game.manager&&!menuMode&&bayOf(id)){
+    if(game.mode==='evening'){
+      if(!game.stations[id])return openPopover('bay',id);
+      return openPopover('machine',id);
+    }
+    if(!game.stations[id])return;
   }
   goToStation(id);
 }
@@ -953,7 +957,7 @@ function managerLabel(id,s){
   if(wear){wear.hidden=!st||installing;if(st){wear.style.width=`${Math.round(st.wear)}%`;wear.dataset.level=st.wear>=BREAK_FROM?'high':st.wear>=35?'mid':'low';}}
   const more=s.label.querySelector('.label-more');if(more)more.hidden=!st||installing;
   const svc=st?.service;
-  const time=bayEmpty?(moveFits(id)?'MOVE HERE':game.mode==='evening'||game.mode==='playing'?'+ ADD':''):installing?`INSTALL ${Math.ceil(game.installing[id])}s`:st?.down&&!svc?'DOWN · FIX':svc?`${svc.kind==='repair'?'FIXING':'SERVICE'} ${Math.ceil(svc.remaining)}s`:
+  const time=bayEmpty?(moveFits(id)?'MOVE HERE':game.mode==='evening'?'+ ADD':''):installing?`INSTALL ${Math.ceil(game.installing[id])}s`:st?.down&&!svc?'DOWN · FIX':svc?`${svc.kind==='repair'?'FIXING':'SERVICE'} ${Math.ceil(svc.remaining)}s`:
     id==='office'&&program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':'';
   s.label.querySelector('.station-time').textContent=time;
   s.label.querySelector('.station-progress').style.width=svc?`${100*(1-svc.remaining/svc.total)}%`:program?`${100*(1-program.programRemaining/program.programDuration)}%`:busy&&st?`${100*(1-st.remaining/(st.duration||1))}%`:'0';
@@ -1087,12 +1091,22 @@ function quoteAction(act,id){
   const done=act==='accept'?game.acceptQuote(id):act==='covari'?game.outsourceQuote(id):game.declineQuote(id);
   processEvents();updateUI(true);if(done)$('scene').focus({preventScroll:true});
 }
-// The shop panel: staff, upgrades, the wing and ads. Machines are bought on the floor.
+// The shop panel: equipment, staff, upgrades, the wing and ads.
 function storeRows(){
   const can=game.canManage(),evening=game.mode==='evening',rows=[];
   const row=(title,blurb,control,extra='')=>`<div class="store-row${extra}"><div><b>${title}</b><small>${blurb}</small></div>${control}</div>`;
   const buy=(attr,label,cost,disabled)=>`<button ${attr} ${disabled?'disabled':''}>${label}${cost!==undefined?` <span>${money(cost)}</span>`:''}</button>`;
-  rows.push(`<p class="store-hint">Buy machines by clicking an empty bay on the floor. Use a machine's ⋯ to sell it${game.canMove()?' or move it to another bay':''}.${game.halls.length?' Scroll or pinch to zoom; drag the floor to look around.':''}</p>`);
+  rows.push(`<p class="store-hint">Buy equipment, hire staff, and expand the shop from this menu. During evening hours, bays on the floor are also clickable to inspect or rearrange.${game.halls.length?' Scroll or pinch to zoom; drag the floor to look around.':''}</p>`);
+  rows.push('<h4>Equipment <small>machines for your bays</small></h4>');
+  const openBays=BAYS.filter(bay=>game.bayOpen(bay)&&!game.stations[bay.id]);
+  const sizeRank={bench:0,compact:1,small:2,large:3};
+  for(const [op,m] of Object.entries(MACHINES)){
+    const fits=openBays.filter(bay=>m.sizes.includes(bay.size)).sort((a,b)=>(sizeRank[a.size]??9)-(sizeRank[b.size]??9));
+    const target=fits[0];
+    const installed=Object.values(game.stations).filter(s=>s.op===op).length;
+    const note=m.blurb+(installed?` · ${installed} installed`:'')+(target?` · Fits ${BAY_SIZES[target.size].toLowerCase()}`:'');
+    rows.push(row(m.name,note,target?buy(`data-machine="${op}" data-bay="${target.id}"`,'Buy',m.cost,!can||game.cash<m.cost):'<span class="owned-tag">NO OPEN BAY</span>',installed?' owned':''));
+  }
   rows.push('<h4>Staff <small>wages are paid every evening</small></h4>');
   for(const [role,info] of Object.entries(STAFF)){
     const team=game.staff.filter(member=>member.role===role),max=game.staffMax(role),more=!game.expanded&&info.maxWing>info.max;
@@ -1114,7 +1128,7 @@ function storeRows(){
 let storeSignature='';
 function renderStore(force=false){
   const holder=game.mode==='evening'?$('evening-store'):$('store-list');
-  const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.halls.join(),game.hallsPending.join(),game.staff.map(m=>m.id).join(),game.adDay,game.mode].join('|');
+  const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.halls.join(),game.hallsPending.join(),game.staff.map(m=>m.id).join(),game.adDay,game.mode,Object.keys(game.stations).map(k=>k+':'+game.stations[k].op).join()].join('|');
   $('store-status').textContent=game.mode==='evening'?'AFTER HOURS':`PLANNING · TIME STOPPED · CASH ${money(game.cash)}`;
   if(!force&&signature===storeSignature)return;storeSignature=signature;
   holder.innerHTML=storeRows();
@@ -1127,8 +1141,15 @@ function closeStore(){if($('store-panel').hidden)return;$('store-panel').hidden=
 function toggleStore(){if($('store-panel').hidden)openStore();else closeStore();}
 function storeAction(event){
   const b=event.target.closest('button');if(!b||b.disabled)return;
-  if(b.dataset.buy)game.purchase(b.dataset.buy);else if(b.dataset.hire)game.hire(b.dataset.hire);else if(b.dataset.fire)game.fire(b.dataset.fire);else if(b.dataset.ad)game.advertise();else if(b.dataset.wing)game.buildWing();else if(b.dataset.hall)game.buildHall(b.dataset.hall);else return;
-  processEvents();renderStore(true);updateUI(true);saveRun();if(game.mode==='evening')renderLedger();
+  if(b.dataset.machine)game.buyMachine(b.dataset.bay,b.dataset.machine);
+  else if(b.dataset.buy)game.purchase(b.dataset.buy);
+  else if(b.dataset.hire)game.hire(b.dataset.hire);
+  else if(b.dataset.fire)game.fire(b.dataset.fire);
+  else if(b.dataset.ad)game.advertise();
+  else if(b.dataset.wing)game.buildWing();
+  else if(b.dataset.hall)game.buildHall(b.dataset.hall);
+  else return;
+  processEvents();syncBays();renderStore(true);updateUI(true);saveRun();if(game.mode==='evening')renderLedger();
 }
 function renderLedger(){
   const day=game.history.at(-1),net=day.revenue+day.tips-day.materials-day.covari-day.penalties-day.purchases-day.wages-day.rent;
