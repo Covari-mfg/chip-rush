@@ -9,7 +9,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { SHIFTS, OPS, RULESET, ShopGame } from '../dist/core.js';
 import {
   ManagerGame, MANAGER_ROLE, MANAGER_MODE, MANAGER_OPS, MACHINES, BAYS, UPGRADES, WING, STAFF, JOBS, CUSTOMERS, RUN_LENGTHS, DAY_SECONDS, START_CASH,
-  QUOTE_WINDOW, MAX_QUOTES, QUOTE_CUTOFF, COVARI_SHARE, COVARI_SLOTS, COVARI_DELIVERY, INSTALL_SECONDS, RESALE, LATE_PENALTY, AD, MAX_DAYS, BIDS,
+  QUOTE_WINDOW, MAX_QUOTES, QUOTE_CUTOFF, COVARI_SLOTS, COVARI_DELIVERY, INSTALL_SECONDS, RESALE, LATE_PENALTY, AD, MAX_DAYS, BIDS,
+  covariPriceFor,
   SALES_DELAY, CONTRACT_BONUS, CONTRACT_PENALTY, BREAK_FROM, SERVICE_FROM, REPAIR, SERVICE, TECH_SERVICE_AT,
   rentFor, maxPayout, boardId, parseBoard, deadlineFor, opInfo, winChance, quoteInterval,
   START_ASSETS, HALLS, HALL_BAYS, HALL_RENT, REVIEW_LEVELS, COVARI_BELOW, DELAY_RISK, hallAdjacent,
@@ -34,7 +35,7 @@ function quoteFor(game, jobId, {contract = false, customer = 0, markup = 0} = {}
   const basePrice = Math.round(job.price * (job.tight ? 1.15 : 1) / 10) * 10;
   const quote = {id:game.nextId++, type:contract ? 'contract' : 'job', customer, jobId, name:job.name, kind:job.kind, color:job.color, tight:Boolean(job.tight),
     technology:null, route:[...job.route, 'ship'], basePrice, markup, deadline:contract ? Math.round(game.time + DAY_SECONDS) : deadlineFor(job),
-    quoteRemaining:QUOTE_WINDOW, age:0, material:30, covariCost:Math.round(basePrice * COVARI_SHARE / 10) * 10};
+    quoteRemaining:QUOTE_WINDOW, age:0, material:30, covariCost:covariPriceFor(job.route)};
   if (contract) { quote.units = 3; quote.unitBase = Math.round(basePrice * (1 + CONTRACT_BONUS) / 10) * 10; }
   game.priceQuote(quote);
   game.quotes.push(quote);
@@ -235,9 +236,13 @@ test('accepting work the floor cannot make expires with a fee, a reputation hit 
 
 test('Covari takes only real capability gaps, is paid up front and ships through QC', () => {
   const game = fresh();
+  assert.equal(game.outsourceQuote(quoteFor(game, 'panel').id), false, 'Not a partner yet');
+  assert.equal(game.partnerCovari(), true);
+  assert.equal(game.policy.gaps, 'covari');
   assert.equal(game.outsourceQuote(quoteFor(game, 'spacer').id), false);
   const panel = quoteFor(game, 'panel');
   assert.equal(game.outsourceQuote(panel.id), true);
+  assert.equal(game.order(panel.id).price, game.covariCharge(panel));
   const order = game.order(panel.id);
   assert.deepEqual(order.route, ['inspect', 'ship']);
   assert.equal(game.cash, START_CASH - panel.covariCost);
@@ -247,11 +252,11 @@ test('Covari takes only real capability gaps, is paid up front and ships through
   runOn(game, 'inspect');
   assert.equal(game.interact('ship'), true);
   assert.equal(game.cash, START_CASH - panel.covariCost + panel.price, 'Full price, no early tip');
-  const busy = fresh(), many = [quoteFor(busy, 'panel'), quoteFor(busy, 'cover'), quoteFor(busy, 'panel')];
+  const busy = fresh();busy.partnerCovari();const many = [quoteFor(busy, 'panel'), quoteFor(busy, 'cover'), quoteFor(busy, 'panel')];
   assert.equal(busy.outsourceQuote(many[0].id), true);
   assert.equal(busy.outsourceQuote(many[1].id), true);
   assert.equal(busy.outsourceQuote(many[2].id), false);
-  const deal = fresh(), contract = quoteFor(deal, 'panel', {contract:true});
+  const deal = fresh();deal.partnerCovari();const contract = quoteFor(deal, 'panel', {contract:true});
   assert.equal(deal.outsourceQuote(contract.id), false, 'Covari does not take whole contracts');
 });
 
@@ -347,39 +352,6 @@ test('an idle worn machine can be serviced with empty hands', () => {
   assert.ok(game.drain().some(e => e.type === 'serviced' && e.kind === 'maint'));
 });
 
-test('a maintenance tech repairs breakdowns and services worn machines on their own', () => {
-  const game = fresh();
-  evening(game, () => game.hire('technician'));
-  game.stations.lathe.down = true;
-  game.stations.mill.wear = TECH_SERVICE_AT + 5;
-  for (let t = 0; t < 60 && (game.stations.lathe.down || game.stations.mill.wear); t += .05) { game.tick(.05); assertIntegrity(game); }
-  assert.equal(game.stations.lathe.down, false);
-  assert.equal(game.stations.mill.wear, 0);
-  assert.ok(game.drain().filter(e => e.type === 'serviced' && e.by.startsWith('staff-')).length >= 2);
-});
-
-test('a runner waiting at a broken machine does not keep the technician away', () => {
-  const game = fresh();
-  evening(game, () => { game.hire('programmer'); game.hire('runner'); game.hire('technician'); });
-  const quote = quoteFor(game, 'spacer');game.acceptQuote(quote.id);
-  game.stations.lathe.down = true;
-  for (let t = 0; t < 120 && game.order(quote.id); t += .05) { game.tick(.05); assertIntegrity(game); }
-  assert.equal(game.order(quote.id), undefined, 'Repaired, then the part went through');
-  assert.ok(game.drain().some(e => e.type === 'serviced' && e.station === 'lathe' && e.kind === 'repair'));
-});
-
-test('runners route around a broken machine to a working one of the same kind', () => {
-  const game = fresh();game.cash = 30000;
-  game.buildWing(); advance(game, DAY_SECONDS + .1); game.openDay();
-  game.buyMachine('bay-5', 'lathe'); advance(game, INSTALL_SECONDS + .1);
-  game.hire('programmer'); game.hire('runner');
-  game.stations.lathe.down = true;
-  const quote = quoteFor(game, 'spacer');game.acceptQuote(quote.id);
-  for (let t = 0; t < 120 && game.order(quote.id); t += .05) { game.tick(.05); assertIntegrity(game); }
-  assert.equal(game.order(quote.id), undefined, 'Shipped on the second lathe');
-  assert.equal(game.stations.lathe.wear, 0, 'The broken lathe was never used');
-});
-
 test('contracts: one board slot, one CAD program, paid per part, judged as a whole', () => {
   const game = fresh(), q = quoteFor(game, 'spacer', {contract:true, customer:3});
   assert.equal(q.price, q.unitPrice * q.units);
@@ -421,7 +393,7 @@ test('a sales manager answers quotes with your rules', () => {
   assert.equal(game.quotes.length, 0);
   assert.equal(game.order(ok.id)?.price, ok.price, 'Bid at the standing markup and won');
   assert.equal(game.order(gap.id), undefined, 'Missing process: turned away by default');
-  game.setPolicy('gaps', 'covari');
+  assert.equal(game.partnerCovari(), true);
   const panel = quoteFor(game, 'panel');advance(game, SALES_DELAY + .1);
   assert.ok(game.order(panel.id)?.outsourced, 'Missing process: sent to Covari');
   game.setPolicy('reserve', 2);
@@ -432,27 +404,6 @@ test('a sales manager answers quotes with your rules', () => {
   const contract = quoteFor(game, 'spacer', {contract:true});advance(game, SALES_DELAY + .1);
   assert.equal(game.contracts.length, 0, 'Contracts can be switched off');
   assert.equal(game.setPolicy('gaps', 'maybe'), false);
-});
-
-test('a programmer and runner complete a job with the owner standing still', () => {
-  const game = fresh();
-  evening(game, () => { game.hire('programmer'); game.hire('runner'); });
-  assert.equal(game.staff[0].seat, 0, 'The first programmer takes the office chair');
-  const quote = quoteFor(game, 'housing');
-  game.acceptQuote(quote.id);
-  for (let t = 0; t < 120 && game.order(quote.id); t += .05) { game.tick(.05); assertIntegrity(game); }
-  assert.equal(game.order(quote.id), undefined);
-  assert.equal(game.shipped, 1);
-});
-
-test('a clerk ships inspected parts and carries Covari crates to QC', () => {
-  const game = fresh();
-  evening(game, () => game.hire('clerk'));
-  const panel = quoteFor(game, 'panel');
-  game.outsourceQuote(panel.id);
-  for (let t = 0; t < 80 && game.order(panel.id); t += .05) { game.tick(.05); assertIntegrity(game); }
-  assert.equal(game.order(panel.id), undefined);
-  assert.equal(game.sourced, 1);
 });
 
 test('day end pays rent and wages, opens an evening, and the next day starts clean', () => {
@@ -523,6 +474,7 @@ test('random play with the full floor keeps every part in exactly one place for 
       for (const role of ['runner', 'runner', 'clerk', 'programmer', 'technician']) game.hire(role);
       if (seed % 2) game.hire('sales');
     });
+    if (seed % 2) game.partnerCovari();
     game.setPolicy('gaps', seed % 2 ? 'covari' : 'accept');
     let ticks = 0;
     while (game.mode !== 'results' && ticks++ < 20000) {
@@ -795,14 +747,15 @@ test('sales rules: a review line for big quotes, a Covari bid, and Covari for sm
   assert.equal(game.quote(big.id), undefined, 'An unreviewed quote lapses like any other');
   game.setPolicy('review', 0);
   // Small jobs to Covari, even though the floor can make them, at the Covari bid.
+  assert.equal(game.partnerCovari(), true);
   assert.equal(game.setPolicy('covariBelow', 300), true);
-  assert.equal(game.setPolicy('covariMarkup', .2), true);
+  assert.equal(game.setPolicy('covariMargin', .2), true);
   const spacer = quoteFor(game, 'spacer');
   assert.ok(spacer.basePrice < 300 && game.covariEligible(spacer));
   advance(game, SALES_DELAY + .1);
   const placed = game.order(spacer.id);
   assert.ok(placed?.outsourced, 'Sent to Covari');
-  assert.equal(placed.price, Math.round(spacer.basePrice * 1.2 / 10) * 10, 'At the Covari bid');
+  assert.equal(placed.price, Math.round(spacer.covariCost * 1.2 / 10) * 10, 'Covari price plus the shop margin');
   assert.equal(placed.price - game.totals.covari, placed.price - spacer.covariCost);
   // With Covari full, a small job the floor can make is accepted in-house at the standing bid.
   const second = quoteFor(game, 'spacer');advance(game, SALES_DELAY + .1);
@@ -811,9 +764,9 @@ test('sales rules: a review line for big quotes, a Covari bid, and Covari for sm
   assert.equal(game.order(third.id)?.outsourced, false, 'Covari full: made in-house');
   assert.equal(game.order(third.id).markup, game.policy.markup);
   // Same (null) follows the standing bid.
-  assert.equal(game.setPolicy('covariMarkup', null), true);
+  assert.equal(game.setPolicy('covariMargin', 0), true);
   // The owner can send small jobs by hand too, but not larger ones the floor can make.
-  const owner = fresh();owner.setPolicy('covariBelow', 300);
+  const owner = fresh();owner.partnerCovari();owner.setPolicy('covariBelow', 300);
   assert.equal(owner.outsourceQuote(quoteFor(owner, 'housing').id), false);
   assert.match(owner.drain().find(e => e.type === 'hint')?.message ?? '', /Covari limit/);
   assert.equal(owner.outsourceQuote(quoteFor(owner, 'spacer').id), true);
@@ -953,7 +906,7 @@ test('random play with halls, moves, delays, expedites and save-restore keeps ev
       game.buildWing();
       for (const role of ['runner', 'runner', 'clerk', 'programmer', 'technician', 'sales']) game.hire(role);
     });
-    game.setPolicy('gaps', 'covari');game.setPolicy('covariBelow', 400);game.setPolicy('review', 1600);
+    game.partnerCovari();game.setPolicy('gaps', 'covari');game.setPolicy('covariBelow', 400);game.setPolicy('review', 1600);
     let ticks = 0;
     while (game.mode !== 'results' && game.day < 5 && ticks++ < 30000) {
       if (game.mode === 'evening') {

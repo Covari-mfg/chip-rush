@@ -25,7 +25,6 @@ export const START_REPUTATION = 3;
 export const QUOTE_WINDOW = 18;
 export const MAX_QUOTES = 3;
 export const QUOTE_CUTOFF = 20;
-export const COVARI_SHARE = .8;
 export const COVARI_DELIVERY = 20;
 export const COVARI_SLOTS = 2;
 export const INSTALL_SECONDS = 12;
@@ -43,6 +42,8 @@ export const CONTRACT_PENALTY = .25;
 // jobs listed below the Covari line go to Covari even when the floor could make them.
 export const REVIEW_LEVELS = [0, 800, 1200, 1600, 2400, 3200];
 export const COVARI_BELOW = [0, 300, 400, 500, 600, 800];
+// Added on top of Covari's price. The customer pays that total; a higher margin wins less often.
+export const COVARI_MARGINS = [0, .1, .2, .3, .4, .5];
 // Asking a customer for one more day: the first ask risks this much, each
 // further ask on the same job adds it again, and loyalty softens it.
 export const DELAY_RISK = .25;
@@ -58,6 +59,8 @@ export const MANAGER_OPS = {
   edm:{name:'Wire EDM',short:'EDM',duration:8,color:'#b7c3cf',external:true,technology:'edm'},
 };
 export const opInfo = key => OPS[key] ?? MANAGER_OPS[key];
+// What Covari charges for each process it actually performs. Inspect and ship stay on this floor.
+export const COVARI_STEP = {lathe:90, mill:110, deburr:70, anodize:120, heat:140, laser:60, coat:160, mold:200, edm:180};
 // The lathe, mill and QC bench the shop opens with. Everything else stands in a bay.
 export const BASE_STATIONS = ['lathe', 'mill', 'inspect'];
 
@@ -189,6 +192,27 @@ export function winChance(markup, reputation, loyalty) {
   return Math.max(.05, Math.min(1, 1 - 2 * markup + .05 * (reputation - 3) + .06 * loyalty));
 }
 const round10 = value => Math.round(value / 10) * 10;
+export function covariPriceFor(route) {
+  let sum = 0;
+  for (const key of route) {
+    if (key === 'ship' || key === 'inspect') continue;
+    const price = COVARI_STEP[key];
+    if (price == null) throw new Error(`Covari has no price for ${key}`);
+    sum += price;
+  }
+  return round10(Math.max(40, sum));
+}
+// One table for the sales strip and setPolicy. Gaps, slots and contracts toggle;
+// the rest step through their list.
+export const POLICY_STEPS = {
+  markup: BIDS,
+  gaps: ['decline', 'covari', 'accept'],
+  reserve: [0, 1, 2],
+  contracts: [true, false],
+  review: REVIEW_LEVELS,
+  covariMargin: COVARI_MARGINS,
+  covariBelow: COVARI_BELOW,
+};
 const clampBid = value => BIDS.reduce((best, bid) => Math.abs(bid - value) < Math.abs(best - value) ? bid : best, 0);
 
 export class ManagerGame extends ShopGame {
@@ -233,8 +257,9 @@ export class ManagerGame extends ShopGame {
     this.hallsPending = [];
     this.orderLimit = 4;
     this.adDay = 0;
-    // covariMarkup null: Covari jobs carry the standing bid.
-    this.policy = {markup:0, gaps:'decline', reserve:0, contracts:true, review:0, covariMarkup:null, covariBelow:0};
+    this.covariPartner = false;
+    // Gaps stay turned away until the shop partners. The margin is added to Covari's price.
+    this.policy = {markup:0, gaps:'decline', reserve:0, contracts:true, review:0, covariMargin:.2, covariBelow:0};
     this.staff = [];
     this.staffHired = 0;
     this.receivingQueue = [];
@@ -382,10 +407,16 @@ export class ManagerGame extends ShopGame {
   pickJob() {
     // Simple turning and milling work fades as the market expects more from the
     // shop; complex jobs grow more common with every day past their debut.
+    // About one quote in three needs a process this floor lacks. The rest are
+    // work the machines already here can run, so a good shop does not become
+    // a desk that only forwards jobs.
     const pool = JOBS.filter(job => job.day <= this.day);
     const weight = job => Math.max(1, job.weight - (job.fade ?? 0) * (this.day - 1)) + (job.grow ?? 0) * (this.day - job.day);
-    let roll = this.rng() * pool.reduce((sum, job) => sum + weight(job), 0), job = pool.at(-1);
-    for (const candidate of pool) { roll -= weight(candidate); if (roll <= 0) { job = candidate; break; } }
+    const makeable = pool.filter(job => this.gapsFor([...job.route, 'ship']).length === 0);
+    const gaps = pool.filter(job => this.gapsFor([...job.route, 'ship']).length > 0);
+    const source = makeable.length && gaps.length ? (this.rng() < 1 / 3 ? gaps : makeable) : pool;
+    let roll = this.rng() * source.reduce((sum, job) => sum + weight(job), 0), job = source.at(-1);
+    for (const candidate of source) { roll -= weight(candidate); if (roll <= 0) { job = candidate; break; } }
     return job;
   }
   contractAllowed() {
@@ -401,7 +432,7 @@ export class ManagerGame extends ShopGame {
       id:this.nextId++, type:contract ? 'contract' : 'job', customer, jobId:job.id, name:job.name, kind:job.kind, color:job.color, tight:Boolean(job.tight),
       technology:external ? MANAGER_OPS[external].technology : null,
       route:[...job.route, 'ship'], basePrice, markup:this.policy.markup, deadline:deadlineFor(job, this.day),
-      quoteRemaining:QUOTE_WINDOW, age:0, material:MATERIAL_COST[stockType(job)], covariCost:round10(basePrice * COVARI_SHARE),
+      quoteRemaining:QUOTE_WINDOW, age:0, material:MATERIAL_COST[stockType(job)], covariCost:covariPriceFor(job.route),
     };
     if (contract) {
       quote.units = Math.min(8, 3 + Math.floor(this.rng() * 3) + Math.floor(this.day / 3));
@@ -433,8 +464,7 @@ export class ManagerGame extends ShopGame {
   }
 
   setPolicy(key, value) {
-    const valid = {markup:BIDS, gaps:['decline', 'covari', 'accept'], reserve:[0, 1, 2], contracts:[true, false],
-      review:REVIEW_LEVELS, covariMarkup:[null, ...BIDS], covariBelow:COVARI_BELOW}[key];
+    const valid = POLICY_STEPS[key];
     if (!valid || !valid.includes(value)) return false;
     this.policy[key] = value;
     // A new standing bid also applies to quotes still waiting for an answer.
@@ -490,19 +520,32 @@ export class ManagerGame extends ShopGame {
   // Covari takes work the floor cannot make (the shared capability-gap rule,
   // expressed per quote) and, when the owner sets a limit, small jobs listed under it.
   smallJob(quote) { return quote.type !== 'contract' && this.policy.covariBelow > 0 && quote.basePrice < this.policy.covariBelow; }
-  covariEligible(quote) { return quote.type !== 'contract' && (this.gapsFor(quote.route).length > 0 || this.smallJob(quote)); }
+  covariEligible(quote) { return !!this.covariPartner && quote.type !== 'contract' && (this.gapsFor(quote.route).length > 0 || this.smallJob(quote)); }
   covariOpen(quote) { return this.covariEligible(quote) && this.covariOrders().length < COVARI_SLOTS && this.cash >= quote.covariCost; }
+  covariCharge(quote) { return round10((quote?.covariCost ?? 0) * (1 + (this.policy.covariMargin ?? 0))); }
+  // One click from the shop menu or the floor banner. Missing processes then go to Covari.
+  partnerCovari() {
+    if (!this.canManage() || this.covariPartner) return false;
+    this.covariPartner = true;
+    this.policy.gaps = 'covari';
+    this.emit('covariPartner');
+    return true;
+  }
   // Big quotes wait for the owner even when a sales manager is on staff.
   needsReview(quote) { return this.policy.review > 0 && quote.price >= this.policy.review; }
   outsourceQuote(id, {bySales = false} = {}) {
     const quote = this.quote(id);
     if (this.mode !== 'playing' || !quote) return false;
+    if (!this.covariPartner) return this.fail('Partner with Covari from the shop menu. Press M.');
     if (quote.type === 'contract') return this.fail('Covari places single jobs, not whole contracts.');
     if (!this.covariEligible(quote)) return this.fail(this.policy.covariBelow ? `Your floor can make this one, and it lists above your Covari limit of $${this.policy.covariBelow}.` : 'Your floor can make this one. Covari is for work your shop cannot do.');
     if (this.covariOrders().length >= COVARI_SLOTS) return this.fail(`Covari is already placing ${COVARI_SLOTS} jobs for you. Ship one first.`);
-    if (this.cash < quote.covariCost) return this.fail(`Covari needs $${quote.covariCost} up front.`);
+    if (this.cash < quote.covariCost) return this.fail(`Covari's price is $${quote.covariCost}. You need that up front.`);
+    const margin = this.policy.covariMargin ?? 0;
+    quote.markup = margin;
+    quote.price = this.covariCharge(quote);
+    quote.chance = winChance(margin, this.reputation, this.customers[quote.customer].loyalty);
     this.quotes = this.quotes.filter(candidate => candidate !== quote);
-    this.priceQuote(quote);
     if (quote.chance < 1 && this.rng() >= quote.chance) {
       this.bidsLost++;
       this.emit('bidLost', {orderId:id, customer:this.customers[quote.customer].name, markup:quote.markup, bySales});
@@ -529,16 +572,9 @@ export class ManagerGame extends ShopGame {
     // A small job Covari cannot take right now is still work the floor can make.
     return room ? this.acceptQuote(quote.id, {bySales:true}) : this.declineQuote(quote.id, {bySales:true});
   }
-  // Covari jobs carry their own markup; if Covari cannot take one, the quote keeps its old bid.
+  // Covari's price is fixed. The shop's margin is what the customer pays on top.
   salesOutsource(quote) {
-    if (!this.covariOpen(quote)) return false;
-    const markup = quote.markup;
-    quote.markup = this.policy.covariMarkup ?? markup;
-    this.priceQuote(quote);
-    if (this.outsourceQuote(quote.id, {bySales:true})) return true;
-    quote.markup = markup;
-    this.priceQuote(quote);
-    return false;
+    return this.covariOpen(quote) && this.outsourceQuote(quote.id, {bySales:true});
   }
 
   // Accepted work ------------------------------------------------------------------
@@ -1262,27 +1298,18 @@ export class ManagerGame extends ShopGame {
   }
 
   planTask(member) {
+    if (member.role === 'technician') return this.planMaintenance(member);
+    if (member.role === 'clerk') return this.planClerk(member);
+    if (member.role === 'runner') return this.planRunner(member);
+    return null;
+  }
+  floorTask(orderId, steps) { return {orderId, step:0, steps}; }
+  // The Hold bench frees a pair of hands. staffAct waits there if it is already full.
+  parkTask(orderId) { return this.floorTask(orderId, [{station:'buffer', action:'park'}]); }
+  floorContext(member) {
     const here = member.at ?? 'receiving';
-    if (member.role === 'technician') {
-      const reserved = this.reservedStations(member, ['repair', 'maint']), near = key => this.distance(here, key);
-      const down = Object.keys(this.stations).filter(key => this.stations[key].down && !this.stations[key].service && !reserved.has(key)).sort((a, b) => near(a) - near(b))[0];
-      if (down) return {orderId:null, step:0, steps:[{station:down, action:'repair'}]};
-      const worn = Object.keys(this.stations).filter(key => {
-        const station = this.stations[key];
-        return this.installed(key) && !station.down && !station.service && !station.part && station.wear >= TECH_SERVICE_AT && !reserved.has(key);
-      }).sort((a, b) => this.stations[b].wear - this.stations[a].wear)[0];
-      return worn ? {orderId:null, step:0, steps:[{station:worn, action:'maint'}]} : null;
-    }
     const carried = member.carry ? this.order(member.carry) : null;
     if (member.carry && !carried) member.carry = null;
-    const loads = this.reservedStations(member);
-    if (carried) {
-      const next = carried.route[carried.index];
-      if (next === 'ship') return {orderId:carried.id, step:0, steps:[{station:'ship', action:'ship'}]};
-      const target = this.freeStation(next, loads, here) ?? this.stationsFor(next).sort((a, b) => this.distance(here, a) - this.distance(here, b))[0];
-      if (target) return {orderId:carried.id, step:0, steps:[{station:target, action:'load'}]};
-      return {orderId:carried.id, step:0, steps:[{station:'buffer', action:'park'}]};
-    }
     const orders = this.reservedOrders(member);
     const byDue = (a, b) => this.byPriority(a, b);
     const ready = Object.entries(this.stations)
@@ -1290,29 +1317,61 @@ export class ManagerGame extends ShopGame {
       .map(([key, station]) => ({key, order:this.order(station.part.orderId)}))
       .filter(({order}) => order)
       .sort((a, b) => byDue(a.order, b.order));
-    const clerk = member.role === 'clerk';
+    const parked = this.buffer ? this.order(this.buffer.orderId) : null;
+    return {here, carried, loads:this.reservedStations(member), orders, byDue, ready, parked};
+  }
+  planMaintenance(member) {
+    const here = member.at ?? 'receiving';
+    const reserved = this.reservedStations(member, ['repair', 'maint']), near = key => this.distance(here, key);
+    const down = Object.keys(this.stations).filter(key => this.stations[key].down && !this.stations[key].service && !reserved.has(key)).sort((a, b) => near(a) - near(b))[0];
+    if (down) return this.floorTask(null, [{station:down, action:'repair'}]);
+    const worn = Object.keys(this.stations).filter(key => {
+      const station = this.stations[key];
+      return this.installed(key) && !station.down && !station.service && !station.part && station.wear >= TECH_SERVICE_AT && !reserved.has(key);
+    }).sort((a, b) => this.stations[b].wear - this.stations[a].wear)[0];
+    return worn ? this.floorTask(null, [{station:worn, action:'maint'}]) : null;
+  }
+  // Stock, then the next machine on the route. A finished part goes on the Hold bench.
+  planRunner(member) {
+    const {here, carried, loads, orders, byDue, ready, parked} = this.floorContext(member);
+    if (carried) {
+      const next = carried.route[carried.index];
+      if (next === 'ship') return this.parkTask(carried.id);
+      const target = this.freeStation(next, loads, here) ?? this.stationsFor(next).sort((a, b) => this.distance(here, a) - this.distance(here, b))[0];
+      return target ? this.floorTask(carried.id, [{station:target, action:'load'}]) : this.parkTask(carried.id);
+    }
     for (const {key, order} of ready) {
       const next = order.route[order.index];
-      if (next === 'ship') return {orderId:order.id, step:0, steps:[{station:key, action:'collect'}, {station:'ship', action:'ship'}]};
-      const target = clerk ? null : this.freeStation(next, loads, key);
-      if (target) return {orderId:order.id, step:0, steps:[{station:key, action:'collect'}, {station:target, action:'load'}]};
+      if (next === 'ship') continue;
+      const target = this.freeStation(next, loads, key);
+      if (target) return this.floorTask(order.id, [{station:key, action:'collect'}, {station:target, action:'load'}]);
     }
-    const parked = this.buffer ? this.order(this.buffer.orderId) : null;
-    if (parked && !orders.has(parked.id) && parked.started) {
-      const next = parked.route[parked.index];
-      if (next === 'ship') return {orderId:parked.id, step:0, steps:[{station:'buffer', action:'unpark'}, {station:'ship', action:'ship'}]};
-      const target = clerk ? null : this.freeStation(next, loads, 'buffer');
-      if (target) return {orderId:parked.id, step:0, steps:[{station:'buffer', action:'unpark'}, {station:target, action:'load'}]};
+    if (parked && !orders.has(parked.id) && parked.started && parked.route[parked.index] !== 'ship') {
+      const target = this.freeStation(parked.route[parked.index], loads, 'buffer');
+      if (target) return this.floorTask(parked.id, [{station:'buffer', action:'unpark'}, {station:target, action:'load'}]);
     }
-    const crate = this.receivingQueue.filter(id => !orders.has(id) && this.order(id)).sort((a, b) => (this.order(b).expedited ? 1 : 0) - (this.order(a).expedited ? 1 : 0))[0];
-    const qc = crate && this.freeStation('inspect', loads, 'receiving');
-    if (qc) return {orderId:crate, step:0, steps:[{station:'receiving', action:'receive'}, {station:qc, action:'load'}]};
-    if (clerk) return null;
     for (const order of this.orders.filter(order => !order.outsourced && !order.started && order.programmed && !orders.has(order.id) &&
       (order.materialPaid || this.cash >= order.material)).sort(byDue)) {
       const bin = `material-${stockType(order)}`, target = this.freeStation(order.route[0], loads, bin);
-      if (target) return {orderId:order.id, step:0, steps:[{station:bin, action:'pickup'}, {station:target, action:'load'}]};
+      if (target) return this.floorTask(order.id, [{station:bin, action:'pickup'}, {station:target, action:'load'}]);
     }
+    return null;
+  }
+  // Inspected parts out the door, and Covari crates onto QC.
+  planClerk(member) {
+    const {carried, loads, orders, ready, parked} = this.floorContext(member);
+    if (carried) {
+      if (carried.route[carried.index] === 'ship') return this.floorTask(carried.id, [{station:'ship', action:'ship'}]);
+      return this.parkTask(carried.id);
+    }
+    for (const {key, order} of ready) {
+      if (order.route[order.index] === 'ship') return this.floorTask(order.id, [{station:key, action:'collect'}, {station:'ship', action:'ship'}]);
+    }
+    if (parked && !orders.has(parked.id) && parked.started && parked.route[parked.index] === 'ship')
+      return this.floorTask(parked.id, [{station:'buffer', action:'unpark'}, {station:'ship', action:'ship'}]);
+    const crate = this.receivingQueue.filter(id => !orders.has(id) && this.order(id)).sort((a, b) => (this.order(b).expedited ? 1 : 0) - (this.order(a).expedited ? 1 : 0))[0];
+    const qc = crate && this.freeStation('inspect', loads, 'receiving');
+    if (qc) return this.floorTask(crate, [{station:'receiving', action:'receive'}, {station:qc, action:'load'}]);
     return null;
   }
 

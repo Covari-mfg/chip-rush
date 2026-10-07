@@ -457,6 +457,28 @@ html[data-interface="mobile"] body:has(#overlay:not([hidden]):not(.evening)) #to
 .staff-tag.role-sales{color:#f4f1e6;border-color:#e6e1d088}
 .store-row.role-technician b{color:#fff1c2}.store-row.role-sales b{color:#f4f1e6}
 .store-hint{font-size:12px;color:#c9c6a6;background:#ffd16914;border:1px solid #ffd16933;border-radius:7px;padding:8px 10px;margin:10px 0 2px;line-height:1.4}
+.covari-partner-banner{position:absolute;top:156px;left:16px;z-index:15;display:flex;align-items:center;gap:14px;width:min(640px,calc(100vw - 40px));padding:16px 16px 16px 14px;border:0;border-radius:16px;background:linear-gradient(120deg,#f7fff9,#9eefd2);color:#123b40;box-shadow:0 16px 48px #00182088,0 0 0 4px #0e7a64;text-align:left;cursor:pointer}
+@media(min-width:760px){:where(html[data-interface="desktop"]) body.playing .covari-partner-banner{top:152px;left:16px;width:min(720px,calc(100vw - 148px))}}
+@media(max-width:759px){:where(html[data-interface="desktop"]) .covari-partner-banner{top:auto;bottom:112px;left:12px;width:calc(100vw - 24px)}}
+.covari-partner-banner[hidden]{display:none!important}
+.covari-partner-banner small{display:block;font-size:11px;letter-spacing:1.8px;font-weight:800;color:#0f6e5c}
+.covari-partner-banner strong{display:block;font-size:22px;letter-spacing:-.4px;line-height:1.1}
+.covari-partner-banner em{display:block;font-style:normal;font-size:13px;color:#315a59;margin-top:3px}
+.covari-partner-logo{width:42px;height:42px;border-radius:10px;overflow:hidden;background:#fff;flex:0 0 42px;position:relative}
+.covari-partner-logo img{position:absolute;width:90px;height:90px;max-width:none;left:50%;top:50%;transform:translate(-50%,-50%)}
+.covari-partner-go{margin-left:auto;background:#123b40;color:#f4fff8;font-weight:900;font-size:14px;letter-spacing:.3px;border-radius:9px;padding:12px 14px;white-space:nowrap}
+.covari-partner-banner:hover{filter:brightness(1.04)}
+.covari-partner-card{margin:12px 0 8px;padding:14px;border-radius:14px;background:linear-gradient(145deg,#f7fff9,#b7f3dc);color:#123b40;box-shadow:0 0 0 3px #12866f}
+.covari-partner-card .covari-partner-brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.covari-partner-card small{display:block;font-size:11px;letter-spacing:1.6px;font-weight:800;color:#0f6e5c}
+.covari-partner-card strong{display:block;font-size:22px;letter-spacing:-.4px;line-height:1.05}
+.covari-partner-card p{margin:0 0 12px;font-size:13px;line-height:1.45;color:#244e4c}
+.covari-partner-card .primary-button{width:100%;font-size:15px;letter-spacing:.6px}
+.covari-partner-card.on{background:linear-gradient(145deg,#e7f8f2,#f4fff9);box-shadow:0 0 0 2px #1f8f78}
+.covari-margin{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800}
+.covari-margin .bid{display:flex;align-items:center;gap:6px}
+.covari-margin .bid button{min-width:32px;background:#123b40;color:#f4fff8;border:0;border-radius:6px;padding:6px 8px}
+.covari-margin output{min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
 body.manager-mode #shop-sidebar #orders{height:176px}
 @media(max-width:759px){body.manager-mode #shop-sidebar #orders{height:204px}.sales-strip{width:184px}}
 

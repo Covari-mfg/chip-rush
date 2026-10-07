@@ -84,6 +84,7 @@ export function simulate({seed = 1, length = 5, policy = POLICIES['machines + st
   game.distance = (a, b) => routeLength(a, b, game.expanded ? 'owner-wing' : 'owner-shop', game.halls);
   game.start({length, seed});
   const routeLen = (a, b) => game.distance(a, b);
+  if (policy.covari !== false) game.partnerCovari();
   if (policy.markup) game.setPolicy('markup', policy.markup);
   if (policy.gaps) game.setPolicy('gaps', policy.gaps);
   if (policy.reserve) game.setPolicy('reserve', policy.reserve);

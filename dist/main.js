@@ -5,7 +5,7 @@ import { ShopAudio } from './audio.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
-import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, REVIEW_LEVELS, COVARI_BELOW, INSTALL_SECONDS, rentFor, opInfo, boardId } from './manager.js';
+import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, INSTALL_SECONDS, rentFor, opInfo, boardId, POLICY_STEPS } from './manager.js';
 import { deviceInterface, isPhoneDevice } from './device.js';
 import { createTapNavigation } from './tap-navigation.js';
 
@@ -321,10 +321,9 @@ function fitLights(wing){
   sun.target.updateMatrixWorld();cam.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;
 }
 function createBay(def){
-  const g=new THREE.Group(),tape=new THREE.MeshStandardMaterial({color:0xeac16b,roughness:.7}),dark=new THREE.MeshStandardMaterial({color:0x183441,roughness:.8});
+  const g=new THREE.Group(),tape=new THREE.MeshStandardMaterial({color:0xeac16b,roughness:.7});
   const w=def.w,d=def.d,t=.07;
   for(const [x,z,sx,sz] of [[0,-d/2,w,t],[0,d/2,w,t],[-w/2,0,t,d],[w/2,0,t,d]]){const m=new THREE.Mesh(new THREE.BoxGeometry(sx,.012,sz),tape);m.position.set(x,.03,z);m.castShadow=false;m.receiveShadow=true;g.add(m);}
-  for(let i=0;i<4;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.05,.013,w*.18),dark);m.position.set(-w*.3+i*w*.2,.032,0);m.rotation.y=.7;m.castShadow=false;m.receiveShadow=true;g.add(m);}
   g.visible=false;return g;
 }
 function boot(){
@@ -611,7 +610,7 @@ function updateUI(force=false){
   $('shipment-progress').title=shipmentGoal;$('shipment-progress').setAttribute('aria-label',shipmentGoal);
   $('order-count').textContent=`${game.orders.length} / 4`;}
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);if(game.manager)updateManagerTickets(force);else updateTickets(force);
-  updateOfficeUI();updateSourceUI();
+  updateOfficeUI();updateSourceUI();syncCovariBanner();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
   for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
   const next=nextTarget(),target=nearby?.def.id;
@@ -973,7 +972,7 @@ function gapText(order){const gaps=game.gapsFor(order.route);if(!gaps.length)ret
 function customerTag(index){const c=game.customers[index];if(!c)return '';const pips=Math.round(c.loyalty);return `<span class="customer" title="${c.name} · loyalty ${c.loyalty.toFixed(1)} of 3">${c.name}<i>${'♥'.repeat(pips)}${'♡'.repeat(3-pips)}</i></span>`;}
 function quoteHTML(q){
   const stock=stockType(q),gap=gapText(q),technology=q.technology?technologyBadges([q.technology]):'',contract=q.type==='contract',covari=game.covariEligible(q);
-  const note=gap||(contract?`Contract · ${q.units} parts · due end of tomorrow · ${money(q.unitPrice)} each`:`${q.deadline}s to deliver · stock ${money(q.material)}${q.tight?' · tight tolerance':''}`);
+  const note=gap?(game.covariPartner?`${gap} · Covari ${money(q.covariCost)} · you charge ${money(game.covariCharge(q))}`:`${gap} · Turn on Covari to place it`):contract?`Contract · ${q.units} parts · due end of tomorrow · ${money(q.unitPrice)} each`:`${q.deadline}s to deliver · stock ${money(q.material)}${q.tight?' · tight tolerance':''}`;
   return `<div class="ticket-top">${customerTag(q.customer)}<span class="due"></span></div><div class="ticket-heading"><h3>${contract?`${q.units} × `:''}${q.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technology}</span><b class="price"></b></div><div class="route">${routeChips(q)}</div><small class="quote-note${gap?' gap':''}">${note}</small><div class="quote-actions"><span class="bid" role="group" aria-label="Bid"><button data-act="bid-down" data-id="${q.id}" aria-label="Lower the bid">◀</button><output class="bid-value"></output><button data-act="bid-up" data-id="${q.id}" aria-label="Raise the bid">▶</button></span><button data-act="accept" data-id="${q.id}"><span class="accept-label">Bid</span> <small class="chance"></small></button>${covari?`<button data-act="covari" data-id="${q.id}" class="covari" aria-label="Outsource with Covari"><span class="source-logo"><img src="${$('covari-logo').src}" alt=""></span><span class="covari-keep"></span></button>`:''}<button data-act="decline" data-id="${q.id}" class="decline" aria-label="Turn quote ${q.id} away">No</button></div><div class="ticket-progress"><i></i></div>`;
 }
 function managerTicketState(o){
@@ -1010,15 +1009,17 @@ function clock(seconds){const t=Math.max(0,Math.ceil(seconds));return `${Math.fl
 // The sales strip: the rules your sales manager follows, and your standing bid.
 const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Turn away'},contracts:{true:'Take',false:'Skip'}};
 const amountOrOff=n=>n?money(n):'Off';
+function policyStepper(key, label, shown = ''){
+  return `<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}">${shown}</output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
+}
 function salesStripHTML(){
-  const stepper=(key,label)=>`<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}"></output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
   return `<button type="button" class="sales-head" data-sales-toggle aria-expanded="false" aria-controls="sales-strip"><small>SALES RULES</small><strong class="sales-who"></strong><i class="sales-chevron" aria-hidden="true">▸</i></button>
-  <div class="sales-row"><span>Standing bid</span>${stepper('markup','standing bid')}</div>
-  <div class="sales-row" title="Quotes priced at or above this wait for you, even with a sales manager"><span>Review over</span>${stepper('review','review line')}</div>
+  <div class="sales-row"><span>Standing bid</span>${policyStepper('markup','standing bid')}</div>
+  <div class="sales-row" title="Quotes priced at or above this wait for you, even with a sales manager"><span>Review over</span>${policyStepper('review','review line')}</div>
   <div class="sales-row"><span>Missing process</span><button data-policy="gaps" data-show="gaps"></button></div>
-  <div class="sales-row" title="Bid used when the sales manager sends a job to Covari. Same follows the standing bid"><span>Covari bid</span>${stepper('covariMarkup','Covari bid')}</div>
+  <div class="sales-row" title="Added on top of Covari's price. A higher margin pays you more and wins the customer less often."><span>Your margin</span>${policyStepper('covariMargin','your margin')}</div>
   <div class="sales-row"><span>Keep slots free</span><button data-policy="reserve" data-show="reserve"></button></div>
-  <div class="sales-row" title="Jobs listed below this go to Covari even when your floor could make them"><span>Covari under</span>${stepper('covariBelow','Covari limit')}</div>
+  <div class="sales-row" title="Jobs listed below this go to Covari even when your floor could make them"><span>Covari under</span>${policyStepper('covariBelow','Covari limit')}</div>
   <div class="sales-row"><span>Contracts</span><button data-policy="contracts" data-show="contracts"></button></div>`;
 }
 // Collapsed by default so quotes, not settings, sit beside the jobs. One line
@@ -1032,7 +1033,7 @@ function updateSalesStrip(){
   salesStrip.classList.toggle('collapsed',!salesOpen);salesStrip.querySelector('[data-sales-toggle]').setAttribute('aria-expanded',String(salesOpen));
   salesStrip.classList.toggle('automatic',!!seller);
   salesStrip.querySelector('[data-show="markup"]').textContent=pct(p.markup);
-  salesStrip.querySelector('[data-show="covariMarkup"]').textContent=p.covariMarkup===null?'Same':pct(p.covariMarkup);
+  salesStrip.querySelector('[data-show="covariMargin"]').textContent=pct(p.covariMargin??0);
   salesStrip.querySelector('[data-show="review"]').textContent=amountOrOff(p.review);
   salesStrip.querySelector('[data-show="covariBelow"]').textContent=amountOrOff(p.covariBelow);
   salesStrip.querySelector('[data-show="gaps"]').textContent=POLICY_TEXT.gaps[p.gaps]??'Turn away';
@@ -1040,9 +1041,10 @@ function updateSalesStrip(){
   salesStrip.querySelector('[data-show="contracts"]').textContent=POLICY_TEXT.contracts[p.contracts];
 }
 function policyAction(b){
-  const key=b.dataset.policy,p=game.policy;
-  const step=(list,value)=>list[Math.max(0,Math.min(list.length-1,list.indexOf(value)+Number(b.dataset.step)))];
-  const next=key==='markup'?step(BIDS,p.markup):key==='covariMarkup'?step([null,...BIDS],p.covariMarkup):key==='review'?step(REVIEW_LEVELS,p.review):key==='covariBelow'?step(COVARI_BELOW,p.covariBelow):key==='gaps'?(p.gaps==='decline'?'covari':'decline'):key==='reserve'?(p.reserve+1)%3:!p.contracts;
+  const key=b.dataset.policy,p=game.policy,list=POLICY_STEPS[key];
+  if(!list)return;
+  const along=list[Math.max(0,Math.min(list.length-1,list.indexOf(p[key])+Number(b.dataset.step)))];
+  const next=key==='gaps'?(p.gaps==='decline'?'covari':'decline'):key==='reserve'?(p.reserve+1)%3:key==='contracts'?!p.contracts:along;
   game.setPolicy(key,next);processEvents();updateUI(true);
 }
 let renderedManagerTickets='';
@@ -1073,7 +1075,7 @@ function updateManagerTickets(force){
     const missingOps=gap?game.gapsFor(q.route).map(k=>opInfo(k).name).join(', '):'';
     accept.disabled=full||Boolean(gap);
     accept.title=gap?`Requires ${missingOps} · buy the machine or outsource with Covari`:full?`The order board is full (${game.orderLimit})`:q.chance<1?`${Math.round(q.chance*100)}% chance the customer takes this bid`:'';
-    const covari=el.querySelector('[data-act="covari"]');if(covari){covari.querySelector('.covari-keep').textContent=`+${money(q.price-q.covariCost)}`;covari.disabled=covariFull||game.cash<q.covariCost;covari.title=covariFull?`Covari is already placing ${COVARI_SLOTS} jobs (ship one first)`:game.cash<q.covariCost?`Covari needs ${money(q.covariCost)} up front (cash: ${money(game.cash)})`:`Pay ${money(q.covariCost)} now, collect ${money(q.price)} on shipping`;}}
+    const covari=el.querySelector('[data-act="covari"]');if(covari){const charge=game.covariCharge(q);covari.querySelector('.covari-keep').textContent=`+${money(charge-q.covariCost)}`;covari.disabled=covariFull||game.cash<q.covariCost;covari.title=covariFull?`Covari is already placing ${COVARI_SLOTS} jobs (ship one first)`:game.cash<q.covariCost?`Covari's price is ${money(q.covariCost)} (cash: ${money(game.cash)})`:`Covari's price ${money(q.covariCost)}. You charge the customer ${money(charge)}.`;}}
   for(const c of game.contracts){const el=$('contract-'+c.id);if(!el)continue;const state=contractState(c);
     el.querySelector('.due').textContent=c.remaining>game.time?`${clock(c.remaining-game.time)} tomorrow`:clock(c.remaining);el.classList.toggle('urgent',c.remaining<25);
     el.querySelector('.ticket-status').textContent=state.text;el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,c.remaining/c.deadline)})`;
@@ -1091,11 +1093,25 @@ function quoteAction(act,id){
   const done=act==='accept'?game.acceptQuote(id):act==='covari'?game.outsourceQuote(id):game.declineQuote(id);
   processEvents();updateUI(true);if(done)$('scene').focus({preventScroll:true});
 }
+function covariBrand(logo, kicker, title){
+  return `<div class="covari-partner-brand"><span class="covari-partner-logo"><img src="${logo}" alt=""></span><div><small>${kicker}</small><strong>${title}</strong></div></div>`;
+}
+function covariPartnerCard(){
+  const logo=$('covari-logo').src;
+  if(game.covariPartner)return `<article class="covari-partner-card on">${covariBrand(logo,'COVARI IS ON','You are a partner')}<p>Missing processes go to Covari. Their price is on the quote. Your margin is what you add for the customer.</p><div class="covari-margin"><span>Your margin</span>${policyStepper('covariMargin','your margin',pct(game.policy.covariMargin))}</div></article>`;
+  return `<article class="covari-partner-card">${covariBrand(logo,'NOT CONNECTED','Turn on Covari')}<p>Covari places the jobs this floor cannot make. They name a price. You decide what the customer pays.</p><button data-covari="1" class="primary-button" type="button">TURN ON COVARI <span>↗</span></button></article>`;
+}
+function syncCovariBanner(){
+  const banner=$('covari-partner-banner');
+  if(!banner)return;
+  banner.hidden=!(game.manager&&!menuMode&&!game.covariPartner&&(game.mode==='playing'||game.mode==='paused'));
+}
 // The shop panel: equipment, staff, upgrades, the wing and ads.
 function storeRows(){
   const can=game.canManage(),evening=game.mode==='evening',rows=[];
   const row=(title,blurb,control,extra='')=>`<div class="store-row${extra}"><div><b>${title}</b><small>${blurb}</small></div>${control}</div>`;
   const buy=(attr,label,cost,disabled)=>`<button ${attr} ${disabled?'disabled':''}>${label}${cost!==undefined?` <span>${money(cost)}</span>`:''}</button>`;
+  rows.push(covariPartnerCard());
   rows.push(`<p class="store-hint">Buy equipment, hire staff, and expand the shop from this menu. During evening hours, bays on the floor are also clickable to inspect or rearrange.${game.halls.length?' Scroll or pinch to zoom; drag the floor to look around.':''}</p>`);
   rows.push('<h4>Equipment <small>machines for your bays</small></h4>');
   const openBays=BAYS.filter(bay=>game.bayOpen(bay)&&!game.stations[bay.id]);
@@ -1128,7 +1144,7 @@ function storeRows(){
 let storeSignature='';
 function renderStore(force=false){
   const holder=game.mode==='evening'?$('evening-store'):$('store-list');
-  const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.halls.join(),game.hallsPending.join(),game.staff.map(m=>m.id).join(),game.adDay,game.mode,Object.keys(game.stations).map(k=>k+':'+game.stations[k].op).join()].join('|');
+  const signature=[holder.id,Math.round(game.cash/10),[...game.upgrades].join(),game.expanded,game.wingPending,game.halls.join(),game.hallsPending.join(),game.staff.map(m=>m.id).join(),game.adDay,game.mode,game.covariPartner,game.policy.covariMargin,Object.keys(game.stations).map(k=>k+':'+game.stations[k].op).join()].join('|');
   $('store-status').textContent=game.mode==='evening'?'AFTER HOURS':`PLANNING · TIME STOPPED · CASH ${money(game.cash)}`;
   if(!force&&signature===storeSignature)return;storeSignature=signature;
   holder.innerHTML=storeRows();
@@ -1141,7 +1157,9 @@ function closeStore(){if($('store-panel').hidden)return;$('store-panel').hidden=
 function toggleStore(){if($('store-panel').hidden)openStore();else closeStore();}
 function storeAction(event){
   const b=event.target.closest('button');if(!b||b.disabled)return;
-  if(b.dataset.machine)game.buyMachine(b.dataset.bay,b.dataset.machine);
+  if(b.dataset.policy){policyAction(b);renderStore(true);return;}
+  if(b.dataset.covari)game.partnerCovari();
+  else if(b.dataset.machine)game.buyMachine(b.dataset.bay,b.dataset.machine);
   else if(b.dataset.buy)game.purchase(b.dataset.buy);
   else if(b.dataset.hire)game.hire(b.dataset.hire);
   else if(b.dataset.fire)game.fire(b.dataset.fire);
@@ -1257,7 +1275,8 @@ function managerEvent(ev){
     case 'bidLost':audio.event('expired');toast(`${ev.customer} went elsewhere${ev.markup>0?` at ${pct(ev.markup)}`:''}.`,2.4);return true;
     case 'declined':case 'quoteLapsed':case 'dayStart':case 'staffCad':case 'expired':case 'fired':case 'bid':case 'policy':case 'serviceStart':return true;
     case 'failed':toast(ev.reason,3.2);return true;
-    case 'outsourced':audio.event('programmed');floatText(`−${money(ev.cost)} · COVARI`,'receiving',true);return true;
+    case 'covariPartner':audio.event('finish');toast('Covari is on. Jobs this floor cannot make can go to them. Their price is on the quote. Your margin is what you add.',4.2);return true;
+    case 'outsourced':audio.event('programmed');floatText(`COVARI ${money(ev.cost)}`,'receiving',true);return true;
     case 'purchase':audio.event('ready');floatText(`−${money(ev.cost)} · ${(MACHINES[ev.key]?.name??UPGRADES[ev.key]?.name??'').toUpperCase()}`,ev.station??'office',true);syncBays();return true;
     case 'installed':{audio.event('ready');syncBays();floatText('INSTALLED ✓',ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.4,s.def.z,0x9effd4,16);return true;}
     case 'sold':audio.event('park');syncBays();floatText(`+${money(ev.refund)} · SOLD`,ev.station,true);return true;
@@ -1317,6 +1336,7 @@ function bindControls(){
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');
+  $('covari-partner-banner').onclick=()=>{if(!game.manager||!game.partnerCovari())return;processEvents();renderStore(true);updateUI(true);saveRun();};
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});
