@@ -1099,7 +1099,7 @@ function covariBrand(logo, kicker, title){
 function covariPartnerCard(){
   const logo=$('covari-logo').src;
   if(game.covariPartner)return `<article class="covari-partner-card on">${covariBrand(logo,'COVARI IS ON','You are a partner')}<p>Missing processes go to Covari. Their price is on the quote. Your margin is what you add for the customer.</p><div class="covari-margin"><span>Your margin</span>${policyStepper('covariMargin','your margin',pct(game.policy.covariMargin))}</div></article>`;
-  return `<article class="covari-partner-card">${covariBrand(logo,'NOT CONNECTED','Turn on Covari')}<p>Covari places the jobs this floor cannot make. They name a price. You decide what the customer pays.</p><button data-covari="1" class="primary-button" type="button">TURN ON COVARI <span>↗</span></button></article>`;
+  return `<article class="covari-partner-card">${covariBrand(logo,'NOT CONNECTED','Turn on Covari')}<p>Outsource to a peer to peer network</p><button data-covari="1" class="primary-button" type="button">TURN ON COVARI <span>↗</span></button></article>`;
 }
 function syncCovariBanner(){
   const banner=$('covari-partner-banner');
