@@ -140,18 +140,18 @@
 .source-card #source-accept{background:#1dbcae;border-color:#1dbcae;color:#102a32;font-weight:600}
 .source-card #source-accept:hover{background:#55d6c9}
 
-.ticket-heading,.source-card .source-heading{display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0}
+.ticket-heading,.source-card .source-heading{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
 .ticket-heading h3{flex:1;min-width:0;margin:5px 0}
-.technology-badges{display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
-.technology-badge{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #2a77733d;border-radius:6px;background:#d7e8df;color:#155c51;flex-shrink:0}
+.technology-badges{display:inline-flex;align-items:center;gap:3px;flex-shrink:0}
+.technology-badge{width:auto;min-width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:2px 5px;border:1px solid #2a77733d;border-radius:5px;background:#d7e8df;color:#155c51;flex-shrink:0}
 .technology-badge.tech-mill{background:#d6e5ec;border-color:#3b78963d;color:#285f7a}
-.technology-icon{display:block;width:24px;height:24px;flex-shrink:0}
+.technology-icon{display:block;width:18px;height:18px;flex-shrink:0}
 .source-card .source-heading>strong{font-size:16px;font-weight:600;letter-spacing:-.15px;min-width:0}
 .source-card .technology-badge{color:#a4efdf;background:#214a4b;border-color:#6eb4a755}
 .source-card.delivered>.source-heading{display:flex}
 .station-label>.technology-icon{width:19px;height:19px}
 
-.source-card .technology-badge{width:auto;gap:4px;padding:3px 6px}.technology-code{font-size:11.5px;font-weight:700;letter-spacing:.15px;line-height:1}
+.source-card .technology-badge{width:auto;gap:4px;padding:3px 6px}.technology-code{font-size:10.5px;font-weight:800;letter-spacing:.2px;line-height:1}
 
 /* A compact start-page board and a centered full leaderboard after a shift. */
 .home-board{position:absolute;right:34px;top:120px;width:292px;max-height:calc(100dvh - 154px);overflow:auto;pointer-events:auto;padding:20px;background:#102d36f2;border:1px solid #6da09570;border-radius:12px;box-shadow:0 16px 48px #05182055}
@@ -299,21 +299,24 @@ body.manager-mode #shop-sidebar #orders{height:162px}
 #orders .quote-ticket.impossible{border-color:#e08a6a;background:#fff2ea}
 #orders .manager-ticket.impossible{border-color:#e08a6a}
 #orders .covari-ticket{background:#eaf5f1;border-color:#9fd5c5}
-.order-ticket .ticket-heading{display:flex;align-items:center;gap:6px}
+.order-ticket .ticket-heading{display:flex;align-items:center;gap:6px;min-width:0}
 .order-ticket .ticket-heading h3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.order-ticket .price{margin-left:auto;font:800 14px ui-monospace,monospace;color:#1e6b52;white-space:nowrap}
+.order-ticket .price{margin-left:auto;flex-shrink:0;font:800 14px ui-monospace,monospace;color:#1e6b52;white-space:nowrap}
 .route-step.missing{background:#f6d3c6;color:#a43c22;text-decoration:line-through;text-decoration-thickness:1.5px}
 .quote-note{display:block;font-size:11px;line-height:1.25;color:#5e7470;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quote-note.gap{color:#a43c22;font-weight:700}
-.quote-actions{display:flex;gap:5px;margin-top:auto;padding-top:5px}
-.quote-actions button{font-family:inherit;font-size:11px;font-weight:800;line-height:14px;min-height:28px;padding:4px 8px;border-radius:5px;border:1px solid #2b5b56;background:var(--ink);color:#fff7dc;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.quote-actions{display:flex;align-items:center;gap:4px;margin-top:auto;padding-top:4px}
+.quote-actions .bid{display:inline-flex;align-items:center;gap:2px;flex-shrink:0}
+.quote-actions .bid button{padding:2px 5px;min-width:18px;min-height:24px}
+.quote-actions .bid output{font:800 10.5px ui-monospace,monospace;min-width:26px;text-align:center}
+.quote-actions button{font-family:inherit;font-size:10.5px;font-weight:800;line-height:13px;min-height:26px;padding:3px 6px;border-radius:5px;border:1px solid #2b5b56;background:var(--ink);color:#fff7dc;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0}
 .quote-actions button:hover:not(:disabled){filter:brightness(1.25)}
 .quote-actions button:disabled{opacity:.4}
 .quote-actions button.risky{background:transparent;color:#a43c22;border-color:#e0a28a}
-.quote-actions button.covari{background:#1f6d63;border-color:#1f6d63;flex:1;min-width:0;overflow:hidden}
+.quote-actions button.covari{background:#1f6d63;border-color:#1f6d63;flex-shrink:0}
 .quote-actions button.decline{background:transparent;color:#536c66;border-color:#c2d2c5;margin-left:auto}
-.quote-actions .source-logo,.manager-ticket .source-logo{display:inline-block;position:relative;width:15px;height:15px;overflow:hidden;flex:0 0 15px;border-radius:3px;background:#fff}
-.quote-actions .source-logo img,.manager-ticket .source-logo img{position:absolute;width:33px;height:33px;max-width:none;left:50%;top:50%;transform:translate(-50%,-50%)}
+.quote-actions .source-logo,.manager-ticket .source-logo{display:inline-block;position:relative;width:14px;height:14px;overflow:hidden;flex:0 0 14px;border-radius:3px;background:#fff}
+.quote-actions .source-logo img,.manager-ticket .source-logo img{position:absolute;width:30px;height:30px;max-width:none;left:50%;top:50%;transform:translate(-50%,-50%)}
 #score.negative{color:#ff947d}
 body.manager-mode .action-controls{grid-template-columns:1fr 1fr 1fr}
 @media(min-width:760px){body.manager-mode #shop-sidebar .action-controls{flex-basis:330px}}

@@ -1073,7 +1073,7 @@ function updateManagerTickets(force){
     const missingOps=gap?game.gapsFor(q.route).map(k=>opInfo(k).name).join(', '):'';
     accept.disabled=full||Boolean(gap);
     accept.title=gap?`Requires ${missingOps} · buy the machine or outsource with Covari`:full?`The order board is full (${game.orderLimit})`:q.chance<1?`${Math.round(q.chance*100)}% chance the customer takes this bid`:'';
-    const covari=el.querySelector('[data-act="covari"]');if(covari){covari.querySelector('.covari-keep').textContent=`+${money(q.price-q.covariCost)}`;covari.disabled=covariFull||game.cash<q.covariCost;covari.title=covariFull?`Covari is already placing ${COVARI_SLOTS} jobs`:game.cash<q.covariCost?`Covari needs ${money(q.covariCost)} up front`:`Pay ${money(q.covariCost)} now, collect ${money(q.price)} on shipping`;}}
+    const covari=el.querySelector('[data-act="covari"]');if(covari){covari.querySelector('.covari-keep').textContent=`+${money(q.price-q.covariCost)}`;covari.disabled=covariFull||game.cash<q.covariCost;covari.title=covariFull?`Covari is already placing ${COVARI_SLOTS} jobs (ship one first)`:game.cash<q.covariCost?`Covari needs ${money(q.covariCost)} up front (cash: ${money(game.cash)})`:`Pay ${money(q.covariCost)} now, collect ${money(q.price)} on shipping`;}}
   for(const c of game.contracts){const el=$('contract-'+c.id);if(!el)continue;const state=contractState(c);
     el.querySelector('.due').textContent=c.remaining>game.time?`${clock(c.remaining-game.time)} tomorrow`:clock(c.remaining);el.classList.toggle('urgent',c.remaining<25);
     el.querySelector('.ticket-status').textContent=state.text;el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,c.remaining/c.deadline)})`;
@@ -1256,6 +1256,7 @@ function managerEvent(ev){
     case 'accepted':audio.event('select');if(ev.gaps.length)toast(`#${ev.orderId} accepted, but this floor has no ${ev.gaps.map(key=>opInfo(key).name.toLowerCase()).join(' or ')}. It will expire unless you add one.`,4);else if(ev.bySales)floatText(`${ev.contract?'CONTRACT ':''}WON${ev.markup>0?' AT '+pct(ev.markup):''}`,'office',true);else if(ev.contract)toast('Contract signed: one CAD program covers every part.',2.6);return true;
     case 'bidLost':audio.event('expired');toast(`${ev.customer} went elsewhere${ev.markup>0?` at ${pct(ev.markup)}`:''}.`,2.4);return true;
     case 'declined':case 'quoteLapsed':case 'dayStart':case 'staffCad':case 'expired':case 'fired':case 'bid':case 'policy':case 'serviceStart':return true;
+    case 'failed':toast(ev.reason,3.2);return true;
     case 'outsourced':audio.event('programmed');floatText(`−${money(ev.cost)} · COVARI`,'receiving',true);return true;
     case 'purchase':audio.event('ready');floatText(`−${money(ev.cost)} · ${(MACHINES[ev.key]?.name??UPGRADES[ev.key]?.name??'').toUpperCase()}`,ev.station??'office',true);syncBays();return true;
     case 'installed':{audio.event('ready');syncBays();floatText('INSTALLED ✓',ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.4,s.def.z,0x9effd4,16);return true;}
