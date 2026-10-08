@@ -152,7 +152,7 @@ and is always available from its own card on the welcome screen; it neither
 needs nor grants shift unlocks. Its config is `MANAGER_MODE` and its rules live
 in `dist/manager.js` (`ManagerGame` extends `ShopGame`); its record is
 [experiments/open-for-business.md](experiments/open-for-business.md). The player
-picks 3, 5 or 7 working days, or Endless. Each day is 150 seconds; the shop
+runs the shop until they stop. Each day is 150 seconds; the shop
 starts with $1,500, a lathe, a mill and QC.
 
 - **Quotes and bids.** A quote arrives three seconds into each day and then
@@ -241,17 +241,20 @@ starts with $1,500, a lathe, a mill and QC.
 - **Evenings and endings.** Rent (300 × 1.3^(day−1), ×1.35 with the wing, ×(1 + 0.1 per hall)) and
   wages are charged at closing; accepted work carries over, open quotes close.
   The evening ledger docks beside the floor, so bays stay clickable after
-  hours. Cash below zero ends the run as bankrupt. Fixed runs end after their
-  last day; Endless can retire any evening. Unfinished jobs at the very end are
+  hours. Cash below zero ends the run as bankrupt. A new run is limitless:
+  any evening the player can retire and post that result. A run already saved
+  at 3, 5, or 7 days can still finish that length. Unfinished jobs at the very end are
   cancelled with their fees. Score is net worth: cash plus 70% resale of
   machines (the starting three included, $5,110) and upgrades and 50% of the
   wing and halls, never below 0. Stars count days
   survived (3 / 5 / 7); they are shown, never used to unlock.
-- **Data.** Same v8 save, with a `manager` record (best per length, longest
-  Endless, last length) beside the untouched shift fields. Server runs use role
-  `MANAGER_ROLE` (−1, never a level index) and rulesets `manager-v1-d3|d5|d7|endless`, each
-  its own board; the `scores.days` column (migration 0002) ranks Endless by
-  days then net worth. No challenge links. `validateManagerResult` bounds
+- **Data.** Same v8 save, with a `manager` record (best net worth, including
+  older per-length bests, longest run, last length) beside the untouched shift
+  fields. Server runs use role `MANAGER_ROLE` (−1, never a level index). New
+  runs post to `manager-v1-endless`. Scores already stored on `manager-v1-d3`,
+  `-d5`, and `-d7` stay in the table and appear on that one board, ranked by
+  net worth (points), then days, then time. The `scores.days` column
+  (migration 0002) is unchanged. No challenge links. `validateManagerResult` bounds
   elapsed time, days, finish reason and net worth by the economy. The run in
   progress also saves to `chip-rush-manager-run-v1` (the whole `ManagerGame`
   state, the board run id and the machinist's spot) every few seconds while

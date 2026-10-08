@@ -165,6 +165,10 @@ export function parseBoard(id) {
   const length = match[2] ? 0 : Number(match[1]);
   return RUN_LENGTHS.includes(length) ? length : null;
 }
+// One public board. New runs post here. Older day-length rows stay on their
+// own rulesets and are read into this same list.
+export const MANAGER_BOARD = boardId(0);
+export const MANAGER_SCORE_RULESETS = [boardId(3), boardId(5), boardId(7), MANAGER_BOARD];
 // Rent climbs every day so Endless always ends; fixed runs feel it too.
 export function rentFor(day, wing = false, halls = 0) { return Math.round(300 * 1.3 ** (day - 1) * (wing ? WING.rent : 1) * (1 + HALL_RENT * halls) / 10) * 10; }
 // The lathe, mill and QC bench the shop opens with, valued like any machine.

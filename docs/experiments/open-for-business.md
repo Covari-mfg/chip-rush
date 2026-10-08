@@ -5,6 +5,14 @@ and no legacy index, sits on its own card under the shift list, and is always
 available. This is a local development record; creator playtest, approval and
 release are open.
 
+## Current rules (2026-10-08)
+
+The live mode is one limitless run. Setup does not offer 3-, 5-, or 7-day
+lengths. New runs post to `manager-v1-endless`. That board lists every Open for
+Business score, including rows still stored on `manager-v1-d3`, `-d5`, and
+`-d7`, ranked by net worth (points). Those rows are not deleted or rewritten.
+The history below records the earlier four-length design.
+
 ## Identity
 
 | Field | Value |

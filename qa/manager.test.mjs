@@ -593,31 +593,61 @@ test('manager runs post to their own board and never mix with shift scores', asy
   assert.equal((await begin(2, boardId(5))).status, 400, 'A shift cannot start a manager run');
   assert.equal((await begin(MANAGER_ROLE, 'manager-v1-d9')).status, 400);
   const runs = {};
-  for (const length of [5, 0]) runs[length] = await begin(MANAGER_ROLE, boardId(length));
+  for (const length of [3, 5, 7, 0]) runs[length] = await begin(MANAGER_ROLE, boardId(length));
   const shift = await begin(2, RULESET);
   now = START + 2 * 3600_000;
   const post = (run, data) => send('/api/scores', {cookie:run.cookie, data:{runId:run.id, name:'Owner One', role:MANAGER_ROLE, ...data}});
-  let response = await post(runs[5], {board:boardId(5), score:15000, shipped:45, missed:1, sourced:6, days:5, elapsed:5 * DAY_SECONDS, finishReason:'complete'});
+  let response = await post(runs[3], {board:boardId(3), score:12000, shipped:20, missed:1, sourced:2, days:3, elapsed:3 * DAY_SECONDS, finishReason:'complete'});
+  assert.equal(response.status, 200, await response.clone().text());
+  response = await post(runs[5], {board:boardId(5), score:15000, shipped:45, missed:1, sourced:6, days:5, elapsed:5 * DAY_SECONDS, finishReason:'complete'});
+  assert.equal(response.status, 200, await response.clone().text());
+  response = await post(runs[7], {board:boardId(7), score:8000, shipped:30, missed:2, sourced:4, days:7, elapsed:7 * DAY_SECONDS, finishReason:'complete'});
   assert.equal(response.status, 200, await response.clone().text());
   response = await post(runs[0], {board:boardId(0), score:30000, shipped:120, missed:4, sourced:20, days:9, elapsed:9 * DAY_SECONDS, finishReason:'retired'});
   assert.equal(response.status, 200, await response.clone().text());
   response = await send('/api/scores', {cookie:shift.cookie, data:{runId:shift.id, name:'Shift Player', role:2, score:4000, shipped:5, missed:0, sourced:0, calls:3, elapsed:180, finishReason:'time-up'}});
   assert.equal(response.status, 200, await response.clone().text());
-  const fixed = await (await send(`/api/leaderboard?board=${boardId(5)}`)).json();
-  assert.deepEqual(fixed.entries.map(e => [e.name, e.score, e.days]), [['Owner One', 15000, 5]]);
+  const ranked = [[30000, 9], [15000, 5], [12000, 3], [8000, 7]];
   const endless = await (await send(`/api/leaderboard?board=${boardId(0)}`)).json();
-  assert.deepEqual(endless.entries.map(e => [e.score, e.days]), [[30000, 9]]);
-  assert.deepEqual((await (await send(`/api/leaderboard?board=${boardId(3)}`)).json()).entries, []);
+  assert.equal(endless.ruleset, boardId(0));
+  assert.deepEqual(endless.entries.map(e => [e.score, e.days]), ranked, 'One list, ranked by net worth, including older day-length scores');
+  const legacy = await (await send(`/api/leaderboard?board=${boardId(5)}`)).json();
+  assert.equal(legacy.ruleset, boardId(0));
+  assert.deepEqual(legacy.entries.map(e => [e.score, e.days]), ranked, 'A day-length board id is the same list');
+  const stored = sqlite.prepare('SELECT ruleset, points FROM scores WHERE role = ? ORDER BY points DESC').all(MANAGER_ROLE);
+  assert.deepEqual(stored.map(row => [row.ruleset, row.points]), [
+    [boardId(0), 30000], [boardId(5), 15000], [boardId(3), 12000], [boardId(7), 8000],
+  ], 'Day-length score rows stay on their original rulesets');
   const shifts = await (await send('/api/leaderboard')).json();
   assert.deepEqual(shifts.entries.map(e => e.name), ['Shift Player'], 'The shift board only lists shift runs');
+  assert.equal(shifts.ruleset, RULESET);
   assert.equal((await send('/api/leaderboard?board=roles-v8-optional-calls')).status, 404);
   response = await post(runs[5], {board:boardId(5), score:99999999, shipped:45, missed:1, sourced:6, days:5, elapsed:5 * DAY_SECONDS, finishReason:'complete'});
-  assert.equal((await (await send(`/api/leaderboard?board=${boardId(5)}`)).json()).entries.length, 1, 'One score per run');
+  assert.equal((await (await send(`/api/leaderboard?board=${boardId(0)}`)).json()).entries.length, 4, 'One score per run');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM scores WHERE ruleset = ?').get(boardId(5)).count, 1);
 });
 
-test('endless boards rank days survived before net worth', async () => {
+test('the manager board ranks net worth and keeps older day-length scores in that list', async () => {
   const source = await readFile(new URL('../server/worker.js', import.meta.url), 'utf8');
-  assert.match(source, /length\?'points DESC,days DESC,created_at ASC':'days DESC,points DESC,created_at ASC'/);
+  assert.match(source, /ORDER BY points DESC,days DESC,created_at ASC/);
+  assert.match(source, /MANAGER_SCORE_RULESETS/);
+  assert.doesNotMatch(source, /days DESC,points DESC/);
+});
+
+test('shop setup offers one limitless run and one leaderboard tab', async () => {
+  const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
+  const social = await readFile(new URL('../dist/social.js', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
+  assert.match(main, /game\.start\(\{length:0\}\)/);
+  assert.match(main, /social\.start\(MANAGER_ROLE,boardId\(0\)\)/);
+  assert.doesNotMatch(main, /renderRunLengths/);
+  assert.match(main, /Play until you stop/);
+  assert.doesNotMatch(main, /3, 5 or 7 days/);
+  assert.doesNotMatch(html, /How long to run the shop/);
+  assert.match(social, /MANAGER_BOARD = 'manager-v1-endless'/);
+  assert.match(social, /\[MANAGER_BOARD,'Open for Business'\]/);
+  assert.match(social, /One board, ranked by net worth/);
+  assert.doesNotMatch(social, /'3 days'|'5 days'|'7 days'|'Endless'/);
 });
 
 test('challenge links never carry manager runs', () => {
@@ -635,7 +665,7 @@ test('manager records load safely beside shift progress in the v8 save', async (
   };
   const fresh = load({});
   assert.equal(fresh.unlocked, 0, 'A new player starts at First Shift');
-  assert.deepEqual(fresh.managerRecord, {bests:{}, days:0, length:5}, 'and can still open the shop: the mode needs no unlock');
+  assert.deepEqual(fresh.managerRecord, {bests:{}, days:0, length:0}, 'and can still open the shop: the mode needs no unlock');
   const cleared = load({'chip-rush-roles-v8':{unlocked:3, bests:[1, 2, 3, 4], grades:[3, 3, 3, 1]}});
   assert.equal(cleared.unlocked, 3, 'The shift unlock chain ends at Night Shift as released');
   const saved = load({'chip-rush-roles-v8':{unlocked:1, bests:[0, 0, 0, 0], grades:[1, 0, 0, 0], manager:{bests:{5:9000, 0:'x', 3:-4, 9:500}, days:7.8, length:0}}});
@@ -643,7 +673,7 @@ test('manager records load safely beside shift progress in the v8 save', async (
   assert.deepEqual(saved.managerRecord, {bests:{5:9000}, days:7, length:0});
   for (const junk of [null, 'x', [], {length:4, days:-3}]) {
     const value = load({'chip-rush-roles-v8':{unlocked:0, bests:[], grades:[], manager:junk}}).managerRecord;
-    assert.deepEqual(value, {bests:{}, days:0, length:5}, JSON.stringify(junk));
+    assert.deepEqual(value, {bests:{}, days:0, length:0}, JSON.stringify(junk));
   }
 });
 

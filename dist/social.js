@@ -1,9 +1,12 @@
 import { RULESET, SHIFTS } from './core.js';
 import { createGameAnalytics } from './analytics.js';
 
-// Open for Business boards. Kept beside the shift board, never mixed with it.
-const MANAGER_BOARDS = [['manager-v1-d3','3 days'],['manager-v1-d5','5 days'],['manager-v1-d7','7 days'],['manager-v1-endless','Endless']];
-const isManagerBoard = board => MANAGER_BOARDS.some(([id]) => id === board);
+// One Open for Business board, beside the shift board and never mixed with it.
+// Older day-length ids still count as this board so a run already in progress
+// opens the same list.
+const MANAGER_BOARD = 'manager-v1-endless';
+const LEGACY_MANAGER_BOARDS = ['manager-v1-d3', 'manager-v1-d5', 'manager-v1-d7', MANAGER_BOARD];
+const isManagerBoard = board => LEGACY_MANAGER_BOARDS.includes(board);
 
 export function parseChallenge(search) {
   const p=new URLSearchParams(search);
@@ -59,19 +62,19 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   }
   function renderTabs(){
     const tabs=$('board-tabs');if(!tabs)return;tabs.replaceChildren();
-    for(const [id,label] of [['','Shifts'],...MANAGER_BOARDS]){
+    for(const [id,label] of [['','Shifts'],[MANAGER_BOARD,'Open for Business']]){
       const b=document.createElement('button');b.type='button';b.role='tab';b.ariaSelected=String(id===board);b.textContent=label;
       b.onclick=()=>{if(board===id)return;board=id;renderTabs();loadBoard();};tabs.append(b);
     }
     const manager=isManagerBoard(board);
-    $('board-note').textContent=manager?'Open for Business. Each run length has its own board.':'One leaderboard for every shift. More complex work. Faster shipping. Higher scores.';
-    $('board-scoring').textContent=manager?(board.endsWith('endless')?'Most days survived, then net worth: cash plus equipment at resale.':'Net worth at closing: cash plus equipment at resale.'):'Part complexity + early shipping + streaks. CAD, customer calls and rush deliveries earn extra. Missed accepted rushes deduct points.';
+    $('board-note').textContent=manager?'Open for Business. One board, ranked by net worth.':'One leaderboard for every shift. More complex work. Faster shipping. Higher scores.';
+    $('board-scoring').textContent=manager?'Net worth at closing: cash plus equipment at resale.':'Part complexity + early shipping + streaks. CAD, customer calls and rush deliveries earn extra. Missed accepted rushes deduct points.';
   }
   async function loadBoard(showFull=true){
     const token=++boardGeneration,shown=showFull?board:'';
     if(showFull){$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';}
     try{const data=await api('leaderboard'+(shown?`?board=${encodeURIComponent(shown)}`:''));if(token!==boardGeneration)return;
-      if(showFull||!board){$('board-status').textContent=data.entries.length?(shown?`Top 30 · ${MANAGER_BOARDS.find(([id])=>id===shown)[1]}`:'Top 30 · all shifts · points'):'No scores yet. Set the first one.';renderScores('board-list',data.entries);}
+      if(showFull||!board){$('board-status').textContent=data.entries.length?(shown?'Top 30 · Open for Business':'Top 30 · all shifts · points'):'No scores yet. Set the first one.';renderScores('board-list',data.entries);}
       if(!shown){$('home-board-status').textContent=data.entries.length?'All shifts. One leaderboard.':'No scores yet. Your shift could be first.';renderScores('home-board-list',data.entries.slice(0,10));}
     }catch(error){if(token!==boardGeneration)return;if(showFull)$('board-status').textContent=error.message;if(!shown)$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
   }
@@ -116,7 +119,8 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     $('leaderboard-dialog').close();
   }
   function openBoard(withResult=false){
-    board=withResult&&result?.board?result.board:withResult?'':board;renderTabs();
+    const requested=withResult&&result?.board?result.board:withResult?'':board;
+    board=isManagerBoard(requested)?MANAGER_BOARD:requested;renderTabs();
     $('post-form').hidden=!withResult||!result;
     $('post-result-summary').textContent=result?`Your ${result.board?'run':'shift'} · ${summary(result)}`:'';
     syncPostControls();

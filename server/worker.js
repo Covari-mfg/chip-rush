@@ -1,5 +1,5 @@
 import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
-import { MANAGER_ROLE, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
+import { MANAGER_ROLE, MANAGER_BOARD, MANAGER_SCORE_RULESETS, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 const fail=(message,status=400)=>json({error:message},status);
@@ -51,8 +51,8 @@ export function validateResult(value,run,now=Date.now()){
   return null;
 }
 
-// Open for Business posts net worth for one run length. Like shift scores
-// these are self-reported; the checks bound them by the game's own economy.
+// Open for Business posts net worth. New runs use manager-v1-endless. Like
+// shift scores these are self-reported; the checks bound them by the economy.
 export function validateManagerResult(value,run,now=Date.now()){
   const length=parseBoard(run?.ruleset);
   if(!run||length===null||run.role!==MANAGER_ROLE||value.role!==MANAGER_ROLE||(value.board!==undefined&&value.board!==run.ruleset))return 'Start a new run before posting.';
@@ -81,11 +81,13 @@ export default {
     if(request.method==='POST'&&request.headers.get('origin')!==url.origin)return fail('Use the game page to post.',403);
     try{
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'&&url.searchParams.has('board')){
-        const board=url.searchParams.get('board'),length=parseBoard(board);
-        if(length===null)return fail('Choose a leaderboard.',404);
-        const order=length?'points DESC,days DESC,created_at ASC':'days DESC,points DESC,created_at ASC';
-        const data=await env.DB.prepare(`SELECT name,points AS score,shipped,missed,sourced,days,created_at FROM scores WHERE ruleset=? ORDER BY ${order} LIMIT 30`).bind(board).all();
-        return json({ruleset:board,entries:data.results||[]});
+        const board=url.searchParams.get('board');
+        if(parseBoard(board)===null)return fail('Choose a leaderboard.',404);
+        // One list: endless scores plus rows still stored on the day-length boards.
+        // Ranked by net worth (points), the same measure those boards already use.
+        const marks=MANAGER_SCORE_RULESETS.map(()=>'?').join(',');
+        const data=await env.DB.prepare(`SELECT name,points AS score,shipped,missed,sourced,days,created_at FROM scores WHERE ruleset IN (${marks}) ORDER BY points DESC,days DESC,created_at ASC LIMIT 30`).bind(...MANAGER_SCORE_RULESETS).all();
+        return json({ruleset:MANAGER_BOARD,entries:data.results||[]});
       }
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
