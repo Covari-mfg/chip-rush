@@ -611,7 +611,7 @@ function updateUI(force=false){
   $('shipment-progress').title=shipmentGoal;$('shipment-progress').setAttribute('aria-label',shipmentGoal);
   $('order-count').textContent=`${game.orders.length} / 4`;}
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);if(game.manager)updateManagerTickets(force);else updateTickets(force);
-  updateOfficeUI();updateSourceUI();syncCovariBanner();
+  updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
   for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
   const next=nextTarget(),target=nearby?.def.id;
@@ -1088,11 +1088,6 @@ function covariSwitch(){
   const on=game.covariPartner;
   return `<div class="covari-row"><button type="button" class="covari-switch" data-covari="1" aria-pressed="${on}" aria-label="Covari"><span class="covari-partner-logo"><img src="${$('covari-logo').src}" alt=""></span><b>Covari</b><span class="switch" aria-hidden="true"><i></i></span></button><p class="covari-note">Outsource to a peer to peer network</p><div class="covari-margin"><span>Your margin</span>${policyStepper('covariMargin','your margin',pct(game.policy.covariMargin))}</div></div>`;
 }
-function syncCovariBanner(){
-  const banner=$('covari-partner-banner');
-  if(!banner)return;
-  banner.hidden=!(game.manager&&!menuMode&&!game.covariPartner&&(game.mode==='playing'||game.mode==='paused'));
-}
 // The shop panel: equipment, staff, upgrades, the wing and ads.
 function storeRows(){
   const can=game.canManage(),evening=game.mode==='evening',rows=[];
@@ -1323,7 +1318,6 @@ function bindControls(){
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');
-  $('covari-partner-banner').onclick=()=>{if(!game.manager||!game.partnerCovari())return;processEvents();renderStore(true);updateUI(true);saveRun();};
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});
