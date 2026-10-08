@@ -30,9 +30,10 @@ function readUnlocked(value){return Math.max(0,Math.min(SHIFTS.length-1,Math.tru
 // earned on a still-locked level (friend challenges) never unlock anything.
 function unlockCleared(level,stars){for(let i=0;i<SHIFTS.length-1;i++)if(i<=level&&Number(stars?.[i])>0)level=Math.max(level,i+1);return level;}
 // Open for Business keeps its own records beside the shift records in the same save:
-// best net worth per run length ('0' is Endless), longest Endless run, last length.
-let managerRecord={bests:{},days:0,length:5};
-function readManagerRecord(value){if(!value||typeof value!=='object'||Array.isArray(value))value={};const record={bests:{},days:Math.max(0,Math.trunc(Number(value?.days))||0),length:RUN_LENGTHS.includes(value?.length)?value.length:5};for(const length of RUN_LENGTHS){const best=Math.trunc(Number(value?.bests?.[length]));if(best>0)record.bests[length]=best;}return record;}
+// best net worth (including older per-length bests), longest run, last length.
+// A new run is always limitless (length 0). A saved 3-, 5-, or 7-day run can still finish.
+let managerRecord={bests:{},days:0,length:0};
+function readManagerRecord(value){if(!value||typeof value!=='object'||Array.isArray(value))value={};const record={bests:{},days:Math.max(0,Math.trunc(Number(value?.days))||0),length:RUN_LENGTHS.includes(value?.length)?value.length:0};for(const length of RUN_LENGTHS){const best=Math.trunc(Number(value?.bests?.[length]));if(best>0)record.bests[length]=best;}return record;}
 const roleSave=readRoleSave(SAVE_KEY);
 if(roleSave){
   unlocked=readUnlocked(roleSave.unlocked);
@@ -719,7 +720,7 @@ function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}au
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
-  game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;game.start({length:managerRecord.length});closePopover();cancelMove();resetBays();salesStrip=null;social.start(MANAGER_ROLE,boardId(managerRecord.length));
+  game.distance=(a,b)=>a===b?0:routeBetween(a,b).length;game.start({length:0});managerRecord.length=0;save();closePopover();cancelMove();resetBays();salesStrip=null;social.start(MANAGER_ROLE,boardId(0));
   enterFloor();$('shift-number').textContent=managerHeading();$('shift-name').textContent=MANAGER_MODE.name;processEvents();updateUI(true);saveRun();$('scene').focus();}
 // A saved run comes back exactly where it was left: mid-day runs return
 // paused, evenings return to the ledger. The board run id travels with it.
@@ -777,8 +778,8 @@ function showManagerBriefing(){
   briefingManager=true;const cfg=MANAGER_MODE;hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   const run=savedRunSummary();$('briefing-continue').hidden=!run;$('briefing-replace').hidden=!run;
   if(run)$('briefing-continue').innerHTML=`CONTINUE · DAY ${run.day}${run.length?' OF '+run.length:' · ENDLESS'} · ${money(run.cash)} <span>↗</span>`;
-  $('briefing-lengths').hidden=false;$('briefing-start').innerHTML=`${run?'START A NEW RUN':'OPEN THE SHOP'} <span>↗</span>`;$('briefing-start').classList.toggle('secondary',!!run);renderRunLengths();
-  $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes.`;
+  $('briefing-lengths').hidden=true;$('briefing-lengths').replaceChildren();$('briefing-start').innerHTML=`${run?'START A NEW RUN':'OPEN THE SHOP'} <span>↗</span>`;$('briefing-start').classList.toggle('secondary',!!run);
+  $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>days survived</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$(run?'briefing-continue':'briefing-start').focus({preventScroll:true});
 }
@@ -786,7 +787,7 @@ function showManagerBriefing(){
 function buildModeCard(){
   const card=$('mode-manager'),best=Math.max(0,...Object.values(managerRecord.bests));
   const run=savedRunSummary();
-  card.querySelector('.mode-best').textContent=run?`Saved run · day ${run.day}${run.length?' of '+run.length:' · Endless'} · ${money(run.cash)}`:best?`Best ${money(best)}${managerRecord.days?` · Endless ${managerRecord.days} days`:''}`:'3, 5 or 7 days, or Endless';
+  card.querySelector('.mode-best').textContent=run?`Saved run · day ${run.day}${run.length?' of '+run.length:' · Endless'} · ${money(run.cash)}`:best?`Best ${money(best)}${managerRecord.days?` · ${managerRecord.days} days`:''}`:'Play until you stop.';
 }
 function showResults(){
   if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(SHIFTS.length-1,game.shiftIndex+1));
@@ -824,16 +825,6 @@ const lengthName=length=>length?`${length}-day run`:'Endless';
 const OP_HEIGHT={lathe:3.306,mill:3.534,inspect:2.05,deburr:2.05,anodize:2.2,heat:2.65,laser:2.1};
 const opAt=id=>game.manager?(game.stations[id]?.op??null):id;
 function managerHeading(){return `OPEN FOR BUSINESS · DAY ${game.day}${game.length?' / '+game.length:''}${game.halls.length?` · ${game.halls.length} SOUTH HALL${game.halls.length>1?'S':''}`:game.expanded?' · EAST WING':''}`;}
-function renderRunLengths(){
-  const holder=$('briefing-lengths');holder.replaceChildren();
-  for(const length of RUN_LENGTHS){
-    const b=document.createElement('button');b.type='button';b.setAttribute('role','radio');b.setAttribute('aria-checked',String(managerRecord.length===length));
-    b.className='run-length'+(managerRecord.length===length?' selected':'');b.dataset.length=length;
-    const best=managerRecord.bests[length];
-    b.innerHTML=`<b>${length?length+' days':'Endless'}</b><small>${length?(best?'Best '+money(best):'Fixed run'):(managerRecord.days?`Best ${managerRecord.days} days`:'Until the rent wins')}</small>`;
-    holder.appendChild(b);
-  }
-}
 function updateManagerHUD(){
   $('score-label').textContent='CASH';$('score').textContent=money(game.cash);$('score').classList.toggle('negative',game.cash<0);
   $('shipped-label').textContent='REPUTATION';$('shipped').textContent='★'+game.reputation.toFixed(1);
@@ -1339,7 +1330,6 @@ function bindControls(){
   $('action-manage').onclick=toggleStore;$('touch-shop').onclick=toggleStore;$('store-close').onclick=closeStore;
   $('store-list').addEventListener('click',storeAction);$('evening-store').addEventListener('click',storeAction);
   $('evening-open').onclick=openNextDay;$('evening-retire').onclick=()=>{if(game.manager&&game.retire())processEvents();};$('evening-leave').onclick=showMenu;
-  $('briefing-lengths').addEventListener('click',e=>{const b=e.target.closest('[data-length]');if(!b)return;managerRecord.length=Number(b.dataset.length);save();renderRunLengths();$('briefing-lengths').querySelector(`[data-length="${b.dataset.length}"]`)?.focus();});
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
     if(['Space','Enter'].includes(e.code)&&e.target.closest?.('button'))return;
