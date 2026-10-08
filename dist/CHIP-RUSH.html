@@ -444,7 +444,7 @@ html[data-interface="mobile"] body:has(#overlay:not([hidden]):not(.evening)) #to
 .quote-actions .bid button:disabled{opacity:.25}
 .quote-actions .bid output{font:800 11px ui-monospace,monospace;color:#2b5b56;min-width:34px;text-align:center}
 .quote-actions .chance{font-weight:700;opacity:.85}
-#orders .contract-quote{border-color:#7b6fc9;background:#f6f2ff}
+#orders .quote-ticket.contract-quote{border-color:#7b6fc9;background:#f6f2ff}
 #orders .contract-ticket{background:#efeafc;border:2px solid #9a8de0;display:flex;flex-direction:column}
 .contract-units{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
 .contract-units i{width:12px;height:8px;border-radius:2px;background:#d8d3ea}
@@ -5868,7 +5868,7 @@ function gapText(order){const gaps=game.gapsFor(order.route);if(!gaps.length)ret
 function customerTag(index){const c=game.customers[index];if(!c)return '';const pips=Math.round(c.loyalty);return `<span class="customer" title="${c.name} · loyalty ${c.loyalty.toFixed(1)} of 3">${c.name}<i>${'♥'.repeat(pips)}${'♡'.repeat(3-pips)}</i></span>`;}
 function quoteHTML(q){
   const stock=stockType(q),gap=gapText(q),technology=q.technology?technologyBadges([q.technology]):'',contract=q.type==='contract',covari=game.covariEligible(q);
-  const note=gap?(game.covariPartner?`${gap} · Covari ${money(q.covariCost)} · you charge ${money(game.covariCharge(q))}`:`${gap} · Turn on Covari to place it`):contract?`Contract · ${q.units} parts · due end of tomorrow · ${money(q.unitPrice)} each`:`${q.deadline}s to deliver · stock ${money(q.material)}${q.tight?' · tight tolerance':''}`;
+  const note=gap&&contract?gap:gap?(game.covariPartner?`${gap} · Covari ${money(q.covariCost)} · you charge ${money(game.covariCharge(q))}`:`${gap} · Turn on Covari to place it`):contract?`Contract · ${q.units} parts · due end of tomorrow · ${money(q.unitPrice)} each`:`${q.deadline}s to deliver · stock ${money(q.material)}${q.tight?' · tight tolerance':''}`;
   return `<div class="ticket-top">${customerTag(q.customer)}<span class="due"></span></div><div class="ticket-heading"><h3>${contract?`${q.units} × `:''}${q.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technology}</span><b class="price"></b></div><div class="route">${routeChips(q)}</div><small class="quote-note${gap?' gap':''}">${note}</small><div class="quote-actions"><span class="bid" role="group" aria-label="Bid"><button data-act="bid-down" data-id="${q.id}" aria-label="Lower the bid">◀</button><output class="bid-value"></output><button data-act="bid-up" data-id="${q.id}" aria-label="Raise the bid">▶</button></span><button data-act="accept" data-id="${q.id}"><span class="accept-label">Bid</span> <small class="chance"></small></button>${covari?`<button data-act="covari" data-id="${q.id}" class="covari" aria-label="Outsource with Covari"><span class="source-logo"><img src="${$('covari-logo').src}" alt=""></span><span class="covari-keep"></span></button>`:''}<button data-act="decline" data-id="${q.id}" class="decline" aria-label="Turn quote ${q.id} away">No</button></div><div class="ticket-progress"><i></i></div>`;
 }
 function managerTicketState(o){
@@ -5960,7 +5960,7 @@ function updateManagerTickets(force){
   const full=game.boardFull(),covariFull=game.covariOrders().length>=COVARI_SLOTS,seller=game.staff.find(m=>m.role==='sales');
   for(const q of game.quotes){const el=$('quote-'+q.id);if(!el)continue;
     const review=game.needsReview(q),handled=seller&&!review;el.classList.toggle('review',!!seller&&review);
-    el.querySelector('.due').textContent=handled?`${seller.name} ${Math.max(0,Math.ceil(SALES_DELAY-q.age))}s`:`${seller?'YOUR CALL · ':''}${Math.ceil(q.quoteRemaining)}s`;el.classList.toggle('urgent',q.quoteRemaining<6);
+    el.querySelector('.due').textContent=(q.type==='contract'?'CONTRACT · ':'')+(handled?`${seller.name} ${Math.max(0,Math.ceil(SALES_DELAY-q.age))}s`:`${seller?'YOUR CALL · ':''}${Math.ceil(q.quoteRemaining)}s`);el.classList.toggle('urgent',q.quoteRemaining<6);
     el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,handled?1-q.age/SALES_DELAY:q.quoteRemaining/QUOTE_WINDOW)})`;
     el.querySelector('.price').textContent=money(q.price);el.querySelector('.price').classList.toggle('marked-up',q.markup>0);el.querySelector('.price').classList.toggle('discount',q.markup<0);
     el.querySelector('.bid-value').textContent=pct(q.markup);
@@ -5970,7 +5970,7 @@ function updateManagerTickets(force){
     accept.querySelector('.chance').textContent=q.chance<1?`${Math.round(q.chance*100)}%`:'';
     const missingOps=gap?game.gapsFor(q.route).map(k=>opInfo(k).name).join(', '):'';
     accept.disabled=full||Boolean(gap);
-    accept.title=gap?`Requires ${missingOps} · buy the machine or outsource with Covari`:full?`The order board is full (${game.orderLimit})`:q.chance<1?`${Math.round(q.chance*100)}% chance the customer takes this bid`:'';
+    accept.title=gap?`Requires ${missingOps} · buy the machine${q.type==='contract'?'':' or outsource with Covari'}`:full?`The order board is full (${game.orderLimit})`:q.chance<1?`${Math.round(q.chance*100)}% chance the customer takes this bid`:'';
     const covari=el.querySelector('[data-act="covari"]');if(covari){const charge=game.covariCharge(q);covari.querySelector('.covari-keep').textContent=`+${money(charge-q.covariCost)}`;covari.disabled=covariFull||game.cash<q.covariCost;covari.title=covariFull?`Covari is already placing ${COVARI_SLOTS} jobs (ship one first)`:game.cash<q.covariCost?`Covari's price is ${money(q.covariCost)} (cash: ${money(game.cash)})`:`Covari's price ${money(q.covariCost)}. You charge the customer ${money(charge)}.`;}}
   for(const c of game.contracts){const el=$('contract-'+c.id);if(!el)continue;const state=contractState(c);
     el.querySelector('.due').textContent=c.remaining>game.time?`${clock(c.remaining-game.time)} tomorrow`:clock(c.remaining);el.classList.toggle('urgent',c.remaining<25);
