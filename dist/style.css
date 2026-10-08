@@ -437,7 +437,7 @@ html[data-interface="mobile"] body:has(#overlay:not([hidden]):not(.evening)) #to
 .quote-actions .bid button:disabled{opacity:.25}
 .quote-actions .bid output{font:800 11px ui-monospace,monospace;color:#2b5b56;min-width:34px;text-align:center}
 .quote-actions .chance{font-weight:700;opacity:.85}
-#orders .contract-quote{border-color:#7b6fc9;background:#f6f2ff}
+#orders .quote-ticket.contract-quote{border-color:#7b6fc9;background:#f6f2ff}
 #orders .contract-ticket{background:#efeafc;border:2px solid #9a8de0;display:flex;flex-direction:column}
 .contract-units{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
 .contract-units i{width:12px;height:8px;border-radius:2px;background:#d8d3ea}

@@ -260,6 +260,22 @@ test('Covari takes only real capability gaps, is paid up front and ships through
   assert.equal(deal.outsourceQuote(contract.id), false, 'Covari does not take whole contracts');
 });
 
+test('a contract quote with a gap shows the missing process and no Covari price', async () => {
+  const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
+  const cards = main.slice(main.indexOf('function routeChips('), main.indexOf('function managerTicketState('));
+  const game = fresh();game.partnerCovari();
+  const context = vm.createContext({game, opInfo, stockType:() => 'round', money:n => `$${n}`, technologyBadges:() => '', stockIcon:() => '', $:() => ({src:'logo.png'})});
+  vm.runInContext(`${cards};this.quoteHTML=quoteHTML;`, context);
+  const note = html => html.match(/<small class="quote-note[^"]*">([^<]*)<\/small>/)[1];
+  const job = quoteFor(game, 'collar'), contract = quoteFor(game, 'collar', {contract:true});
+  assert.match(note(context.quoteHTML(job)), /^No anodize yet · Covari \$\d+ · you charge \$\d+$/);
+  assert.match(context.quoteHTML(job), /data-act="covari"/, 'A single job with a gap can go to Covari');
+  const card = context.quoteHTML(contract);
+  assert.equal(note(card), 'No anodize yet');
+  assert.doesNotMatch(card, /Covari|data-act="covari"/, 'A contract card names no Covari price and has no Covari button');
+  assert.match(card, /<h3>3 × Ocean collar<\/h3>/);
+});
+
 test('machines go into bays that fit them; duplicates add capacity; selling frees the bay', () => {
   const game = fresh();game.cash = 30000;
   assert.equal(game.buyMachine('bay-3', 'anodize'), false, 'An anodize bath does not fit a small bay');
