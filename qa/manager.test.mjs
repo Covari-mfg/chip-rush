@@ -307,6 +307,74 @@ test('machines go into bays that fit them; duplicates add capacity; selling free
   assert.equal(game.hasMachine('anodize'), true, 'After hours, machines are ready by morning');
 });
 
+test('buying or placing a station over the player leaves the player able to move', async () => {
+  const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
+  const sync = main.slice(main.indexOf('function syncBays('), main.indexOf('function resetBays('));
+  assert.match(sync, /releasePlayer\(\)/, 'Placing a station releases a player caught in its footprint');
+  const section = (from, to) => {
+    const start = main.indexOf(from), end = main.indexOf(to, start);
+    assert.ok(start >= 0 && end > start, from);
+    return main.slice(start, end);
+  };
+  const game = fresh();
+  game.cash = 30000;
+  const context = vm.createContext({Math, HALLS, game});
+  vm.runInContext(`${section('const STATION_LAYOUT=', '\nlet renderer')}
+    ${section('const BASE_BOUNDS=', '\nfunction save')}
+    const player={x:0,z:0,angle:0};
+    let path=[],pathStation=null,targetRing={visible:false},character={position:{y:0,set(x,y,z){this.x=x;this.y=y;this.z=z;}}},playerRing={position:{set(x,y,z){this.x=x;this.y=y;this.z=z;}}};
+    ${section('function safeSpot(', '\n// A* routing')}
+    this.floor={player,character,activateMap,safeSpot,moveBy,releasePlayer,obstacles:()=>obstacles,layout:STATION_LAYOUT,placed};`, context);
+  const floor = context.floor;
+  floor.activateMap('owner-shop');
+  const footprint = id => {
+    const def = floor.placed(floor.layout.find(station => station.id === id), 'owner-shop');
+    return {minX:def.x-def.w/2-.25,maxX:def.x+def.w/2+.25,minZ:def.z-def.d/2-.25,maxZ:def.z+def.d/2+.25};
+  };
+  const contains = (box, x, z) => x>box.minX&&x<box.maxX&&z>box.minZ&&z<box.maxZ;
+  const canWalk = () => {
+    const origin = {x:floor.player.x, z:floor.player.z};
+    for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      floor.player.x = origin.x; floor.player.z = origin.z;
+      floor.moveBy(dx * .8, dz * .8);
+      if (Math.hypot(floor.player.x-origin.x, floor.player.z-origin.z) > .25) { floor.player.x = origin.x; floor.player.z = origin.z; return true; }
+    }
+    floor.player.x = origin.x; floor.player.z = origin.z;
+    return false;
+  };
+  const standIn = (id, x, z) => { floor.player.x = x; floor.player.z = z; assert.equal(contains(footprint(id), x, z), true); };
+  const bay = footprint('bay-2');
+  standIn('bay-2', (bay.minX+bay.maxX)/2, (bay.minZ+bay.maxZ)/2);
+  assert.equal(floor.safeSpot(floor.player.x, floor.player.z), true, 'An empty bay is walkable');
+  assert.equal(canWalk(), true, 'The player can cross an empty bay');
+  const cash = game.cash;
+  assert.equal(game.buyMachine('bay-2', 'anodize'), true);
+  assert.equal(game.cash, cash - MACHINES.anodize.cost, 'Buying still charges the anodize price');
+  assert.equal(game.stations['bay-2'].op, 'anodize');
+  assert.equal(canWalk(), false, 'The new station is solid where the player is standing');
+  assert.equal(floor.releasePlayer(), true);
+  assert.equal(contains(footprint('bay-2'), floor.player.x, floor.player.z), false, 'The player is outside the anodize footprint');
+  assert.equal(floor.safeSpot(floor.player.x, floor.player.z), true);
+  assert.equal(canWalk(), true, 'The player can walk away after the anodize station is bought on top of them');
+  const clip = footprint('bay-2');
+  standIn('bay-2', clip.maxX - .2, (clip.minZ+clip.maxZ)/2);
+  assert.equal(canWalk(), false, 'Standing in the padding between anodize and shipping is still stuck');
+  assert.equal(floor.releasePlayer(), true);
+  assert.ok(floor.player.x >= clip.maxX && floor.player.x < clip.maxX + .2, 'The right-side clip steps just outside the machine');
+  assert.equal(canWalk(), true, 'They can walk out of the gap beside shipping');
+  game.hallsPending.push('hall-a');
+  const bay1 = footprint('bay-1');
+  standIn('bay-1', (bay1.minX+bay1.maxX)/2, (bay1.minZ+bay1.maxZ)/2);
+  assert.equal(canWalk(), true, 'The destination bay is empty');
+  assert.equal(game.moveMachine('bay-2', 'bay-1'), true);
+  assert.equal(game.stations['bay-1'].op, 'anodize');
+  assert.equal(canWalk(), false, 'Moving the station onto the player traps them');
+  assert.equal(floor.releasePlayer(), true);
+  assert.equal(contains(footprint('bay-1'), floor.player.x, floor.player.z), false);
+  assert.equal(floor.safeSpot(floor.player.x, floor.player.z), true);
+  assert.equal(canWalk(), true, 'Placing a station over the player still leaves them able to move');
+});
+
 test('the east wing opens overnight, adds large bays and staff room, and raises rent', () => {
   const game = fresh();game.cash = 30000;
   assert.equal(game.staffMax('runner'), STAFF.runner.max);
