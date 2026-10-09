@@ -148,6 +148,34 @@ function toast(message,duration=2.6){$('toast').textContent=message;$('toast').c
 function safeSpot(x,z){return x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ&&!obstacles.some(o=>{if(o.bay&&(typeof game!=='undefined'&&game?.manager)&&!game.stations[o.id])return false;return x>o.minX&&x<o.maxX&&z>o.minZ&&z<o.maxZ;});}
 function movePosition(position,dx,dz){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.12));for(let i=0;i<steps;i++){if(safeSpot(position.x+dx/steps,position.z))position.x+=dx/steps;if(safeSpot(position.x,position.z+dz/steps))position.z+=dz/steps;}}
 function moveBy(dx,dz){movePosition(player,dx,dz);}
+// A bought or moved station keeps its bay. If that footprint already contains
+// the player, step them to the nearest walkable point just outside it.
+function insideFootprint(box,x,z){return x>box.minX&&x<box.maxX&&z>box.minZ&&z<box.maxZ;}
+function nearestWalkableOutside(box,from){
+  const gap=.05;let best=null,bestD=Infinity;
+  const consider=(x,z)=>{if(insideFootprint(box,x,z)||!safeSpot(x,z))return;const d=(x-from.x)**2+(z-from.z)**2;if(d<bestD){bestD=d;best={x,z};}};
+  consider(box.minX-gap,from.z);consider(box.maxX+gap,from.z);consider(from.x,box.minZ-gap);consider(from.x,box.maxZ+gap);
+  for(let step=.16;step<=2.6&&!best;step+=.16){
+    consider(box.minX-gap,from.z-step);consider(box.minX-gap,from.z+step);
+    consider(box.maxX+gap,from.z-step);consider(box.maxX+gap,from.z+step);
+    consider(from.x-step,box.minZ-gap);consider(from.x+step,box.minZ-gap);
+    consider(from.x-step,box.maxZ+gap);consider(from.x+step,box.maxZ+gap);
+  }
+  if(!best)for(let r=.25;r<=4.5&&!best;r+=.25)for(let a=0;a<24;a++)consider(from.x+Math.cos(a*Math.PI/12)*r,from.z+Math.sin(a*Math.PI/12)*r);
+  return best;
+}
+function releasePlayer(){
+  if(typeof game==='undefined'||!game?.manager)return false;
+  for(const box of obstacles){
+    if(!box.bay||!game.stations[box.id]||!insideFootprint(box,player.x,player.z))continue;
+    const spot=nearestWalkableOutside(box,player);if(!spot)return false;
+    player.x=spot.x;player.z=spot.z;path=[];pathStation=null;if(targetRing)targetRing.visible=false;
+    if(character?.position)character.position.set(player.x,character.position.y??0,player.z);
+    if(playerRing?.position)playerRing.position.set(player.x,.075,player.z);
+    return true;
+  }
+  return false;
+}
 
 // A* routing uses the same collision boundary as keyboard movement.
 function routeSegmentClear(a,b){
@@ -845,7 +873,7 @@ let baySignature='';
 function syncBays(){
   const signature=game.manager?Object.keys(game.stations).map(key=>key+':'+game.stations[key].op).join():'';
   if(signature===baySignature)return;baySignature=signature;
-  routeCache.clear();
+  routeCache.clear();releasePlayer();
   for(const id of Object.keys(bays)){
     const s=stations[id],op=game.manager?game.stations[id]?.op??null:s.def.baseBay?id:null;
     if(s.op!==op){
