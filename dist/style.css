@@ -381,6 +381,11 @@ body.manager-mode .action-controls{grid-template-columns:1fr 1fr 1fr}
 .mode-tag{color:var(--gold)!important;font-size:9px!important;letter-spacing:1.3px;font-weight:800;margin:0 0 3px!important}
 .mode-best{color:var(--teal)!important}
 .mode-card .pick-mark{margin-left:auto;color:var(--gold);font-size:15px}
+.shift-choice .shift-credit{color:#aac1c0;font-weight:400}
+.shift-choice .shift-credit b{display:inline;font-size:10px;color:var(--gold);font-weight:700}
+.model-credit{display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:fit-content;max-width:100%;margin:-6px 0 16px!important;padding:0!important;color:#aac1c0!important;font-size:13px!important;line-height:1.2!important;font-weight:400}
+.model-credit .model-kicker{color:#aac1c0;font-weight:400;font-size:13px;letter-spacing:0;text-transform:none}
+.model-credit b{color:var(--gold);font-weight:700;font-size:13px;letter-spacing:0}
 .shift-credit a{color:var(--gold);text-decoration:underline;text-underline-offset:2px}
 .mode-card .shift-credit a:hover{color:#fff8e4}
 @media(max-width:680px){.mode-section{margin-top:8px}.mode-card{padding:9px 10px;gap:10px}.mode-copy .mode-sub{display:none}}

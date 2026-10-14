@@ -780,7 +780,7 @@ function frame(now){
   renderer.render(scene,camera);
 }
 const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4'};
-function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${credit?`<small class="shift-credit">${credit}</small>`:''}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
+function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];const named=/^(Created with )(.+)$/.exec(credit||'');const creditHtml=named?`<small class="shift-credit">${named[1]}<b>${named[2]}</b></small>`:'';b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${creditHtml}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
 function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;processEvents();updateUI(true);$('scene').focus();}
@@ -833,10 +833,20 @@ function closeHelp(){
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
 function showMenu(){if(game.manager)saveRun();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
+function showModelCredit(credit){
+  const el=$('briefing-credit');
+  el.replaceChildren();
+  const named=/^(Created with )(.+)$/.exec(credit||'');
+  if(!named){el.hidden=true;return;}
+  el.hidden=false;
+  const kicker=document.createElement('span');kicker.className='model-kicker';kicker.textContent=named[1].trim();
+  const names=document.createElement('b');names.textContent=named[2];
+  el.append(kicker,names);
+}
 function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
-  $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
+  $('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -846,7 +856,7 @@ function showManagerBriefing(){
   const run=savedRunSummary();$('briefing-continue').hidden=!run;$('briefing-replace').hidden=!run;
   if(run)$('briefing-continue').innerHTML=`CONTINUE · DAY ${run.day}${run.length?' OF '+run.length:' · ENDLESS'} · ${money(run.cash)} <span>↗</span>`;
   $('briefing-lengths').hidden=true;$('briefing-lengths').replaceChildren();$('briefing-start').innerHTML=`${run?'START A NEW RUN':'OPEN THE SHOP'} <span>↗</span>`;$('briefing-start').classList.toggle('secondary',!!run);
-  $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
+  $('briefing-role').textContent=cfg.name;showModelCredit();$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>days survived</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$(run?'briefing-continue':'briefing-start').focus({preventScroll:true});
 }
