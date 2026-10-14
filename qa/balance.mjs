@@ -99,7 +99,7 @@ export class Driver {
     }
   }
   pathTo(id) {
-    const access = accesses[id];
+    const access = navigation.accessesFor(this.game.config.mapId)[id] ?? accesses[id];
     assert.ok(access, 'Known destination ' + id);
     nav.activateMap(this.game.config.mapId);
     nav.player.x=this.position.x;nav.player.z=this.position.z;

@@ -836,3 +836,43 @@ export function createHall({x0,z0,x1,z1,col,name,northDoors,westDoor}) {
   dash(x0+.2,z0+.2,x1-.2,z0+.2);dash(x0+.2,z1-.2,x1-.2,z1-.2);dash(x0+.2,z0+.2,x0+.2,z1-.2);dash(x1-.2,z0+.2,x1-.2,z1-.2);
   return {built:batchStatic(built),plot:batchStatic(plot)};
 }
+export function createStormRig() {
+  const g=new THREE.Group();g.name='storm-rig';
+  // High-voltage backup generator & capacitor bank mounted along the back-center bay (-0.4, -4.65).
+  const gen=new THREE.Group();gen.position.set(-.4,0,-4.65);g.add(gen);
+  box(gen,1.9,.18,1.1,0,.12,0,C.navy,.04);
+  box(gen,1.76,1.15,.94,0,.76,0,C.tealDark,.05);
+  box(gen,1.82,.12,.98,0,1.38,0,C.cream,.03);
+  for(const x of [-.55,0,.55]){
+    cyl(gen,.16,.16,.56,x,1.72,-.12,C.navy,16);
+    for(let r=0;r<4;r++)cyl(gen,.21,.21,.04,x,1.52+r*.12,-.12,C.cyan,16,glow(0x4be8ff,.65));
+    cyl(gen,.06,.06,.18,x,2.06,-.12,C.gold,12);
+  }
+  const rotor=new THREE.Group();rotor.position.set(0,.78,.49);gen.add(rotor);
+  cyl(rotor,.28,.28,.06,0,0,0,C.navy,20).rotation.x=Math.PI/2;
+  const coreRing=cyl(rotor,.20,.20,.07,0,0,.01,0x4be8ff,18,glow(0x4be8ff,.9));coreRing.rotation.x=Math.PI/2;
+  for(let i=0;i<6;i++){
+    const a=i*Math.PI/3;
+    const spoke=box(rotor,.04,.38,.08,0,0,.01,C.gold,.005);spoke.rotation.z=a;
+  }
+  textPlate(gen,'BACKUP GENERATOR · OVERDRIVE BUS',1.58,.14,0,1.22,.485,{color:'#dffcff',bg:'#133642',size:34});
+  hazard(gen,-.72,.78,.485,.12);hazard(gen,.72,.78,.485,.12);
+  // Glowing floor power conduits radiating from the generator to the rearranged cells.
+  const busMat=glow(0x38e2ff,.55);
+  const conduits=[];
+  for(const [x,z,w,d] of [
+    [-.4,-2.4, .11,3.5],
+    [-2.0,-3.9, 3.2,.11],
+    [1.65,-3.9, 4.1,.11],
+    [-1.9,.65, 3.4,.11],
+    [1.55,.85, 3.5,.11],
+  ]){
+    const strip=box(g,w,.016,d,x,.042,z,0x38e2ff,.003,busMat);strip.castShadow=false;
+    conduits.push(strip);
+  }
+  g.userData.rotor=rotor;
+  g.userData.coreRing=coreRing;
+  g.userData.conduits=conduits;
+  g.userData.animated=[rotor,coreRing,...conduits];
+  return batchStatic(g);
+}

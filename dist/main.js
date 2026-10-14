@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall } from './assets/models.js';
+import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType } from './core.js';
 import { ShopAudio } from './audio.js';
 import { createSocial } from './social.js';
@@ -61,8 +61,8 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
-  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:'night-shop'},
-  {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:'night-shop'},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop']},
+  {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:['night-shop','dawn-shop']},
   // Open for Business machine bays. Island and front-wall bays are in the
   // original room; the east wing adds four large bays and two small ones.
   {id:'bay-1',name:'BAY',bay:'compact',x:-.9,z:-.5,height:.7,w:2.3,d:1.35,map:['owner-shop','owner-wing']},
@@ -96,6 +96,13 @@ const openHalls=new Set();
 const MAPS={
   'first-shop':{theme:'day'},
   'night-shop':{theme:'night'},
+  'dawn-shop':{theme:'dawn',place:{
+    lathe:{x:-3.3,z:-2.95,access:{x:-3.3,z:-1.29}},
+    mill:{x:3.1,z:-2.85,access:{x:3.1,z:-1.16}},
+    deburr:{x:-3.45,z:-.1,access:{x:-3.45,z:1.19}},
+    anodize:{x:2.4,z:.85,access:{x:2.4,z:2.14}},
+    inspect:{x:0,z:-1.75,rotationY:0,w:2.4,d:1.6,access:{x:0,z:-.32}},
+  },obstacles:[{minX:-1.55,maxX:.75,minZ:-5.35,maxZ:-3.95}]},
   // place moves a shared station for this map only. In the owner's shop QC and
   // Shipping part to leave a doorway east; the wing map also widens the room.
   'owner-shop':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}}},
@@ -106,7 +113,7 @@ const mapHas=(def,mapId)=>(!def.hall||openHalls.has(def.hall))&&(def.map?[].conc
 const placed=(def,mapId)=>({...def,...MAPS[mapId].place?.[def.id]});
 const accessOf=def=>def.access||{x:def.x,z:def.z+def.d/2+.63};
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,lighting,appliedTheme=null;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,lighting,appliedTheme=null,lightningFlash=0;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
@@ -313,6 +320,7 @@ function createMaterialBin(type){
 const THEMES={
   day:{sky:0x102c38,backdrop:0x163845,hemi:[0xdafff3,0x466374,2.25],sun:[0xffe6b5,3.8],fill:[0x86d8ee,2],exposure:1.22},
   night:{sky:0x070f19,backdrop:0x0a1620,hemi:[0x9db8f4,0x22303f,1.55],sun:[0xffc98d,2.9],fill:[0x4f7fd6,1.5],exposure:1.16},
+  dawn:{sky:0x091828,backdrop:0x0d2134,hemi:[0xb9f0ff,0x1d354c,1.88],sun:[0x6fe3ff,3.4],fill:[0xff9f59,2.05],exposure:1.21},
   // Open for Business runs a working day: morning light drifts to dusk by closing.
   morning:{sky:0x18394a,backdrop:0x1d4252,hemi:[0xfff1dc,0x4a6474,2.3],sun:[0xffe0a8,3.9],fill:[0x9fdcf0,1.9],exposure:1.24},
   dusk:{sky:0x2a2438,backdrop:0x2b2a3c,hemi:[0xffc9a6,0x3c3346,1.85],sun:[0xff9d62,3.2],fill:[0x7f86d8,1.6],exposure:1.18},
@@ -332,9 +340,9 @@ function applyMap(){
   if(appliedTheme!==mapKey){
     appliedTheme=mapKey;openHalls.clear();for(const id of halls)openHalls.add(id);
     applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
-    for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office')s.model.position.set(s.def.x,0,s.def.z);}
+    for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;}}
     // The east wing widens the room: refit the camera and stretch the sun's shadows over it.
-    const wing=mapId==='owner-wing';annex.visible=wing;for(const [id,shell] of hallShells)shell.built.visible=openHalls.has(id);fitLights(wing);
+    const wing=mapId==='owner-wing';annex.visible=wing;if(stormRig)stormRig.visible=mapId==='dawn-shop';for(const [id,shell] of hallShells)shell.built.visible=openHalls.has(id);fitLights(wing);
     shopFrame=measureShopFrame();layoutDirty=true;resetView();
   }
   for(const [id,shell] of hallShells)shell.plot.visible=managing&&mapId==='owner-wing'&&!openHalls.has(id)&&(game.hallBuyable(id)||game.hallsPending.includes(id));
@@ -364,7 +372,7 @@ function boot(){
   const sun=new THREE.DirectionalLight(0xffe6b5,3.8);sun.position.set(-7,15,9);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-15;sun.shadow.camera.right=15;sun.shadow.camera.top=14;sun.shadow.camera.bottom=-13;sun.shadow.camera.near=.5;sun.shadow.camera.far=45;sun.shadow.bias=-.00045;sun.shadow.normalBias=.03;sun.shadow.radius=3;scene.add(sun);
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
-  world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);
+  world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);stormRig=createStormRig();stormRig.visible=false;scene.add(stormRig);
   for(const h of HALL_PLOTS){const shell=createHall(h);shell.built.visible=shell.plot.visible=false;scene.add(shell.built,shell.plot);hallShells.set(h.id,shell);
     const sign=$('wing-sign').cloneNode(true);sign.id='hall-sign-'+h.id;sign.classList.add('hall-sign');sign.setAttribute('aria-label',`Expand the shop with ${h.name}`);sign.querySelector('.station-name').textContent=`BUILD ${h.name.toUpperCase()}`;sign.onclick=()=>openPopover('hall',h.id);$('wing-sign').after(sign);hallSigns.set(h.id,sign);}
   scene.add(sun.target);
@@ -492,6 +500,17 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='sourceDelivered'){audio.event('ready');spawnParticles(stations.receiving.def.x,1.6,stations.receiving.def.z,0x72e8cf,8);}
   if(ev.type==='sourceFulfilled'){audio.event('shipped');floatText(`+${ev.points} · ORDER FULFILLED`,'ship',true);spawnParticles(6,1.2,1.2,0x72e8cf,18);}
   if(ev.type==='programmed'){floatText('CAD READY ✓','office',true);}
+  if(ev.type==='surge'){
+    const bolt=ev.source==='lightning';
+    floatText(bolt?'⚡ LIGHTNING SURGE 2×':'⚡ GENERATOR SURGE 2×','office',true);
+    toast(bolt?'Storm lightning supercharged the capacitor bank · 2.0× machine speed!':'Generator Surge engaged · 2.0× machine speed for 16s!',2.8);
+    spawnParticles(-.4,1.65,-4.5,0x4be8ff,22);
+    lightningFlash=bolt?1:.55;shake=bolt?.85:.45;
+  }
+  if(ev.type==='overdrive'){
+    toast('⚡ Harmonic Overdrive · 2+ machines running at 1.5× speed!',2.2);
+    spawnParticles(-.4,1.5,-4.5,0x64f2ff,14);
+  }
   if(ev.type==='call'){nextPhoneRing=clockTime+2.2;}
   if(ev.type==='callAnswering'){clearMovement();player.angle=Math.atan2(stations.office.def.x-player.x,stations.office.def.z-player.z);}
   if(ev.type==='callAnswered'){floatText(`+${ev.points} · CALL HANDLED`,'office',true);$('call-accept').focus();}
@@ -587,8 +606,8 @@ function animateShop(dt){
     const spindle=s.model.userData.spindle;
     if(op==='heat')s.model.userData.heat.material.emissiveIntensity=busy&&active?.95+Math.sin(clockTime*5)*.3:ready?.6:.3;
     if(op==='laser')s.model.userData.beam.visible=busy&&active;
-    if(spindle&&busy&&active){if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15;else if(op==='mill'){spindle.rotation.y+=dt*11;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
-      if((op==='lathe'||op==='mill'||op==='deburr')&&Math.random()<dt*7&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,0xffd67b,1);}
+    if(spindle&&busy&&active){const boost=game.machineSpeed?.()||1;if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15*boost;else if(op==='mill'){spindle.rotation.y+=dt*11*boost;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4*boost)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2*boost)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3*boost)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
+      if((op==='lathe'||op==='mill'||op==='deburr')&&Math.random()<dt*7*boost&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,boost>1?0x5ce6ff:0xffd67b,1);}
     }
     if(state?.part){const mesh=parts.get(state.part.orderId)?.mesh;if(mesh){const wp=s.model.userData.workPoint;if(wp){mesh.position.y=wp.y+(ready&&!reduced?Math.sin(clockTime*3.5)*.055:0);if(ready)mesh.rotation.y+=dt*.8;}}}
   }
@@ -604,6 +623,21 @@ function animateShop(dt){
   animateOfficeSeat(dt);animateStaff(dt);
   if(active&&game.call?.state==='ringing'&&clockTime>=nextPhoneRing){audio.event('call');nextPhoneRing=clockTime+2.2;}
   if(menuMode){character.position.set(.1,Math.sin(clockTime*2)*.018,2.5);character.rotation.y=-.4;playerRing.position.set(.1,.07,2.5);const u=character.userData;if(u.head)u.head.rotation.y=Math.sin(clockTime*.5)*.12;}
+  if(stormRig?.visible){
+    const boost=active?(game.machineSpeed?.()||1):1;
+    if(stormRig.userData.rotor)stormRig.userData.rotor.rotation.z+=dt*(boost>=2?14:boost>1?8:3.2);
+    if(stormRig.userData.coreRing?.material)stormRig.userData.coreRing.material.emissiveIntensity=boost>=2?1.35+Math.sin(clockTime*16)*.35:boost>1?.95+Math.sin(clockTime*10)*.2:.55;
+    for(const strip of stormRig.userData.conduits||[])if(strip.material)strip.material.emissiveIntensity=boost>=2?1.1+Math.sin(clockTime*14)*.25:boost>1?.78:.38;
+    if(active&&boost>1&&!reduced&&Math.random()<dt*(boost>=2?9:4))spawnParticles(-.4+(Math.random()-.5)*.9,1.85,-4.65,0x4be8ff,1);
+    if(lightningFlash>0){
+      lightningFlash=Math.max(0,lightningFlash-dt*2.4);
+      renderer.toneMappingExposure=THEMES.dawn.exposure+lightningFlash*.45;
+      lighting.sun.intensity=THEMES.dawn.sun[1]+lightningFlash*2.4;
+    }else if(appliedTheme==='dawn-shop'){
+      renderer.toneMappingExposure=THEMES.dawn.exposure;
+      lighting.sun.intensity=THEMES.dawn.sun[1];
+    }
+  }
   targetRing.scale.setScalar(1+Math.sin(clockTime*6)*.09);updateParticles(dt);shake=Math.max(0,shake-dt*2);
 }
 function ticketState(o){if(!o.programmed)return game.office.orderId===o.id?`CAD ${game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)?'':'paused · '}${Math.ceil(o.programRemaining)}s`:'Complete CAD at the office';if(o.location==='material')return `Collect ${stockType(o)} stock`;if(o.location==='hands')return `In your hands · ${opInfo(o.route[o.index]).name} next`;if(o.location==='buffer')return 'Parked on Hold bench';const s=game.stations[o.location];return s?.ready?`${opInfo(o.location).name} ready · collect part`:`${opInfo(o.location)?.name||'Machine'} working…`;}
@@ -626,7 +660,7 @@ function updateTickets(force){
   for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=ticketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
 }
 function nextTarget(){if(game.manager)return managerNextTarget();if(onPhone())return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const ready=Object.entries(game.stations).find(([id,s])=>s.ready);if(ready)return ready[0];if(game.nextCAD?.())return 'office';const candidates=['round','plate','block'].map(type=>game.nextMaterial?.(type)).filter(Boolean);const next=candidates.sort((a,b)=>a.remaining-b.remaining)[0];if(next)return `material-${stockType(next)}`;const o=game.selected;return o?.location==='material'?`material-${stockType(o)}`:o?.location==='hands'?o.route[o.index]:o?.location||null;}
-function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return !game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
+function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
   if(game.manager){const action=managerStationAction(id);if(action)return action;}if(id.startsWith('material-')){const type=id.slice(9);const next=game.nextMaterial(type);return o?.id===201?'Inspect and ship this customer part':game.hand?`Recycle #${o.id} · restart route`:next?`Collect ${type} stock · #${next.id}`:game.orders.some(job=>stockType(job)===type&&!job.programmed)?'Complete CAD at the office first':`No ${type} job ready`;}if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${opInfo(id).name.toLowerCase()}`:`${opInfo(id)?.name||id} station`;}
 function updateUI(force=false){
   if(game.manager)updateManagerHUD(force);else{
@@ -638,6 +672,10 @@ function updateUI(force=false){
   const shipmentGoal=`${game.shipped} orders shipped. Clear at ${game.config.passTarget}. ${nextStar<0?'All three stars earned.':`${nextStar+1} star${nextStar?'s':''} at ${game.config.stars[nextStar]} shipped.`}`;
   $('shipment-progress').title=shipmentGoal;$('shipment-progress').setAttribute('aria-label',shipmentGoal);
   $('order-count').textContent=`${game.orders.length} / 4`;}
+  if(game.config.overdrive){
+    const boost=game.machineSpeed?.()||1;
+    $('shift-name').textContent=boost>=2?`${game.config.name} · ⚡ SURGE 2.0×`:boost>1?`${game.config.name} · ⚡ OVERDRIVE 1.5×`:game.config.name;
+  }
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);if(game.manager)updateManagerTickets(force);else updateTickets(force);
   updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
@@ -694,13 +732,14 @@ function positionLabels(){
   const target=nextTarget(),managing=!!game.manager&&!menuMode;for(const [id,s] of Object.entries(stations)){
   const p=screenPoint(new THREE.Vector3(s.def.x,(managing?s.height:s.def.height)+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
   if(managing){const bayEmpty=bayOf(id)&&!game.stations[id],hideEmptyBay=game.mode==='playing'&&bayEmpty&&!moveFits(id);s.label.hidden=!mapHas(s.def,activeMapId())||(id==='material-block'&&!game.config.stock.includes('block'))||hideEmptyBay;s.label.classList.toggle('target',target===id||nearby?.def.id===id);s.label.style.opacity='';managerLabel(id,s);continue;}
-  const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,ready=id==='receiving'?!!game.receiving:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state);
+  const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,surgeOffice=id==='office'&&!!game.config.overdrive,ready=id==='receiving'?!!game.receiving:surgeOffice?game.surgeRemaining<=0&&game.surgeCooldown<=0:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)||surgeOffice&&game.surgeRemaining>0;
   for(const name of ['for-sale','installing','down','servicing','move-target','moving'])s.label.classList.remove(name);
   const more=s.label.querySelector('.label-more');if(more)more.hidden=true;
-  const locked=id==='receiving'?!game.config.sourcing:id==='office'?!game.config.programming:id.startsWith('material-')?!game.config.stock.includes(id.slice(9)):!!opInfo(id)&&id!=='ship'&&!game.config.unlocks.includes(id);
+  const locked=id==='receiving'?!game.config.sourcing:id==='office'?!game.config.programming&&!game.config.overdrive:id.startsWith('material-')?!game.config.stock.includes(id.slice(9)):!!opInfo(id)&&id!=='ship'&&!game.config.unlocks.includes(id);
   s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('nearby',!menuMode&&nearby?.def.id===id);s.label.classList.toggle('locked',!menuMode&&locked);
-  s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
-  s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:busy?`${100*(1-st.remaining/(st.duration||opInfo(id).duration))}%`:'0';s.label.style.opacity=menuMode?'.72':'';
+  s.label.querySelector('.station-name').textContent=surgeOffice&&!menuMode?'SURGE CONSOLE':s.def.name;
+  s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':surgeOffice?(game.surgeRemaining>0?`⚡ 2× ${Math.ceil(game.surgeRemaining)}s`:game.surgeCooldown>0?`${Math.ceil(game.surgeCooldown)}s`:'⚡ BOOST 2×'):id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
+  s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:surgeOffice&&game.surgeRemaining>0?`${100*(game.surgeRemaining/16)}%`:busy?`${100*(1-st.remaining/(st.duration||opInfo(id).duration))}%`:'0';s.label.style.opacity=menuMode?'.72':'';
 }
   const sign=$('wing-sign');sign.hidden=!managing||game.expanded||game.mode!=='evening';
   if(!sign.hidden){const p=screenPoint(new THREE.Vector3(7.25,1.6,-.78));sign.style.left=p.x+'px';sign.style.top=p.y+'px';sign.querySelector('.station-time').textContent=game.wingPending?'TONIGHT':money(WING.cost);}
@@ -708,7 +747,7 @@ function positionLabels(){
     hallSign.hidden=!managing||game.mode!=='evening'||!(pending||game.hallBuyable(h.id));
     if(!hallSign.hidden){const p=screenPoint(new THREE.Vector3(h.cx,1,h.z0+1.6));hallSign.style.left=p.x+'px';hallSign.style.top=p.y+'px';hallSign.querySelector('.station-time').textContent=pending?'TONIGHT':money(h.cost);}}
   positionStaffTags();positionPopover();}
-function updateMusic(){audio.update(!document.hidden&&!phonePortrait()&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
+function updateMusic(){audio.setTrack?.(game.mode==='playing'&&!game.manager&&game.config?.musicTrack||'country');audio.update(!document.hidden&&!phonePortrait()&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
 function unlockHomeMusic(){if(game.mode!=='menu'||document.hidden)return;audio.init();updateMusic();}
 // Frame budget: high-refresh displays would otherwise redraw the whole shop,
 // shadow map included, 120 times a second. Play needs 60; menus and evenings
@@ -740,8 +779,8 @@ function frame(now){
   if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
-const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5'};
-function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${credit?`<small class="shift-credit">${credit}</small>`:''}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
+const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4'};
+function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];const named=/^(Created with )(.+)$/.exec(credit||'');const creditHtml=named?`<small class="shift-credit">${named[1]}<b>${named[2]}</b></small>`:'';b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${creditHtml}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
 function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;processEvents();updateUI(true);$('scene').focus();}
@@ -794,10 +833,20 @@ function closeHelp(){
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
 function showMenu(){if(game.manager)saveRun();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
+function showModelCredit(credit){
+  const el=$('briefing-credit');
+  el.replaceChildren();
+  const named=/^(Created with )(.+)$/.exec(credit||'');
+  if(!named){el.hidden=true;return;}
+  el.hidden=false;
+  const kicker=document.createElement('span');kicker.className='model-kicker';kicker.textContent=named[1].trim();
+  const names=document.createElement('b');names.textContent=named[2];
+  el.append(kicker,names);
+}
 function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
-  $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
+  $('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -807,7 +856,7 @@ function showManagerBriefing(){
   const run=savedRunSummary();$('briefing-continue').hidden=!run;$('briefing-replace').hidden=!run;
   if(run)$('briefing-continue').innerHTML=`CONTINUE · DAY ${run.day}${run.length?' OF '+run.length:' · ENDLESS'} · ${money(run.cash)} <span>↗</span>`;
   $('briefing-lengths').hidden=true;$('briefing-lengths').replaceChildren();$('briefing-start').innerHTML=`${run?'START A NEW RUN':'OPEN THE SHOP'} <span>↗</span>`;$('briefing-start').classList.toggle('secondary',!!run);
-  $('briefing-role').textContent=cfg.name;$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
+  $('briefing-role').textContent=cfg.name;showModelCredit();$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>days survived</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$(run?'briefing-continue':'briefing-start').focus({preventScroll:true});
 }

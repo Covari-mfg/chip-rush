@@ -26,6 +26,10 @@ export const RECIPES = [
   {name:'Satin bracket',kind:'bracket',route:['mill','deburr','anodize','inspect'],value:270,color:0xc2a0f2},
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
+  {name:'Turbine coupling',kind:'shaft',route:['lathe','mill','deburr','inspect'],value:280,color:0x5ce6ff},
+  {name:'Breaker busbar',kind:'plate',route:['mill','deburr','anodize','inspect'],value:295,color:0xffb84d},
+  {name:'Surge manifold',kind:'block',route:['lathe','mill','anodize','inspect'],value:325,color:0x7cf2d4},
+  {name:'Grid isolator',kind:'block',route:['lathe','mill','deburr','anodize','inspect'],value:350,color:0xa48fff},
 ];
 export const STOCK_TYPES = {
   round: 'Round stock',
@@ -48,6 +52,14 @@ export const FINISHING_SOURCE_JOBS = [
   {name:'Heat-treated pin',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
   {name:'Powder-coated panel',capability:'Powder coating',technology:'pc',gap:'No coating booth on this floor'},
   {name:'Laser-marked plate',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
+];
+// Capabilities Blackout Shift's floor has no station for. The emergency backup
+// cell runs turning, milling, deburring, and anodizing, so precision jobs needing
+// wire EDM, vacuum heat treatment, or laser serialization go to Covari.
+export const PRECISION_SOURCE_JOBS = [
+  {name:'Wire-cut flexure',capability:'Wire EDM',technology:'edm',gap:'No wire EDM on this floor'},
+  {name:'Case-hardened gear',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
+  {name:'Serialized optic mount',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
 ];
 // New-level creative brief: docs/model-experiment.md. Current scenario details:
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
@@ -95,6 +107,17 @@ export const SHIFTS = [
     recipes:[2,5,4,3,4,2],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
     programming:true,sourcing:true,sourceJobs:FINISHING_SOURCE_JOBS,calls:false,callTimes:[],passTarget:4,stars:[4,5,6],
   },
+  {
+    id:'dawn-shift',mapId:'dawn-shop',name:'Blackout Shift',author:'Gemini 4',harness:'Cursor Cloud Agent',
+    musicTrack:'storm',overdrive:true,
+    subtitle:'Grid down. Generator overdrive. Zero CAD delay.',
+    brief:'A coastal storm knocked out the main grid before dawn. The shop floor is rearranged around a backup generator cell and emergency tickets arrive pre-programmed: run 2+ machines together for 1.5× Harmonic Overdrive, or hit the Office Governor Console and lightning strikes for 2.0× Surge speed.',
+    tip:'No CAD needed—grab stock immediately! Running 2+ machines triggers 1.5× Overdrive, and the Office Console or storm lightning unleashes a 2.0× Generator Surge.',
+    retryTip:'Keep two machines cutting at once for 1.5× Overdrive and tap the Office Console when the capacitor bank is charged.',
+    duration:180,firstArrival:8,interval:21,deadline:112,maxOrders:8,
+    recipes:[7,8,5,9,10,7,8,9],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
+    programming:false,sourcing:true,sourceJobs:PRECISION_SOURCE_JOBS,calls:false,callTimes:[],passTarget:5,stars:[5,6,8],
+  },
 ];
 
 export const PROGRAM_DURATION = 6;
@@ -123,6 +146,11 @@ export class ShopGame {
     this.buffer = null;
     this.stations = Object.fromEntries(Object.keys(OPS).filter(key => key !== 'ship').map(key => [key, {part:null,remaining:0,ready:false}]));
     this.office = {present:false,orderId:null};
+    this.surgeRemaining = this.config.overdrive ? 12 : 0;
+    this.surgeCooldown = 0;
+    this.overdriveActive = false;
+    this.stormStrikes = this.config.overdrive ? [50, 105, 148] : [];
+    this.stormIndex = 0;
     this.call = null;
     this.callIndex = 0;
     this.nextCallAt = this.config.calls ? this.config.callTimes[0] : Infinity;
@@ -179,7 +207,32 @@ export class ShopGame {
   }
 
   // CAD belongs to the order and survives recycling its physical part.
-  setOfficePresence(present) { this.office.present = Boolean(present); }
+  setOfficePresence(present) {
+    this.office.present = Boolean(present);
+    if (this.office.present && this.config.overdrive && this.mode === 'playing' && this.surgeRemaining <= 0 && this.surgeCooldown <= 0) {
+      this.triggerSurge('office', 16);
+    }
+  }
+
+  runningStations() {
+    let count = 0;
+    for (const station of Object.values(this.stations)) if (station.part && !station.ready) count++;
+    return count;
+  }
+
+  machineSpeed() {
+    if (!this.config.overdrive) return 1;
+    if (this.surgeRemaining > 0) return 2;
+    return this.runningStations() >= 2 ? 1.5 : 1;
+  }
+
+  triggerSurge(source = 'office', duration = 16) {
+    if (!this.config.overdrive) return false;
+    this.surgeRemaining = Math.max(this.surgeRemaining, duration);
+    if (source === 'office') this.surgeCooldown = 22;
+    this.emit('surge', {source, duration:this.surgeRemaining, multiplier:2});
+    return true;
+  }
 
   requiredTime(recipe, includeMachineWait = false) {
     const route = recipe.route.filter(key => key !== 'ship');
@@ -395,9 +448,21 @@ export class ShopGame {
       }
     }
 
+    if (this.config.overdrive) {
+      this.surgeRemaining = Math.max(0, this.surgeRemaining - dt);
+      if (this.surgeRemaining <= 0) this.surgeCooldown = Math.max(0, this.surgeCooldown - dt);
+      if (this.stormIndex < this.stormStrikes.length && this.elapsed >= this.stormStrikes[this.stormIndex]) {
+        this.stormIndex++;
+        this.triggerSurge('lightning', 10);
+      }
+      const parallel = this.runningStations() >= 2;
+      if (parallel && !this.overdriveActive) this.emit('overdrive', {multiplier:this.machineSpeed()});
+      this.overdriveActive = parallel;
+    }
+    const speedMultiplier = this.machineSpeed();
     for (const [key, station] of Object.entries(this.stations)) {
       if (station.part && !station.ready) {
-        station.remaining = Math.max(0, station.remaining - dt);
+        station.remaining = Math.max(0, station.remaining - dt * speedMultiplier);
         if (station.remaining <= 0) {
           station.ready = true;
           const order = this.order(station.part.orderId);
@@ -498,6 +563,12 @@ export class ShopGame {
     }
     if (key === 'office') {
       if (this.call?.state === 'ringing') return this.interact('phone');
+      if (this.config.overdrive) {
+        if (!this.office.present) return this.fail('Walk to the Office Governor Console to trigger a 2× Generator Surge.');
+        if (this.surgeRemaining > 0) return this.fail(`Generator Surge is active (2.0× speed · ${Math.ceil(this.surgeRemaining)}s left).`);
+        if (this.surgeCooldown > 0) return this.fail(`Capacitors recharging (${Math.ceil(this.surgeCooldown)}s). Run 2+ machines for 1.5× Overdrive!`);
+        return this.triggerSurge('office', 16);
+      }
       if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
       if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
@@ -612,9 +683,10 @@ export class ShopGame {
       return true;
     }
 
+    if (!Object.prototype.hasOwnProperty.call(OPS, key)) return false;
+    if (!this.config.unlocks.includes(key)) return this.fail(`${OPS[key].name} is not needed in this shift.`);
     const station = this.stations[key];
     if (!station) return false;
-    if (!this.config.unlocks.includes(key)) return this.fail(`${OPS[key].name} is not needed in this shift.`);
     if (station.part) {
       if (!station.ready) return this.fail(`${OPS[key].name} is working. Handle another order.`);
       if (this.hand) {

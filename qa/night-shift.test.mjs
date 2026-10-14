@@ -41,7 +41,7 @@ function run(game, station, seconds) {
 }
 
 test('Night Shift is appended with a stable identity and its own credit', () => {
-  assert.equal(SHIFTS.length, 4);
+  assert.equal(SHIFTS.length, 5);
   assert.equal(night.id, 'night-shift');
   assert.equal(night.mapId, 'night-shop');
   assert.ok(night.author && night.harness);

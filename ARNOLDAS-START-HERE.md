@@ -34,8 +34,11 @@ For the current three levels, stars depend on shipped orders, not score or rush 
 | Mixed Orders | 3 minutes | 4 | 5 | 6 |
 | Rush Hour | 3 minutes | 5 | 6 | 8 |
 | Night Shift | 3½ minutes | 4 | 5 | 6 |
+| Blackout Shift | 3 minutes | 5 | 6 | 8 |
 
 Night Shift (level 4) is a calmer after-hours chapter: no calls, a darker shop, a Covari offer for finishing work the floor cannot do (heat treatment, powder coating or laser marking), and two new stations, DEBURR and ANODIZE, in the middle of the floor. Its routes run up to four steps between stock and inspection, and two orders share the single color bath. Worth checking: is the finishing island readable, and do the dial-knob, ocean-collar, satin-bracket and valve-body routes feel fair?
+
+Blackout Shift (level 5, `dawn-shift`) breaks out of the "add another machine" pattern: a pre-dawn storm knocks out the grid, the existing 5 stations rearrange into West (`LATHE` + `DEBURR`) and East (`MILL` + `ANODIZE`) cells around a central `INSPECT` hub and a 3D `BACKUP GENERATOR · OVERDRIVE BUS`, emergency orders need zero CAD delay, running 2+ machines triggers 1.5× Harmonic Overdrive, the Office `SURGE CONSOLE` and scheduled lightning strikes unleash 2.0× Generator Surges, a synthesized 128 BPM storm-synth soundtrack plays, and Covari offers precision capability-gap jobs (Wire EDM, Heat treatment, Laser marking). See `docs/experiments/dawn-shift.md`.
 
 Open for Business is a separate game mode with its own card under the shift list, always open (stars at 3 / 5 / 7 days survived; it does not unlock or require shifts). It is a shop-manager mode: choose a run length, take or refuse quotes, buy machines and hire staff, and survive rent and wages each evening. Worth checking: do quotes with crossed-out steps read clearly, is the Shop panel (M) quick enough mid-day, do staff feel useful rather than in the way, and once south halls open, does zooming and dragging around the bigger floor feel natural? Its economy is simulated with `node qa/manager-balance.mjs`; see docs/experiments/open-for-business.md.
 

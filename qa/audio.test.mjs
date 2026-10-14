@@ -13,6 +13,7 @@ function setup({delayed=false,fail=false,noTimeout=false}={}){
     createGain(){return node();}
     resume(){this.state='running';return Promise.resolve();}
     decodeAudioData(){return delayed?new Promise(r=>{resolveDecode=r;}):Promise.resolve({duration:1628308/44100});}
+    createBuffer(channels,length,sampleRate){const data=Array.from({length:channels},()=>new Float32Array(length));return {duration:length/sampleRate,getChannelData:c=>data[c]};}
     createBufferSource(){const n={...node(),start(...args){this.started=args;},stop(...args){this.stopped=args;}};sources.push(n);return n;}
     createOscillator(){const n={...node(),frequency:parameter(),start(){this.started=true;},stop(){}};oscillators.push(n);return n;}
   }
@@ -78,4 +79,19 @@ test('hiding the home page during loading prevents playback until visible again'
   assert.equal(f.sources.length,0);
   home.document.hidden=false;home.update();assert.equal(f.sources.length,1);
   home.document.hidden=true;home.update();assert.equal(f.audio.musicSource,null);
+});
+test('setTrack switches between the country loop and the synthesized 128 BPM storm-synth track',async()=>{
+  const f=setup();f.audio.init();await settle();f.audio.update(true);
+  assert.equal(f.audio.track,'country');
+  assert.equal(f.sources.length,1);
+  f.audio.setTrack('storm');
+  assert.equal(f.audio.track,'storm');
+  assert.equal(f.sources.length,2);
+  assert.ok(Math.abs(f.sources[1].loopEnd-32*60/128)<.0001);
+  f.audio.event('surge');
+  f.audio.event('overdrive');
+  assert.ok(f.oscillators.length>=5);
+  f.audio.setTrack('country');
+  assert.equal(f.audio.track,'country');
+  assert.equal(f.sources.length,3);
 });
