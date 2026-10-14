@@ -417,7 +417,7 @@ function batchStatic(root) {
 }
 export function createMachine(type) {
   const g=new THREE.Group();g.name=`station-${type}`;g.userData.type=type;
-  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
+  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer,assemble:makeAssembly}[type]||makeBuffer)(g);
   return batchStatic(g);
 }
 export function createPart(stage=0,color=C.cyan,kind='shaft') {
@@ -874,5 +874,305 @@ export function createStormRig() {
   g.userData.coreRing=coreRing;
   g.userData.conduits=conduits;
   g.userData.animated=[rotor,coreRing,...conduits];
+  return batchStatic(g);
+}
+
+// ---------------------------------------------------------------------------
+// Launch Window: the hangar shop beside the pad, its robot assembly cell, the
+// assemblies it builds and the rocket they are stacked onto. All procedural.
+
+// Robot assembly cell. Kit parts wait in the trays on the right; the arm joins
+// them on the round fixture. Faces +Z like the machines.
+function makeAssembly(g) {
+  feet(g,2.62,1.38);safetyMat(g,2.86,.5,1.02);
+  box(g,2.86,.52,1.6,0,.34,-.04,C.navy,.07);
+  box(g,2.8,.12,1.55,0,.66,-.04,C.steel,.03,mat(0x9fb4bb,.42,.48));
+  // Painted keep-out border on the table top.
+  for(const [x,z,w,d] of [[0,-.79,2.74,.04],[0,.71,2.74,.04],[-1.37,-.04,.04,1.5],[1.37,-.04,.04,1.5]])box(g,w,.012,d,x,.725,z,C.gold,.002);
+  // Fixture turntable where the kit becomes an assembly.
+  cyl(g,.36,.38,.08,.1,.76,.16,C.shiny,28,mat(C.shiny,.24,.72));
+  cyl(g,.22,.22,.025,.1,.81,.16,C.dark,24);
+  for(let i=0;i<4;i++){const a=i*Math.PI/2+.4;box(g,.07,.07,.12,.1+Math.cos(a)*.3,.83,.16+Math.sin(a)*.3,C.gold,.01).rotation.y=-a;}
+  // Kit trays: two rows of three, labelled by colour strips.
+  const slots=[];
+  for(let row=0;row<2;row++)for(let i=0;i<3;i++){
+    const x=.74+i*.3,z=-.5+row*.42;
+    box(g,.27,.05,.34,x,.74,z,0x24505b,.012);
+    box(g,.27,.012,.03,x,.77,z+.17,[0x7fd2ff,0xffb36b,0x8fe38a][i],.002);
+    slots.push(new THREE.Vector3(x,.77,z));
+  }
+  // Guard fence on the two far sides; the operator side stays open.
+  for(const [x,z] of [[-1.4,-.82],[1.4,-.82],[-1.4,.68]])box(g,.07,.9,.07,x,1.17,z,C.gold,.012);
+  box(g,2.8,.05,.05,0,1.6,-.82,C.gold,.008);box(g,2.8,.05,.05,0,1.05,-.82,C.gold,.008);
+  box(g,.05,.05,1.5,-1.4,1.6,-.07,C.gold,.008);box(g,.05,.05,1.5,-1.4,1.05,-.07,C.gold,.008);
+  const mesh=new THREE.MeshStandardMaterial({color:0x2c4a55,roughness:.6,transparent:true,opacity:.45});
+  box(g,2.72,.5,.02,0,1.33,-.82,0,.002,mesh);box(g,.02,.5,1.42,-1.4,1.33,-.07,0,.002,mesh);
+  // Light curtain posts at the open front corners.
+  for(const x of [-1.33,1.33]){box(g,.07,.62,.07,x,1.03,.66,C.dark,.01);box(g,.02,.5,.02,x+(x<0?.04:-.04),1.05,.66,0xff5a4a,.002,glow(0xff5a4a,.7));}
+  // Six-axis arm, kept as live pivots for animation.
+  const robot=new THREE.Group();robot.name='assembly-robot';robot.position.set(-.78,.72,-.3);g.add(robot);
+  const orange=mat(0xf0a63a,.42,.18),graphite=mat(0x2a3439,.5,.35);
+  cyl(robot,.25,.29,.12,0,.06,0,0,22,graphite);
+  const turret=new THREE.Group();turret.position.y=.12;robot.add(turret);
+  cyl(turret,.21,.23,.2,0,.1,0,0,20,orange);
+  box(turret,.34,.24,.3,0,.3,0,0,.06,orange);
+  const shoulder=new THREE.Group();shoulder.position.set(0,.36,0);turret.add(shoulder);
+  {const j=cyl(shoulder,.12,.12,.36,0,0,0,0,16,graphite);j.rotation.x=Math.PI/2;}
+  box(shoulder,.17,.72,.2,0,.36,0,0,.06,orange);
+  const elbow=new THREE.Group();elbow.position.set(0,.72,0);shoulder.add(elbow);
+  {const j=cyl(elbow,.1,.1,.3,0,0,0,0,16,graphite);j.rotation.x=Math.PI/2;}
+  box(elbow,.62,.14,.15,.31,0,0,0,.05,orange);
+  const wrist=new THREE.Group();wrist.position.set(.62,0,0);elbow.add(wrist);
+  {const j=cyl(wrist,.07,.07,.18,0,0,0,0,12,graphite);j.rotation.x=Math.PI/2;}
+  cyl(wrist,.05,.05,.16,0,-.1,0,0,12,mat(C.steel,.3,.6));
+  const fingers=[-.045,.045].map(x=>box(wrist,.025,.11,.06,x,-.22,0,C.dark,.006));
+  const torch=cyl(wrist,.03,.03,.02,0,-.28,0,0,10,glow(0x9ff8ff,.2));
+  robot.userData={turret,shoulder,elbow,wrist,fingers,torch};
+  panel(g,1.16,1.12,.66,.34,.56);
+  box(g,.06,.42,.06,1.16,.72,.6,C.navy,.01);
+  textPlate(g,'ASSEMBLY CELL',1.3,.14,-.25,.45,.765,{color:'#0f2a33',bg:'#9fe0ff',size:42});
+  beacon(g,1.3,.72,-.74);
+  g.userData.robot=robot;g.userData.animated=[robot];
+  g.userData.kitSlots=slots;
+  g.userData.workPoint=new THREE.Vector3(.1,.84,.16);
+}
+
+// A finished assembly is a miniature of the rocket section it will become.
+// Unit size: radius .19, height .24. The pad stack draws it scaled up.
+export function createAssembly(section='strut',color=C.cyan,inspected=false) {
+  const g=new THREE.Group();g.name=`assembly-${section}`;
+  const shell=mat(0xeef1ee,.42,.08),accent=mat(color,.36,.3),dark=mat(0x26333b,.5,.3),metal=mat(C.shiny,.3,.65);
+  const body=section==='pump'?dark:shell;
+  cyl(g,.19,.19,.2,0,.12,0,0,24,body);
+  cyl(g,.193,.193,.045,0,.045,0,0,24,accent);
+  cyl(g,.194,.194,.022,0,.22,0,0,24,dark);
+  if(section==='strut'){
+    for(let i=0;i<4;i++){const a=i*Math.PI/2+.3,s=box(g,.03,.18,.03,Math.cos(a)*.2,.13,Math.sin(a)*.2,0,.006,metal);s.rotation.z=Math.cos(a)*.35;s.rotation.x=-Math.sin(a)*.35;}
+  }else if(section==='valve'){
+    for(const a of [.6,2.4,4.2]){box(g,.06,.06,.06,Math.cos(a)*.2,.13,Math.sin(a)*.2,0,.01,accent);cyl(g,.012,.012,.12,Math.cos(a)*.205,.19,Math.sin(a)*.205,0,8,metal);}
+  }else if(section==='pump'){
+    for(let i=0;i<6;i++){const a=i*Math.PI/3;box(g,.015,.12,.05,Math.cos(a)*.195,.13,Math.sin(a)*.195,0,.004,metal).rotation.y=-a;}
+    cyl(g,.08,.1,.05,0,.255,0,0,16,metal);
+  }else if(section==='avionics'){
+    for(let i=0;i<5;i++){const a=i*Math.PI*2/5;box(g,.035,.02,.012,Math.cos(a)*.19,.15,Math.sin(a)*.19,0,.003,glow(i%2?0x8fe38a:0x7fd2ff,.9)).rotation.y=-a+Math.PI/2;}
+    box(g,.28,.012,.28,0,.233,0,0,.004,mat(0x3b5560,.5,.3));
+  }else if(section==='payload'){
+    cyl(g,.11,.19,.09,0,.275,0,0,24,accent);
+    cyl(g,.112,.112,.02,0,.33,0,0,24,metal);
+  }
+  if(inspected)box(g,.05,.008,.05,.08,.243,.08,C.gold,.006);
+  g.userData.stage=inspected?4:3;g.userData.section=section;
+  return g;
+}
+
+function stripeTexture(text,{color='#ffd36b',bg='#0b141b',size=120,font='700 120px ui-monospace,SFMono-Regular,Menlo,monospace'}={}){
+  const c=document.createElement('canvas');c.width=1024;c.height=256;
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+  const ctx=c.getContext('2d');
+  const draw=(main,sub='',tint=color)=>{
+    ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+    ctx.strokeStyle='rgba(255,211,107,.18)';ctx.lineWidth=4;ctx.strokeRect(10,10,c.width-20,c.height-20);
+    ctx.fillStyle=tint;ctx.shadowColor=tint;ctx.shadowBlur=18;ctx.font=font.replace('120px',`${size}px`);ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(main,c.width/2,sub?110:132,980);
+    ctx.shadowBlur=0;if(sub){ctx.fillStyle='rgba(222,236,240,.78)';ctx.font='600 38px system-ui,sans-serif';ctx.fillText(sub,c.width/2,206,960);}
+    tex.needsUpdate=true;
+  };
+  draw(text);
+  return {canvas:c,texture:tex,draw};
+}
+
+// The hangar shares the workshop's footprint so shared stations, bounds and
+// camera framing carry over. Its east side opens onto the launch complex.
+export function createHangar() {
+  const g=new THREE.Group();g.name='launch-hangar';
+  box(g,17.40,.42,10.10,-.55,-.27,-1.20,0x16232e,.16);
+  box(g,17.0,.075,9.70,-.55,-.025,-1.20,0x485a66,.02).castShadow=false;
+  // Sealed epoxy floor panels, cooler and smoother than the workshop concrete.
+  const floorMats=[0x6c7e8a,0x697b88,0x70828e,0x667886].map(c=>mat(c,.58,.06));
+  for(let x=0;x<12;x++)for(let z=0;z<7;z++)
+    box(g,1.397,.035,1.367,-8.305+x*1.41,.021,-5.34+z*1.38,0,.006,floorMats[(x*5+z*3)%4]).castShadow=false;
+  // Walkway lines lead from stock to the cell to the pad door.
+  for(const [x,z,w,d] of [[-.55,-5.47,16.2,.055],[-.55,3.26,16.2,.055],[-8.62,-1.1,.055,8.73],[-3.2,2.5,8.6,.05],[7.55,-3.6,.05,3.6]])
+    box(g,w,.008,d,x,.048,z,C.gold,.002).castShadow=false;
+  for(let i=0;i<9;i++)box(g,.42,.009,.12,.4+i*.75,.049,2.92,i%2?C.dark:C.gold,.001).castShadow=false;
+  // Tall ribbed back wall and a left wall with a roll-up door.
+  const wall=0x29435a,rib=0x33516a;
+  box(g,17.20,4.0,.20,-.55,2.0,-6.12,wall,.035);
+  for(let i=0;i<36;i++)box(g,.07,3.75,.07,-9.0+i*.48,1.95,-6.0,rib,.004);
+  box(g,17.34,.14,.3,-.55,4.05,-6.12,C.navy,.015);
+  box(g,17.15,.32,.12,-.55,.18,-5.96,0x111c24,.008);
+  box(g,.20,3.2,9.82,-9.12,1.6,-1.21,wall,.035);
+  box(g,.26,.14,9.91,-9.12,3.22,-1.205,C.navy,.015);
+  for(let i=0;i<14;i++)box(g,.04,.08,3.6,-8.99,.5+i*.17,-.4,i%2?0x2f4c5f:0x35566a,.004);
+  box(g,.12,2.7,.16,-8.98,1.35,-2.25,C.gold,.01);box(g,.12,2.7,.16,-8.98,1.35,1.45,C.gold,.01);
+  // Overhead bridge-crane rail with its trolley and hook.
+  box(g,17.0,.18,.24,-.55,3.62,-5.55,0xe0b54a,.02);
+  box(g,.6,.22,.5,-2.2,3.48,-5.45,0x2d3d46,.03);
+  tube(g,[[-2.2,3.36,-5.4],[-2.2,2.7,-5.35]],.012,C.steel);
+  box(g,.14,.12,.08,-2.2,2.62,-5.35,C.gold,.01);
+  // High-bay lamps hanging from the back wall.
+  for(const x of [-7.2,-3.6,0,6.4]){
+    box(g,.05,.5,.05,x,3.4,-5.78,C.steel,.004);
+    cyl(g,.36,.18,.18,x,3.08,-5.78,C.navy,16);
+    cyl(g,.32,.32,.015,x,2.985,-5.78,0,16,glow(0xfff2cf,.9));
+  }
+  textPlate(g,'HANGAR 7  ·  FLIGHT HARDWARE',4.2,.34,-4.3,3.22,-5.99,{color:'#ffe6a6',bg:'#18293a',size:46});
+  // Mission clock: a live LED board, redrawn by the renderer.
+  box(g,3.3,1.16,.16,3.4,2.62,-5.97,0x0a1218,.04);
+  const clock=stripeTexture('T−03:40');
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(3.1,.775),new THREE.MeshBasicMaterial({map:clock.texture}));
+  face.position.set(3.4,2.62,-5.885);g.add(face);
+  for(const x of [1.85,4.95])box(g,.06,.6,.06,x,3.35,-5.93,C.steel,.004);
+  // Back-left: nitrogen and helium bottles in a cage.
+  for(let i=0;i<5;i++){cyl(g,.15,.15,1.25,-8.25+i*.36,.69,-5.35,i%2?0x6f8a96:0x4d7a5c,14);sphere(g,.15,-8.25+i*.36,1.32,-5.35,i%2?0x6f8a96:0x4d7a5c,[1,.5,1]);cyl(g,.04,.04,.12,-8.25+i*.36,1.48,-5.35,C.steel,8);}
+  box(g,1.95,.06,.06,-7.53,1.05,-5.08,C.gold,.006);box(g,1.95,.06,.06,-7.53,.45,-5.08,C.gold,.006);
+  box(g,.9,1.0,.62,-6.1,.55,-5.2,0xc8503d,.05);for(let i=0;i<4;i++)box(g,.8,.03,.02,-6.1,.25+i*.22,-4.88,0x7d2b20,.003);
+  // Back-right: launch console with its screens toward the floor.
+  box(g,2.5,.82,.82,3.4,.45,-4.98,C.navy,.05);
+  box(g,2.5,.08,.9,3.4,.9,-4.95,0x2e4652,.02);
+  for(let i=0;i<3;i++){box(g,.66,.44,.06,2.62+i*.78,1.22,-5.2,0x0b141a,.02);box(g,.58,.36,.012,2.62+i*.78,1.22,-5.165,0,.004,glow([0x58d4ff,0xffc65a,0x7ff0a8][i],.55));}
+  textPlate(g,'GO / NO-GO',.9,.13,3.4,.62,-4.565,{color:'#d6f7ff',bg:'#12313d',size:46});
+  // Spares crates in the far right corner.
+  for(const [x,y,z,w,h] of [[6.55,.36,-5.0,.95,.62],[7.35,.3,-5.05,.62,.5],[6.65,.88,-5.05,.7,.42]]){box(g,w,h,.72,x,y,z,0x8a6a45,.03);box(g,w*.6,.12,.012,x,y,z+.365,C.creamLight,.003);}
+  // East door frame: striped posts, the rest open to the apron.
+  for(const z of [-5.9,3.55]){box(g,.3,4.3,.3,8.0,2.15,z,0x2b3a44,.03);for(let i=0;i<7;i++)box(g,.32,.26,.32,8.0,.35+i*.55,z,i%2?C.dark:C.gold,.01);}
+  box(g,.3,.3,9.7,8.0,4.25,-1.18,0x2b3a44,.03);
+  textPlate(g,'TO PAD 7  ▸',1.6,.24,8.0,3.85,-1.2,{color:'#111c24',bg:'#ffd36b',size:58}).rotation.y=Math.PI/2;
+  // Tool chest by the front-left corner.
+  box(g,.95,.92,.6,-8.25,.5,2.9,0xc8503d,.05);for(let i=0;i<5;i++)box(g,.85,.025,.02,-8.25,.2+i*.16,3.21,0x7d2b20,.003);
+  g.userData.clock=clock;g.userData.clockFace=face;
+  return batchStatic(g);
+}
+
+// Launch complex east of the hangar: apron, rail to the pad, a slewing jib
+// crane on a lattice tower, floodlights, and the rocket stack. Positions are
+// world coordinates; LAUNCH_SITE names the pieces the renderer animates.
+export const LAUNCH_SITE={rocket:{x:11.0,z:-2.3},tower:{x:12.75,z:-2.3},cartHome:{x:7.0,z:.92},cartStop:{x:9.45,z:.92},
+  padTop:.48,baseTop:3.06,sectionHeight:.6,sectionScale:.5/.19,noseHeight:1.05};
+export function createLaunchComplex() {
+  const g=new THREE.Group();g.name='launch-complex';
+  const S=LAUNCH_SITE,R=S.rocket,T=S.tower;
+  // Apron slab and expansion-jointed concrete.
+  box(g,6.7,.42,10.1,11.5,-.27,-1.2,0x16232e,.16);
+  const slabs=[0x5d676c,0x596368,0x61696d].map(c=>mat(c,.9));
+  for(let x=0;x<4;x++)for(let z=0;z<6;z++)box(g,1.6,.035,1.58,8.95+x*1.63,.012,-5.3+z*1.62,0,.01,slabs[(x+z*2)%3]).castShadow=false;
+  // Rails and sleepers from the pad door to the crane pick-up point.
+  for(const z of [S.cartHome.z-.2,S.cartHome.z+.2])box(g,3.4,.04,.05,8.25,.06,z,C.shiny,.004,mat(C.shiny,.3,.7));
+  for(let i=0;i<9;i++)box(g,.09,.025,.6,6.75+i*.4,.04,S.cartHome.z,0x3a2c22,.004);
+  const cart=new THREE.Group();cart.name='pad-cart';cart.position.set(S.cartHome.x,0,S.cartHome.z);g.add(cart);
+  box(cart,.78,.12,.56,0,.19,0,0xe0b54a,.03);box(cart,.7,.05,.48,0,.27,0,C.dark,.01);
+  for(const x of [-.26,.26])for(const z of [-.2,.2]){const w=cyl(cart,.07,.07,.05,x,.08,z,C.dark,10);w.rotation.x=Math.PI/2;}
+  const cartSeat=new THREE.Group();cartSeat.position.y=.3;cart.add(cartSeat);
+  // Pad deck with a flame trench and four hold-down clamps.
+  box(g,3.2,S.padTop,3.2,R.x,S.padTop/2,R.z,0x7c868c,.05);
+  box(g,3.3,.06,3.3,R.x,S.padTop-.02,R.z,0x8f999e,.02);
+  // Flame trench: a dark slot running from under the engines to the pad's south edge.
+  box(g,.9,.05,1.75,R.x,S.padTop+.005,R.z+.78,0x2a3238,.01);
+  box(g,.9,.04,.08,R.x,S.padTop+.03,R.z+1.62,C.gold,.004);
+  for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;box(g,.22,.32,.22,R.x+Math.cos(a)*.66,S.padTop+.16,R.z+Math.sin(a)*.66,0x3a464d,.03);}
+  for(const [dx,dz] of [[-1.45,-1.45],[1.45,1.45],[-1.45,1.45]]){cyl(g,.14,.14,.5,R.x+dx,.25,R.z+dz,0xd6dde0,12);sphere(g,.14,R.x+dx,.5,R.z+dz,0xd6dde0,[1,.6,1]);}
+  // Lattice tower with stripe-painted top and warning lights.
+  const tower=new THREE.Group();tower.position.set(T.x,S.padTop,T.z);g.add(tower);
+  const H=8.7,W=1.05,red=0xc9503a;
+  for(const x of [-W/2,W/2])for(const z of [-W/2,W/2])box(tower,.09,H,.09,x,H/2,z,red,.01);
+  for(let y=.6;y<H;y+=.82){
+    for(const z of [-W/2,W/2])box(tower,W,.06,.06,0,y,z,red,.006);
+    for(const x of [-W/2,W/2])box(tower,.06,.06,W,x,y,0,red,.006);
+    const ang=Math.atan2(.82,W);
+    for(const z of [-W/2,W/2]){const d=box(tower,.04,Math.hypot(W,.82),.04,0,y+.41,z,0xb24533,.004);d.rotation.z=(z>0?1:-1)*(Math.PI/2-ang);}
+    for(const x of [-W/2,W/2]){const d=box(tower,.04,Math.hypot(W,.82),.04,x,y+.41,0,0xb24533,.004);d.rotation.x=(x>0?1:-1)*(Math.PI/2-ang);}
+  }
+  box(tower,W+.2,.12,W+.2,0,H,0,C.cream,.02);
+  const warning=[];
+  for(const [x,z] of [[-W/2,-W/2],[W/2,W/2]]){warning.push(cyl(tower,.05,.05,.08,x,H+.11,z,0,10,glow(0xff3b30,.9)));}
+  // Swing arms reach the rocket; they swing clear at ignition.
+  const arms=[];
+  for(const y of [1.9,4.1]){
+    const arm=new THREE.Group();arm.position.set(-W/2,y,0);tower.add(arm);
+    box(arm,1.15,.14,.36,-.58,0,0,0x8a959b,.02);box(arm,1.15,.05,.4,-.58,.1,0,C.gold,.01);
+    for(const z of [-.18,.18])box(arm,1.12,.18,.03,-.58,.18,z,C.steel,.004);
+    arms.push(arm);
+  }
+  // Slewing jib crane on top of the tower stacks each section.
+  const jib=new THREE.Group();jib.name='pad-jib';jib.position.set(T.x,S.padTop+H+.18,T.z);g.add(jib);
+  cyl(jib,.22,.26,.26,0,.13,0,0x2b3a44,16);
+  box(jib,5.3,.16,.22,-2.45,.34,0,0xe0b54a,.02);
+  box(jib,1.1,.4,.5,.75,.36,0,0x2b3a44,.04);
+  for(let i=0;i<10;i++){const d=box(jib,.04,.24,.04,-.1-i*.5,.47,0,0xc79c35,.004);d.rotation.z=i%2?.7:-.7;}
+  const trolley=new THREE.Group();trolley.position.set(-1.75,.24,0);jib.add(trolley);
+  box(trolley,.3,.12,.3,0,0,0,C.dark,.02);
+  const cable=box(trolley,.032,1,.032,0,-.5,0,0xb8c6cc,.002);
+  const hook=new THREE.Group();trolley.add(hook);
+  box(hook,.14,.1,.14,0,0,0,C.gold,.02);
+  const hookSeat=new THREE.Group();hookSeat.position.y=-.06;hook.add(hookSeat);
+  // Floodlight masts with soft, additive beams on the rocket.
+  const beams=[];
+  for(const [mx,mz,h] of [[9.0,-5.35,4.6],[14.05,.95,4.2]]){
+    const mast=new THREE.Group();mast.position.set(mx,0,mz);g.add(mast);
+    box(mast,.12,h,.12,0,h/2,0,0x8a959b,.01);
+    box(mast,.9,.1,.1,0,h,0,0x2b3a44,.01);
+    for(const dx of [-.3,0,.3])box(mast,.22,.18,.12,dx,h+.15,0,0xfff2cf,.02,glow(0xfff1c4,1.1));
+    const target=new THREE.Vector3(R.x,3.6,R.z),from=new THREE.Vector3(mx,h+.15,mz);
+    const len=from.distanceTo(target);
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(.12,1.25,len,24,1,true),new THREE.MeshBasicMaterial({color:0xfff1c4,transparent:true,opacity:.07,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    beam.position.copy(from).add(target).multiplyScalar(.5);
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,-1,0),target.clone().sub(from).normalize());
+    beam.castShadow=false;beam.receiveShadow=false;g.add(beam);beams.push(beam);
+  }
+  // Rocket: a fixed first stage, then a stack of shipped sections and a nose.
+  const rocket=new THREE.Group();rocket.name='rocket';rocket.position.set(R.x,S.padTop,R.z);g.add(rocket);
+  const white=mat(0xf1f3ef,.38,.1),black=mat(0x1d262c,.5,.25),engine=mat(0x4b555c,.35,.65);
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3,b=cyl(rocket,.09,.2,.36,Math.cos(a)*.22,.2,Math.sin(a)*.22,0,16,engine);b.castShadow=true;}
+  cyl(rocket,.52,.5,.42,0,.58,0,0,28,black);
+  cyl(rocket,.5,.5,1.9,0,1.74,0,0,28,white);
+  for(const y of [1.0,2.55])cyl(rocket,.505,.505,.14,0,y,0,0,28,black);
+  textPlate(rocket,'CHIP RUSH',.7,.18,0,1.8,.505,{color:'#13212a',bg:'#f1f3ef',size:60});
+  for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4,f=box(rocket,.05,.42,.34,Math.cos(a)*.56,.62,Math.sin(a)*.56,0,.01,black);f.rotation.y=-a;}
+  const stack=new THREE.Group();stack.name='rocket-stack';stack.position.y=S.baseTop-S.padTop;rocket.add(stack);
+  const nose=new THREE.Group();nose.name='rocket-nose';rocket.add(nose);
+  cyl(nose,.06,.5,S.noseHeight*.86,0,S.noseHeight*.43,0,0,28,white);
+  cyl(nose,.06,.06,.12,0,S.noseHeight*.9,0,0,10,black);
+  cyl(nose,.505,.505,.06,0,.03,0,0,28,black);
+  const ghosts=new THREE.Group();ghosts.name='rocket-ghosts';rocket.add(ghosts);
+  // Ghost sections: the rocket still to build, as a faint holographic outline.
+  const ghostMat=new THREE.MeshBasicMaterial({color:0x7fe7ff,transparent:true,opacity:.16,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending});
+  const ghostEdge=new THREE.MeshBasicMaterial({color:0x9ff3ff,transparent:true,opacity:.75,depthWrite:false,blending:THREE.AdditiveBlending});
+  // Flame and its light pool, hidden until ignition.
+  const flame=new THREE.Group();flame.name='rocket-flame';flame.visible=false;rocket.add(flame);
+  const fire=new THREE.Mesh(new THREE.ConeGeometry(.42,2.3,20,1,true),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.92,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  fire.rotation.x=Math.PI;fire.position.y=-1.1;flame.add(fire);
+  const core=new THREE.Mesh(new THREE.ConeGeometry(.22,1.3,16,1,true),new THREE.MeshBasicMaterial({color:0xfff6d8,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false}));
+  core.rotation.x=Math.PI;core.position.y=-.6;flame.add(core);
+  const glowLight=new THREE.PointLight(0xffa04a,0,14,1.6);glowLight.position.set(R.x,1.2,R.z+.6);g.add(glowLight);
+  // Shock ring that races across the apron at liftoff.
+  const shock=new THREE.Mesh(new THREE.RingGeometry(.8,1.05,48),new THREE.MeshBasicMaterial({color:0xffe2b0,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  shock.rotation.x=-Math.PI/2;shock.position.set(R.x,S.padTop+.06,R.z);shock.visible=false;g.add(shock);
+  // Star lamps on the tower: lit once the stack reaches each star target.
+  const lamps=[];
+  for(let i=0;i<3;i++){
+    const lamp=new THREE.Group();tower.add(lamp);
+    box(lamp,.5,.34,.16,-W/2-.2,0,.44,C.dark,.03);
+    textPlate(lamp,'★'.repeat(i+1),.42,.14,-W/2-.2,-.06,.525,{color:'#ffd36b',bg:'#0b141b',size:70});
+    const bulb=sphere(lamp,.1,-W/2-.2,.1,.53,0,[1.6,.7,.6],new THREE.MeshStandardMaterial({color:0x5a4a2a,emissive:0x3a2a10,emissiveIntensity:.4,roughness:.3}));
+    lamp.userData.bulb=bulb;lamps.push(lamp);
+  }
+  const sectionHeight=S.sectionHeight,scale=S.sectionScale;
+  const place=(height)=>{nose.position.y=S.baseTop-S.padTop+height;};
+  // Rebuild the stack from shipped sections; ghosts show the three-star stack.
+  const setStack=(sections,target=0,stars=[])=>{
+    stack.clear();ghosts.clear();
+    sections.forEach((entry,i)=>{const s=createAssembly(entry.section,entry.color);s.scale.setScalar(scale);s.position.y=i*sectionHeight;stack.add(s);});
+    for(let i=sections.length;i<target;i++){
+      const ring=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,sectionHeight*.92,24,1,true),ghostMat);ring.position.y=S.baseTop-S.padTop+i*sectionHeight+sectionHeight/2;ghosts.add(ring);
+      const edge=new THREE.Mesh(new THREE.CylinderGeometry(.51,.51,.035,24,1,true),ghostEdge);edge.position.y=S.baseTop-S.padTop+(i+1)*sectionHeight-.02;ghosts.add(edge);
+    }
+    place(sections.length*sectionHeight);
+    stars.forEach((count,i)=>{const lamp=lamps[i];if(!lamp)return;lamp.position.y=S.baseTop-S.padTop+count*sectionHeight-sectionHeight/2;const lit=sections.length>=count;const m=lamp.userData.bulb.material;m.color.set(lit?0xffd36b:0x5a4a2a);m.emissive.set(lit?0xffc23a:0x3a2a10);m.emissiveIntensity=lit?1.4:.4;});
+  };
+  // The camera frames these landmarks, not the complex's bounding box: the
+  // box would pair the tower's height with the apron's far corner.
+  const framePoints=[[8.15,-.48,3.85],[14.85,-.48,3.85],[8.15,0,-6.25],[14.85,0,-6.25],[T.x+.6,S.padTop+H+.6,T.z-.6],[T.x-4.9,S.padTop+H+.5,T.z],
+    [R.x,S.baseTop+7*S.sectionHeight+S.noseHeight,R.z],[9.0,4.9,-5.35],[14.5,4.5,.95]].map(p=>new THREE.Vector3(...p));
+  g.userData={rocket,stack,nose,ghosts,flame,fire,core,glowLight,shock,arms,jib,trolley,cable,hook,hookSeat,cart,cartSeat,beams,lamps,warning,setStack,placeNose:place,towerHeight:H,framePoints};
   return batchStatic(g);
 }

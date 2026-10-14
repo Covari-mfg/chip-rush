@@ -1,7 +1,8 @@
 import * as THREE from './vendor/three.module.js';
-import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig } from './assets/models.js';
+import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig, createHangar, createLaunchComplex, createAssembly, LAUNCH_SITE } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType } from './core.js';
 import { ShopAudio } from './audio.js';
+import { LaunchGame, launchOp } from './launch.js';
 import { createSocial } from './social.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
@@ -17,7 +18,8 @@ const $=id=>document.getElementById(id);
 if(interfaceMode==='mobile'){$('scene').setAttribute('aria-label','3D workshop. Tap a station to walk over and use it. Tap Dash while walking to move faster.');$('briefing-touch').hidden=false;$('touch-help').hidden=false;$('mobile-tap-hint').hidden=false;$('mobile-dash').hidden=false;document.querySelector('.help-keys').hidden=true;}
 const mobileTaps=createTapNavigation();
 // Shifts and Open for Business share one renderer; game points at the active rules.
-const classicGame=new ShopGame(),managerGame=new ManagerGame(),audio=new ShopAudio();let game=classicGame;
+const classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),audio=new ShopAudio();let game=classicGame;
+const launching=()=>game===launchGame&&!menuMode;
 let challengeRun=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
@@ -63,6 +65,8 @@ const STATION_LAYOUT=[
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
   {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop']},
   {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:['night-shop','dawn-shop']},
+  // Launch Window's robot cell, mid-floor between the machines and Inspection.
+  {id:'assemble',name:'ASSEMBLY',x:1.55,z:.2,height:1.75,w:2.86,d:1.6,map:'launch-pad'},
   // Open for Business machine bays. Island and front-wall bays are in the
   // original room; the east wing adds four large bays and two small ones.
   {id:'bay-1',name:'BAY',bay:'compact',x:-.9,z:-.5,height:.7,w:2.3,d:1.35,map:['owner-shop','owner-wing']},
@@ -103,6 +107,11 @@ const MAPS={
     anodize:{x:2.4,z:.85,access:{x:2.4,z:2.14}},
     inspect:{x:0,z:-1.75,rotationY:0,w:2.4,d:1.6,access:{x:0,z:-.32}},
   },obstacles:[{minX:-1.55,maxX:.75,minZ:-5.35,maxZ:-3.95}]},
+  // Launch Window: the hangar beside the pad. Flight programs are locked, so
+  // there is no office; the machines line the back wall and Shipping becomes
+  // the pad transfer. fixed replaces the workshop's props with the hangar's.
+  'launch-pad':{theme:'predawn',shell:'hangar',hide:['office'],place:{lathe:{x:-4.6},mill:{x:-.5},ship:{name:'TO PAD'}},
+    fixed:[{minX:-8.6,maxX:-6.55,minZ:-5.6,maxZ:-4.85},{minX:-6.65,maxX:-5.55,minZ:-5.6,maxZ:-4.75},{minX:2.05,maxX:4.75,minZ:-5.5,maxZ:-4.45},{minX:5.95,maxX:7.8,minZ:-5.5,maxZ:-4.55},{minX:-8.85,maxX:-7.65,minZ:2.5,maxZ:3.3}]},
   // place moves a shared station for this map only. In the owner's shop QC and
   // Shipping part to leave a doorway east; the wing map also widens the room.
   'owner-shop':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}}},
@@ -113,7 +122,7 @@ const mapHas=(def,mapId)=>(!def.hall||openHalls.has(def.hall))&&(def.map?[].conc
 const placed=(def,mapId)=>({...def,...MAPS[mapId].place?.[def.id]});
 const accessOf=def=>def.access||{x:def.x,z:def.z+def.d/2+.63};
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,lighting,appliedTheme=null,lightningFlash=0;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,lighting,appliedTheme=null,lightningFlash=0;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
@@ -131,7 +140,7 @@ const fixedObstacles=[{minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,m
 let obstacles=[];
 function activateMap(mapId){
   Object.assign(bounds,BASE_BOUNDS,MAPS[mapId].bounds);
-  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({id:s.id,bay:Boolean(s.bay||s.baseBay),minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...fixedObstacles,...hallObstacles(mapId)];
+  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({id:s.id,bay:Boolean(s.bay||s.baseBay),minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...(MAPS[mapId].fixed??fixedObstacles),...hallObstacles(mapId)];
 }
 // Open halls stretch the floor south. Closed plots inside that span are
 // solid, and partitions block everything but their doorways.
@@ -324,6 +333,9 @@ const THEMES={
   // Open for Business runs a working day: morning light drifts to dusk by closing.
   morning:{sky:0x18394a,backdrop:0x1d4252,hemi:[0xfff1dc,0x4a6474,2.3],sun:[0xffe0a8,3.9],fill:[0x9fdcf0,1.9],exposure:1.24},
   dusk:{sky:0x2a2438,backdrop:0x2b2a3c,hemi:[0xffc9a6,0x3c3346,1.85],sun:[0xff9d62,3.2],fill:[0x7f86d8,1.6],exposure:1.18},
+  // Launch Window counts down from the blue hour before dawn to sunrise.
+  predawn:{sky:0x0c1a2c,backdrop:0x13223a,hemi:[0xb4c6f2,0x2c3648,2.2],sun:[0xdbe3ff,3.3],fill:[0x6a86e0,1.8],exposure:1.2},
+  sunrise:{sky:0x3b2a3d,backdrop:0x3a2c3c,hemi:[0xffd6b4,0x3a3247,2.05],sun:[0xffab6a,3.5],fill:[0x8c8fe2,1.6],exposure:1.22},
 };
 function activeMapId(){return menuMode?'first-shop':game.config.mapId;}
 const themeColor=new THREE.Color(),themeOther=new THREE.Color();
@@ -340,13 +352,15 @@ function applyMap(){
   if(appliedTheme!==mapKey){
     appliedTheme=mapKey;openHalls.clear();for(const id of halls)openHalls.add(id);
     applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
-    for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;}}
+    for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;}s.label.querySelector('.station-name').textContent=s.def.name;}
+    const launchMap=MAPS[mapId].shell==='hangar';world.visible=!launchMap;hangar.visible=launchSite.visible=launchMap;
     // The east wing widens the room: refit the camera and stretch the sun's shadows over it.
     const wing=mapId==='owner-wing';annex.visible=wing;if(stormRig)stormRig.visible=mapId==='dawn-shop';for(const [id,shell] of hallShells)shell.built.visible=openHalls.has(id);fitLights(wing);
     shopFrame=measureShopFrame();layoutDirty=true;resetView();
   }
   for(const [id,shell] of hallShells)shell.plot.visible=managing&&mapId==='owner-wing'&&!openHalls.has(id)&&(game.hallBuyable(id)||game.hallsPending.includes(id));
   if(managing){const t=game.mode==='evening'||game.mode==='results'?1:Math.min(1,game.elapsed/DAY_SECONDS);applyTheme(THEMES.morning,THEMES.dusk,t*t);}
+  if(launching()){const t=Math.min(1,game.elapsed/game.config.duration);applyTheme(THEMES.predawn,THEMES.sunrise,pad.cinematic?Math.min(1,.75+pad.cinematic.t/14):t*.75);}
   for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
   for(const [id,bay] of Object.entries(bays)){const def=stations[id].def;bay.visible=managing&&mapHas(def,mapId)&&!game.stations[id];bay.position.set(def.x,0,def.z);bay.rotation.y=def.baseBay?0:def.rotationY??0;}
 }
@@ -373,6 +387,7 @@ function boot(){
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
   world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);stormRig=createStormRig();stormRig.visible=false;scene.add(stormRig);
+  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);
   for(const h of HALL_PLOTS){const shell=createHall(h);shell.built.visible=shell.plot.visible=false;scene.add(shell.built,shell.plot);hallShells.set(h.id,shell);
     const sign=$('wing-sign').cloneNode(true);sign.id='hall-sign-'+h.id;sign.classList.add('hall-sign');sign.setAttribute('aria-label',`Expand the shop with ${h.name}`);sign.querySelector('.station-name').textContent=`BUILD ${h.name.toUpperCase()}`;sign.onclick=()=>openPopover('hall',h.id);$('wing-sign').after(sign);hallSigns.set(h.id,sign);}
   scene.add(sun.target);
@@ -411,7 +426,8 @@ function measureShopFrame(){
   }
   // A plot for sale peeks in at the edge of the fitted view, but only where it touches floor already open.
   for(const h of HALL_PLOTS)if(!openHalls.has(h.id)&&game.manager&&!menuMode&&game.hallBuyable?.(h.id)&&(h.row===1||HALL_PLOTS.some(o=>openHalls.has(o.id)&&hallAdjacent(o,h))))include(new THREE.Vector3(h.cx,0,h.z0+2));
-  for(const shellObject of [world,...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
+  if(launchSite?.visible)for(const point of launchSite.userData.framePoints)include(point);
+  for(const shellObject of [...(hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
     const shell=new THREE.Box3().setFromObject(shellObject);
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
   }
@@ -459,6 +475,7 @@ function updateCamera(dt,instant=false){
   look.y=mobile?-7.2:.25;
   if(!menuMode&&(layoutDirty||!playFrame)){playFrame=measurePlayFrame();layoutDirty=false;}
   if(playFrame){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
+  if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
   camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
   camera.position.copy(look).add(cameraOffset);camera.lookAt(look);
@@ -498,6 +515,7 @@ function processEvents(){for(const ev of game.drain()){
   audio.event(ev.type);
   if(ev.type==='hint')toast(ev.message);
   if(ev.type==='sourceDelivered'){audio.event('ready');spawnParticles(stations.receiving.def.x,1.6,stations.receiving.def.z,0x72e8cf,8);}
+  if(ev.type==='sourceFulfilled'&&launching())showPA(`Covari’s ${game.sourcing.name.toLowerCase()} is on the pad. +300.`);
   if(ev.type==='sourceFulfilled'){audio.event('shipped');floatText(`+${ev.points} · ORDER FULFILLED`,'ship',true);spawnParticles(6,1.2,1.2,0x72e8cf,18);}
   if(ev.type==='programmed'){floatText('CAD READY ✓','office',true);}
   if(ev.type==='surge'){
@@ -519,9 +537,11 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='rushWon'){floatText('RUSH DELIVERED ✓','ship',true);}
   if(ev.type==='recycle')toast(`#${ev.orderId} recycled`,3);
   if(ev.type==='ready'){floatText('READY ✓',ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.5,s.def.z,0x9effd4,5);}
-  if(ev.type==='shipped'){floatText(`+${ev.points}${ev.combo>1?'  ×'+ev.combo+' streak':''}`,'ship');spawnParticles(6,1.2,1.2,0xffd76c,28);shake=.7;}
+  if(ev.type==='shipped'){floatText(`+${ev.points}${ev.combo>1?'  ×'+ev.combo+' streak':''}`,'ship');spawnParticles(6,1.2,1.2,0xffd76c,28);shake=.7;if(launching()&&game.stack.length)queueSection(game.stack.at(-1),game.stack.length);}
+  if(ev.type==='kitted'){floatText(ev.waiting?`KIT · ${ev.waiting} TO GO`:'KIT COMPLETE','assemble',true);const s=stations.assemble;spawnParticles(s.def.x+.8,1.0,s.def.z,0x9fe0ff,5);}
+  if(ev.type==='assembling'){floatText('ASSEMBLING','assemble',true);}
   if(ev.type==='expired')toast(`#${ev.orderId} expired`,3.3);
-  if(ev.type==='finish')showResults();
+  if(ev.type==='finish'){if(launching())startTerminalCount();else showResults();}
   if(ev.type==='load'){const s=stations[ev.station];spawnParticles(s.def.x,1.15,s.def.z,0x7ff0e0,4);}
 }}
 function partSignature(o){return `${o.id}:${o.index}:${o.location}`;}
@@ -534,11 +554,14 @@ function syncParts(){
   const living=new Set(active.filter(shown).map(o=>o.id));
   for(const [id,entry] of parts){if(!living.has(id)){entry.mesh.removeFromParent();parts.delete(id);}}
   for(const o of active){if(!shown(o))continue;let entry=parts.get(o.id);const sig=partSignature(o);if(entry?.sig===sig)continue;
-    if(entry)entry.mesh.removeFromParent();const stage=o.id===201||o.outsourced?Math.min(3,o.index+1):o.index===0?0:o.route.slice(0,o.index).includes('anodize')?4:Math.min(3,o.index);const mesh=createPart(stage,o.color,o.kind);entry={mesh,sig,order:o.id};parts.set(o.id,entry);
+    if(entry)entry.mesh.removeFromParent();const stage=o.id===201||o.outsourced?Math.min(3,o.index+1):o.index===0?0:o.route.slice(0,o.index).includes('anodize')?4:Math.min(3,o.index);const mesh=o.kit?createAssembly(o.section,o.color,o.index>=2):createPart(stage,o.color,o.kind);entry={mesh,sig,order:o.id};parts.set(o.id,entry);
     const staffCarry=staffViews.get(o.location)?.anchor;
     if(o.location==='hands'||staffCarry){(staffCarry||carryAnchor).add(mesh);mesh.position.set(0,0,0);mesh.scale.setScalar(1.15);}
+    else if(o.location==='kit'){stations.assemble.model.add(mesh);mesh.scale.setScalar(.82);}
     else{const id=o.location==='buffer'?'buffer':o.location;const s=stations[id];if(s){s.model.add(mesh);mesh.position.copy(s.model.userData.workPoint||new THREE.Vector3(0,1.2,0));}}
   }
+  // Kitted parts fill the cell's trays in kit order; reflow as kits leave.
+  if(launching()){const slots=stations.assemble.model.userData.kitSlots;active.filter(o=>o.parentId&&o.location==='kit').sort((a,b)=>a.parentId-b.parentId||a.id-b.id).forEach((o,i)=>{const mesh=parts.get(o.id)?.mesh;if(mesh)mesh.position.copy(slots[i%slots.length]).add(new THREE.Vector3(0,Math.floor(i/slots.length)*.16,0));});}
 }
 function updateMovement(dt){
   viewFollow=false;if(game.mode!=='playing'||onPhone())return;
@@ -609,6 +632,7 @@ function animateShop(dt){
     if(spindle&&busy&&active){const boost=game.machineSpeed?.()||1;if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15*boost;else if(op==='mill'){spindle.rotation.y+=dt*11*boost;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4*boost)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2*boost)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3*boost)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
       if((op==='lathe'||op==='mill'||op==='deburr')&&Math.random()<dt*7*boost&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,boost>1?0x5ce6ff:0xffd67b,1);}
     }
+    if(id==='assemble'&&s.model.visible)animateRobot(s,busy&&active,ready,dt);
     if(state?.part){const mesh=parts.get(state.part.orderId)?.mesh;if(mesh){const wp=s.model.userData.workPoint;if(wp){mesh.position.y=wp.y+(ready&&!reduced?Math.sin(clockTime*3.5)*.055:0);if(ready)mesh.rotation.y+=dt*.8;}}}
   }
   const office=world.userData.office;
@@ -620,7 +644,7 @@ function animateShop(dt){
   if(character.userData.callPhone)character.userData.callPhone.visible=calling;
   if(calling){if(character.userData.rightArm)character.userData.rightArm.rotation.x=-2.85;if(character.userData.head)character.userData.head.rotation.z=-.09;}
   else if(character.userData.head)character.userData.head.rotation.z=0;
-  animateOfficeSeat(dt);animateStaff(dt);
+  animateOfficeSeat(dt);animateStaff(dt);if(launchSite?.visible)animateLaunch(dt);
   if(active&&game.call?.state==='ringing'&&clockTime>=nextPhoneRing){audio.event('call');nextPhoneRing=clockTime+2.2;}
   if(menuMode){character.position.set(.1,Math.sin(clockTime*2)*.018,2.5);character.rotation.y=-.4;playerRing.position.set(.1,.07,2.5);const u=character.userData;if(u.head)u.head.rotation.y=Math.sin(clockTime*.5)*.12;}
   if(stormRig?.visible){
@@ -660,7 +684,7 @@ function updateTickets(force){
   for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=ticketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
 }
 function nextTarget(){if(game.manager)return managerNextTarget();if(onPhone())return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const ready=Object.entries(game.stations).find(([id,s])=>s.ready);if(ready)return ready[0];if(game.nextCAD?.())return 'office';const candidates=['round','plate','block'].map(type=>game.nextMaterial?.(type)).filter(Boolean);const next=candidates.sort((a,b)=>a.remaining-b.remaining)[0];if(next)return `material-${stockType(next)}`;const o=game.selected;return o?.location==='material'?`material-${stockType(o)}`:o?.location==='hands'?o.route[o.index]:o?.location||null;}
-function stationAction(id){if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
+function stationAction(id){if(id==='assemble'&&launching())return cellAction();if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
   if(game.manager){const action=managerStationAction(id);if(action)return action;}if(id.startsWith('material-')){const type=id.slice(9);const next=game.nextMaterial(type);return o?.id===201?'Inspect and ship this customer part':game.hand?`Recycle #${o.id} · restart route`:next?`Collect ${type} stock · #${next.id}`:game.orders.some(job=>stockType(job)===type&&!job.programmed)?'Complete CAD at the office first':`No ${type} job ready`;}if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${opInfo(id).name.toLowerCase()}`:`${opInfo(id)?.name||id} station`;}
 function updateUI(force=false){
   if(game.manager)updateManagerHUD(force);else{
@@ -671,12 +695,14 @@ function updateUI(force=false){
   $('shipped').textContent=nextStar<0?String(game.shipped):`${game.shipped}/${game.config.stars[nextStar]}`;
   const shipmentGoal=`${game.shipped} orders shipped. Clear at ${game.config.passTarget}. ${nextStar<0?'All three stars earned.':`${nextStar+1} star${nextStar?'s':''} at ${game.config.stars[nextStar]} shipped.`}`;
   $('shipment-progress').title=shipmentGoal;$('shipment-progress').setAttribute('aria-label',shipmentGoal);
-  $('order-count').textContent=`${game.orders.length} / 4`;}
+  $('order-count').textContent=`${game.kits?game.kits().length:game.orders.length} / 4`;}
   if(game.config.overdrive){
     const boost=game.machineSpeed?.()||1;
     $('shift-name').textContent=boost>=2?`${game.config.name} · ⚡ SURGE 2.0×`:boost>1?`${game.config.name} · ⚡ OVERDRIVE 1.5×`:game.config.name;
   }
-  const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);if(game.manager)updateManagerTickets(force);else updateTickets(force);
+  const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);
+  if(launching()){const count=launchCount();$('timer-label').textContent='COUNTDOWN';$('timer').textContent=`T−${Math.floor(count/60)}:${String(count%60).padStart(2,'0')}`;}
+  if(game.manager)updateManagerTickets(force);else if(launching())updateKitTickets(force);else updateTickets(force);
   updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
   for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
@@ -739,7 +765,8 @@ function positionLabels(){
   s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('nearby',!menuMode&&nearby?.def.id===id);s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-name').textContent=surgeOffice&&!menuMode?'SURGE CONSOLE':s.def.name;
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':surgeOffice?(game.surgeRemaining>0?`⚡ 2× ${Math.ceil(game.surgeRemaining)}s`:game.surgeCooldown>0?`${Math.ceil(game.surgeCooldown)}s`:'⚡ BOOST 2×'):id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
-  s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:surgeOffice&&game.surgeRemaining>0?`${100*(game.surgeRemaining/16)}%`:busy?`${100*(1-st.remaining/(st.duration||opInfo(id).duration))}%`:'0';s.label.style.opacity=menuMode?'.72':'';
+  s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:surgeOffice&&game.surgeRemaining>0?`${100*(game.surgeRemaining/16)}%`:busy?`${100*(1-st.remaining/(st.duration||(opInfo(id)??launchOp(id)).duration))}%`:'0';
+  if(id==='assemble'&&!menuMode&&!busy&&!ready){const kitted=game.orders.filter(o=>o.parentId&&o.location==='kit').length;if(kitted)s.label.querySelector('.station-time').textContent=`${kitted} IN KIT`;}s.label.style.opacity=menuMode?'.72':'';
 }
   const sign=$('wing-sign');sign.hidden=!managing||game.expanded||game.mode!=='evening';
   if(!sign.hidden){const p=screenPoint(new THREE.Vector3(7.25,1.6,-.78));sign.style.left=p.x+'px';sign.style.top=p.y+'px';sign.querySelector('.station-time').textContent=game.wingPending?'TONIGHT':money(WING.cost);}
@@ -747,12 +774,13 @@ function positionLabels(){
     hallSign.hidden=!managing||game.mode!=='evening'||!(pending||game.hallBuyable(h.id));
     if(!hallSign.hidden){const p=screenPoint(new THREE.Vector3(h.cx,1,h.z0+1.6));hallSign.style.left=p.x+'px';hallSign.style.top=p.y+'px';hallSign.querySelector('.station-time').textContent=pending?'TONIGHT':money(h.cost);}}
   positionStaffTags();positionPopover();}
-function updateMusic(){audio.setTrack?.(game.mode==='playing'&&!game.manager&&game.config?.musicTrack||'country');audio.update(!document.hidden&&!phonePortrait()&&(game.mode==='menu'||game.mode==='playing'),['ringing','answering','offer'].includes(game.call?.state));}
+function updateMusic(){audio.setTrack?.((game.mode==='playing'||game.mode==='terminal')&&!game.manager&&game.config?.musicTrack||'country');audio.update(!document.hidden&&!phonePortrait()&&(game.mode==='menu'||game.mode==='playing'||game.mode==='terminal'),['ringing','answering','offer'].includes(game.call?.state));}
 function unlockHomeMusic(){if(game.mode!=='menu'||document.hidden)return;audio.init();updateMusic();}
 // Frame budget: high-refresh displays would otherwise redraw the whole shop,
 // shadow map included, 120 times a second. Play needs 60; menus and evenings
 // idle at 30; a paused, help or results screen behind its overlay needs 10.
-const FRAME_BUDGET={playing:60,menu:30,evening:30};
+// Launch Window's terminal count (the liftoff) is animation, so it runs at 60.
+const FRAME_BUDGET={playing:60,menu:30,evening:30,terminal:60};
 function framesPerSecond(mode){return FRAME_BUDGET[mode]??10;}
 let moving=null,popover=null;
 const isPlanning=()=>Boolean(game?.manager&&game.mode==='playing'&&(!$('store-panel')?.hidden||popover!==null||moving!==null));
@@ -779,11 +807,11 @@ function frame(now){
   if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
-const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4'};
+const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5'};
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];const named=/^(Created with )(.+)$/.exec(credit||'');const creditHtml=named?`<small class="shift-credit">${named[1]}<b>${named[2]}</b></small>`:'';b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${creditHtml}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
-function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -818,7 +846,7 @@ function savedRunSummary(){
   try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
-function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
 function pause(){if(game.mode!=='playing')return;closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
@@ -832,7 +860,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(){if(game.manager)saveRun();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
+function showMenu(){if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -846,7 +874,7 @@ function showModelCredit(credit){
 function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
-  $('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
+  $('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?`${cfg.goal} The count starts at T−${clock(cfg.duration+(cfg.terminalCount??0))}.`:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -873,7 +901,8 @@ function showResults(){
   $('results-panel').classList.toggle('owner-mastery',shiftMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
   $('result-title').textContent=shiftMastery?'Absolute machine.':passed?'That’s a good shift.':'One more shift?';
-  $('result-message').textContent=`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.finishReason==='work-complete'?`${game.missed?'No jobs remaining':'All jobs finished'}. ${Math.ceil(game.time)}s to spare.`:`${game.unfinished} unfinished at closing.`} `+(passed?(challengeRun?'Challenge shift complete.':game.shiftIndex<SHIFTS.length-1?'Next shift unlocked.':'All available shifts cleared. More shifts coming.') : game.config.retryTip);
+  if(game===launchGame){$('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'FULL STACK':passed?'LIFTOFF':'SCRUBBED'}`;$('result-title').textContent=shiftMastery?'Full stack. Clean flight.':passed?'Liftoff!':'Launch scrubbed.';}
+  $('result-message').textContent=game===launchGame?`${game.shipped} section${game.shipped===1?'':'s'} stacked on the rocket. It needed ${game.config.passTarget} to fly. ${passed?(challengeRun?'Challenge shift complete.':game.shiftIndex<SHIFTS.length-1?'Next shift unlocked.':'All available shifts cleared. More shifts coming.'):game.config.retryTip}`:`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.finishReason==='work-complete'?`${game.missed?'No jobs remaining':'All jobs finished'}. ${Math.ceil(game.time)}s to spare.`:`${game.unfinished} unfinished at closing.`} `+(passed?(challengeRun?'Challenge shift complete.':game.shiftIndex<SHIFTS.length-1?'Next shift unlocked.':'All available shifts cleared. More shifts coming.') : game.config.retryTip);
   const nextStar=game.config.stars.findIndex(target=>game.shipped<target);
   $('result-progress').textContent=nextStar<0?(shiftMastery?'Three stars. Exceptional precision under pressure.':'All three stars earned.'):`${game.config.stars[nextStar]-game.shipped} more shipped order${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;
   $('result-score-label').textContent='SCORE';$('result-shipped-label').textContent='SHIPPED';$('result-missed-label').textContent='MISSED';
@@ -1383,6 +1412,236 @@ function showManagerResults(){
   $('next-button').innerHTML='NEW RUN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
   social.finish({role:MANAGER_ROLE,board:boardId(length),stars,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,days:game.daysCompleted,elapsed:game.totalElapsed,finishReason:reason});
 }
+// Launch Window ---------------------------------------------------------------
+// The pad is presentation: LaunchGame decides what ships and whether it flies.
+// Shipped sections ride the cart out of the hangar and the tower's jib crane
+// stacks them onto the rocket. At terminal count the rocket flies or scrubs.
+const pad={queue:[],anim:null,shown:0,cinematic:null,follow:0,vapor:0,clockText:'',pa:0,lastCount:null};
+const PA_CALLS=[[225,'Weather is go: last night’s storm has cleared the range. Hangar 7, you are go for flight hardware.'],[180,'T−3:00. Propellant loading is under way.'],[120,'T−2:00. Range is green. Keep the sections coming.'],[60,'T−1:00. Last loads before the pad is cleared.'],[30,'T−0:30. Final section window, hangar.']];
+const ease=t=>t<0?0:t>1?1:t*t*(3-2*t);
+const smokeSprites=[];let smokeTexture=null;
+function smokeMap(){
+  if(smokeTexture)return smokeTexture;
+  const c=document.createElement('canvas');c.width=c.height=64;const ctx=c.getContext('2d');
+  const g=ctx.createRadialGradient(32,32,2,32,32,31);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.45,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,64,64);smokeTexture=new THREE.CanvasTexture(c);return smokeTexture;
+}
+// Soft sprites for venting vapour, exhaust and the ground cloud. Pooled.
+function puff(x,y,z,{vx=0,vy=.4,vz=0,size=.5,grow=.6,life=2,opacity=.4,color=0xe8eef0,drag=.6}={}){
+  if(reduced&&smokeSprites.length>24)return;
+  let p=smokeSprites.find(entry=>entry.life<=0);
+  if(!p){if(smokeSprites.length>=180)return;const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeMap(),transparent:true,depthWrite:false,opacity:0}));sprite.renderOrder=3;scene.add(sprite);p={sprite};smokeSprites.push(p);}
+  Object.assign(p,{x,y,z,vx,vy,vz,size,grow,life,max:life,opacity,drag});p.sprite.material.color.set(color);p.sprite.visible=true;
+}
+function updateSmoke(dt){
+  for(const p of smokeSprites){
+    if(p.life<=0)continue;p.life-=dt;
+    if(p.life<=0){p.sprite.visible=false;continue;}
+    const k=Math.exp(-p.drag*dt);p.vx*=k;p.vz*=k;p.vy=p.vy*k+.05*dt;
+    p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.size+=p.grow*dt;
+    const age=1-p.life/p.max;p.sprite.position.set(p.x,p.y,p.z);p.sprite.scale.setScalar(p.size);
+    p.sprite.material.opacity=p.opacity*Math.min(1,age*6)*(1-age);
+  }
+}
+function clearSmoke(){for(const p of smokeSprites){p.life=0;p.sprite.visible=false;}}
+function stackTarget(){return game.config.stars?.at(-1)??0;}
+// Seconds on the launch clock: the shift's time plus terminal count, then the
+// terminal count itself (held at T−10 by a scrub).
+function launchCount(){const c=pad.cinematic,T=game.config.terminalCount;return c?Math.max(0,Math.ceil(c.go?T-c.t:T)):Math.ceil(game.time+T);}
+function resetPad(){
+  if(!launchSite)return;
+  const u=launchSite.userData;pad.queue.length=0;
+  if(pad.anim){pad.anim.mesh.removeFromParent();pad.anim=null;}
+  pad.shown=0;pad.cinematic=null;pad.follow=0;pad.vapor=0;pad.pa=0;pad.clockText='';pad.lastCount=null;
+  u.setStack([],launching()?stackTarget():0,launching()?game.config.stars:[]);
+  u.rocket.position.y=LAUNCH_SITE.padTop;u.rocket.visible=true;u.ghosts.visible=true;u.shock.visible=false;u.flame.visible=false;u.glowLight.intensity=0;
+  for(const arm of u.arms)arm.rotation.y=0;
+  u.cart.position.set(LAUNCH_SITE.cartHome.x,0,LAUNCH_SITE.cartHome.z);u.jib.rotation.y=0;u.trolley.position.x=-1.75;setHook(1);
+  $('launch-overlay').hidden=true;$('pa-banner').hidden=true;document.body.classList.remove('terminal-count');clearSmoke();
+}
+function setHook(length){const u=launchSite.userData;u.hook.position.y=-length;u.cable.scale.y=length;u.cable.position.y=-length/2;}
+function queueSection(entry,count){pad.queue.push({...entry,count});}
+// World height of the hook above the pad, for a cable length.
+const JIB_Y=()=>launchSite.userData.jib.position.y+.24;
+function finishSectionNow(){
+  const u=launchSite.userData;
+  if(pad.anim){pad.anim.mesh.removeFromParent();pad.anim=null;}
+  pad.queue.length=0;pad.shown=game.stack.length;
+  u.setStack(game.stack,stackTarget(),game.config.stars);
+  u.cart.position.set(LAUNCH_SITE.cartHome.x,0,LAUNCH_SITE.cartHome.z);u.jib.rotation.y=0;u.trolley.position.x=-1.75;setHook(1);
+}
+function updatePad(dt){
+  const u=launchSite.userData,S=LAUNCH_SITE;
+  if(!pad.anim&&pad.queue.length){
+    const entry=pad.queue.shift(),mesh=createAssembly(entry.section,entry.color,true);mesh.scale.setScalar(1.6);u.cartSeat.add(mesh);
+    const dx=S.cartStop.x-S.tower.x,dz=S.cartStop.z-S.tower.z;
+    pad.anim={entry,mesh,t:0,index:pad.shown,reach:Math.hypot(dx,dz),angle:Math.atan2(dz,-dx),sparked:false};
+  }
+  const a=pad.anim;if(!a)return;
+  a.t+=dt;const t=a.t,i=a.index,secH=.24*S.sectionScale,top=S.baseTop+i*S.sectionHeight;
+  const cartTop=.3+.24*1.6,hookAt=y=>JIB_Y()-.06-y;
+  // 0–1.3 s: cart rolls to the pick-up point; the jib swings to meet it.
+  const out=ease(t/1.3);u.cart.position.x=THREE.MathUtils.lerp(S.cartHome.x,S.cartStop.x,t<4.4?out:1-ease((t-4.4)/1.1));
+  const swingIn=ease((t-2.8)/1.1);
+  u.jib.rotation.y=THREE.MathUtils.lerp(0,a.angle,ease(t/1.3))*(1-swingIn);
+  u.trolley.position.x=-THREE.MathUtils.lerp(THREE.MathUtils.lerp(1.75,a.reach,ease(t/1.3)),S.tower.x-S.rocket.x,swingIn);
+  if(t<2){setHook(THREE.MathUtils.lerp(1,hookAt(cartTop),ease((t-1.3)/.7)));}
+  else{
+    if(a.mesh.parent!==u.hookSeat){u.hookSeat.add(a.mesh);audio.event('pickup');}
+    const grow=ease((t-2)/.9),scale=THREE.MathUtils.lerp(1.6,S.sectionScale,grow);a.mesh.scale.setScalar(scale);a.mesh.position.y=-.24*scale-.02;
+    // Hoist to just above the stack, swing in under the raised nose, then set it down.
+    const hoisted=hookAt(top+.1+secH),start=hookAt(cartTop);
+    let length=THREE.MathUtils.lerp(start,hoisted,ease((t-2)/.9));
+    if(t>3.9)length=THREE.MathUtils.lerp(hoisted,hookAt(top+secH),ease((t-3.9)/.45));
+    setHook(t>4.4?THREE.MathUtils.lerp(hookAt(top+secH),1,ease((t-4.4)/1.1)):length);
+  }
+  const lift=t<2?0:t<3?ease(t-2)*.85:t<3.9?.85:t<4.35?.85-ease((t-3.9)/.45)*.85:0;
+  u.placeNose(i*S.sectionHeight+(t>=4.35?S.sectionHeight:0)+lift);
+  if(t>=4.35&&!a.sparked){
+    a.sparked=true;a.mesh.removeFromParent();pad.shown=Math.min(game.stack.length,i+1);
+    u.setStack(game.stack.slice(0,pad.shown),stackTarget(),game.config.stars);
+    spawnParticles(S.rocket.x,top+.05,S.rocket.z,0xffd36b,22);spawnParticles(S.rocket.x,top+.05,S.rocket.z,0x9fe0ff,10);
+    audio.event('stack');
+    const reached=game.config.stars.indexOf(pad.shown);
+    showPA(reached>=0?`Section ${pad.shown} stacked. ${'★'.repeat(reached+1)} light is on.`:`Section ${pad.shown} stacked: ${a.entry.name}.`);
+  }
+  if(t>=5.5)pad.anim=null;
+}
+function showPA(text){const el=$('pa-banner');el.textContent=text;el.hidden=false;el.classList.remove('pa-in');void el.offsetWidth;el.classList.add('pa-in');pad.pa=4.2;}
+function animateRobot(s,busy,ready,dt){
+  const r=s.model.userData.robot?.userData;if(!r)return;const t=clockTime;
+  const pose=busy&&!reduced?{turret:-.38+Math.sin(t*2.1)*.42,shoulder:-.5+Math.sin(t*3.2)*.16,elbow:-.7+Math.sin(t*3.9+1)*.22}:{turret:ready?-.45:.15,shoulder:ready?-.2:-.32,elbow:ready?-.4:-.95};
+  r.turret.rotation.y=THREE.MathUtils.damp(r.turret.rotation.y,pose.turret,6,dt);
+  r.shoulder.rotation.z=THREE.MathUtils.damp(r.shoulder.rotation.z,pose.shoulder,6,dt);
+  r.elbow.rotation.z=THREE.MathUtils.damp(r.elbow.rotation.z,pose.elbow,6,dt);
+  r.wrist.rotation.y+=busy?dt*5:0;
+  r.torch.material.emissiveIntensity=busy?(Math.random()<.5?2.2:.4):.15;
+  if(busy&&!reduced&&Math.random()<dt*9){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.12,p.z,Math.random()<.5?0x9ff8ff:0xffffff,1);}
+}
+function cellAction(){
+  const cell=game.stations.assemble,o=game.heldOrder;
+  if(o?.parentId)return o.route[o.index]==='assemble'?`Kit part ${o.tag} for #${o.parentId}`:`${o.tag} needs ${launchOp(o.route[o.index]).name.toLowerCase()} first`;
+  if(o)return o.kit?'Assembly is built · inspect it':'Parts only';
+  if(cell.ready)return `Collect assembly #${cell.part.orderId}`;
+  if(cell.part)return `Assembling #${cell.part.orderId} · ${Math.ceil(cell.remaining)}s`;
+  return 'Drop machined parts here';
+}
+function animateLaunch(dt){
+  const u=launchSite.userData,S=LAUNCH_SITE,live=launching();
+  if(live&&game.mode==='playing'){
+    updatePad(dt);
+    // PA calls on the way down to terminal count.
+    const count=game.time+game.config.terminalCount;
+    for(const [at,text] of PA_CALLS)if(pad.lastCount!==null&&pad.lastCount>at&&count<=at)showPA(text);
+    pad.lastCount=count;
+  }
+  if(pad.pa>0){pad.pa-=dt;if(pad.pa<=0)$('pa-banner').hidden=true;}
+  // Warning lights blink; vapour vents from the oxidiser stage until ignition.
+  for(const [i,w] of u.warning.entries())w.material.emissiveIntensity=Math.sin(clockTime*3+i*Math.PI)>0?1.6:.15;
+  const c=pad.cinematic;
+  if(!reduced&&(!c||c.t<7.2)&&!(c&&!c.go&&c.t>2)){pad.vapor-=dt;if(pad.vapor<=0){pad.vapor=.16+Math.random()*.22;const side=Math.random()<.5?-1:1;puff(S.rocket.x+side*.55,S.padTop+1.2+Math.random()*1.5,S.rocket.z+.2,{vx:side*.35,vy:.05,vz:.15,size:.35,grow:.5,life:2.2,opacity:.32});}}
+  for(const beam of u.beams)beam.material.opacity=.05+Math.sin(clockTime*.7)*.012;
+  if(live)audio.setIntensity(c?3:game.time<=60?2:game.shipped>=1||game.elapsed>50?1:0);
+  if(c)updateTerminalCount(dt);
+  updateSmoke(dt);
+  // The hangar's mission clock mirrors the countdown.
+  if(hangar?.visible){
+    const count=live?launchCount():0;
+    const text=c&&!c.go&&c.t>1?'HOLD':c&&c.go&&c.t>=game.config.terminalCount?'LIFTOFF':`T−${String(Math.floor(count/60)).padStart(2,'0')}:${String(count%60).padStart(2,'0')}`;
+    const sub=c&&!c.go&&c.t>1?'LAUNCH SCRUBBED · RECYCLE':`FLIGHT 1 · STACK ${pad.shown}/${stackTarget()} · GO AT ${game.config.passTarget}`;
+    const key=text+sub;if(key!==pad.clockText){pad.clockText=key;hangar.userData.clock.draw(text,sub,text==='HOLD'?'#ff8a5b':text==='LIFTOFF'?'#9dffb6':'#ffd36b');}
+  }
+}
+// Terminal count: the shift is over and the rocket flies or scrubs.
+function startTerminalCount(){
+  if(pad.cinematic)return;
+  finishSectionNow();clearMovement();
+  const go=game.launchDecision()==='go';
+  // A go rocket flies as built; a scrub keeps the outline of what was missing.
+  launchSite.userData.ghosts.visible=!go;
+  pad.cinematic={t:0,go,beat:-1,ignited:false,liftoff:false,done:false};game.mode='terminal';
+  document.body.classList.add('terminal-count');$('launch-overlay').hidden=false;$('launch-overlay').classList.toggle('scrub',!go);
+  $('launch-caption').textContent=go?'Terminal count. All hardware is on the rocket.':'Hold, hold, hold.';
+  audio.event(go?'terminal':'hold');
+}
+function updateTerminalCount(dt){
+  const c=pad.cinematic,u=launchSite.userData,S=LAUNCH_SITE,T=game.config.terminalCount;c.t+=dt;
+  if(c.go){
+    const remaining=Math.ceil(T-c.t);
+    if(c.t<T&&remaining!==c.beat){c.beat=remaining;$('launch-count').textContent=String(remaining);$('launch-count').classList.remove('tick');void $('launch-count').offsetWidth;$('launch-count').classList.add('tick');audio.event(remaining<=3?'countHigh':'count');
+      if(remaining===8)$('launch-caption').textContent='Swing arms retracting.';
+      if(remaining===4)$('launch-caption').textContent='Ignition sequence start.';}
+    for(const [i,arm] of u.arms.entries())arm.rotation.y=-1.35*ease((c.t-3-i*.4)/1.6);
+    // The jib slews clear of the flight path, back over the tower.
+    u.jib.rotation.y=-1.35*ease(c.t/3);u.trolley.position.x=-THREE.MathUtils.lerp(LAUNCH_SITE.tower.x-LAUNCH_SITE.rocket.x,1,ease(c.t/3));
+    if(c.t>=T-3&&!c.ignited){c.ignited=true;u.flame.visible=true;audio.event('ignition');}
+    if(c.ignited){
+      const k=Math.min(1,(c.t-(T-3))/2.6),flicker=reduced?1:.85+Math.random()*.3;
+      u.flame.scale.set(.45+.55*k,(.3+.9*k)*flicker,.45+.55*k);u.glowLight.intensity=(18+40*k)*flicker;
+      shake=Math.max(shake,c.liftoff?1.1:.25+k*.5);
+      if(!reduced&&Math.random()<dt*(20+40*k)){const a=Math.random()*Math.PI*2,v=1.2+Math.random()*2.6*k;puff(S.rocket.x+Math.cos(a)*.6,S.padTop+.25,S.rocket.z+Math.sin(a)*.6,{vx:Math.cos(a)*v,vy:.25+Math.random()*.4,vz:Math.sin(a)*v*.8,size:.8,grow:1.6,life:3.4,opacity:.62,drag:.45,color:0xdfe3e2});}
+    }
+    if(c.t>=T){
+      if(!c.liftoff){c.liftoff=true;u.shock.visible=!reduced;$('launch-count').textContent='LIFTOFF';$('launch-count').classList.add('liftoff');$('launch-caption').textContent=`${game.stack.length} sections, ${game.stars()} ★. The shop built that.`;audio.event('liftoff');}
+      const f=c.t-T,rise=.35*f+1.25*f*f;
+      if(u.shock.visible){const k=Math.min(1,f/1.6);u.shock.scale.setScalar(1+k*9);u.shock.material.opacity=.85*(1-k);if(k>=1)u.shock.visible=false;}u.rocket.position.y=S.padTop+rise;u.glowLight.position.y=1.2+Math.min(rise,6);
+      if(!reduced&&Math.random()<dt*34)puff(S.rocket.x+(Math.random()-.5)*.4,S.padTop+rise-.6,S.rocket.z,{vx:(Math.random()-.5)*.5,vy:-.4,vz:(Math.random()-.5)*.3,size:.6,grow:1.1,life:2.8,opacity:.55,drag:.9});
+      pad.follow=Math.max(0,(rise-2)*.55);
+      if(f>6.2&&!c.done){c.done=true;finishTerminalCount();}
+    }
+  }else{
+    if(c.t>1&&c.beat!==0){c.beat=0;$('launch-count').textContent='SCRUB';$('launch-caption').textContent=`${game.shipped} of ${game.config.passTarget} sections reached the pad. The count is recycled to tomorrow.`;audio.event('scrub');}
+    if(c.beat===-1)$('launch-count').textContent='HOLD';
+    if(c.t>4.6&&!c.done){c.done=true;finishTerminalCount();}
+  }
+}
+function finishTerminalCount(){
+  if(game.mode==='terminal')game.mode='results';$('launch-overlay').hidden=true;document.body.classList.remove('terminal-count');
+  const u=launchSite.userData;if(pad.cinematic?.go){u.rocket.visible=false;u.flame.visible=false;u.glowLight.intensity=0;}
+  showResults();
+}
+function skipTerminalCount(){
+  const c=pad.cinematic;if(!c||c.done)return;c.done=true;
+  if(c.go){launchSite.userData.rocket.position.y=LAUNCH_SITE.padTop+40;for(const arm of launchSite.userData.arms)arm.rotation.y=-1.35;}
+  pad.follow=0;finishTerminalCount();
+}
+function endTerminalCount(){if(pad.cinematic){pad.cinematic=null;pad.follow=0;$('launch-overlay').hidden=true;document.body.classList.remove('terminal-count');}}
+// Kit tickets: each part's own route, then the shared assembly route.
+let renderedKits='';
+function stepChip(label,state,title){return `<span class="route-step${state==='done'?' done':state==='active'?' active':''}" title="${title}">${state==='done'?'✓ ':''}${label}</span>`;}
+function kitPartState(part){
+  if(!part)return 'done';
+  return part.location==='kit'?'kitted':part.started?'moving':'waiting';
+}
+function updateKitTickets(force){
+  const kits=game.kits();
+  const signature=kits.map(k=>`${k.id}:${k.index}:${k.location}:${game.stations.assemble.ready}:`+k.parts.map(id=>{const p=game.order(id);return p?`${p.index}:${p.location}:${game.stations[p.location]?.ready}`:'x';}).join(',')).join('|')+`|${game.heldOrder?.id}|${kits.length||game.hasEligibleFutureArrival()}`;
+  if(force||signature!==renderedKits){
+    const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedKits=signature;$('orders').replaceChildren();
+    if(!kits.length)$('orders').innerHTML=`<div class="orders-empty">${game.hasEligibleFutureArrival()?'Pad is waiting. The next kit is on its way.':'Every kit is on the pad.'}</div>`;
+    for(const k of kits){
+      const el=document.createElement('article');const held=game.heldOrder,carrying=held&&(held.id===k.id||held.parentId===k.id);
+      el.className='order-ticket kit-ticket long-route'+(carrying?' carried-job':'');el.id='ticket-'+k.id;el.style.setProperty('--kit',`#${k.color.toString(16).padStart(6,'0')}`);
+      el.setAttribute('aria-label',`Order ${k.id}, ${k.name}, a kit of ${k.parts.length} parts`);
+      const parts=k.parts.map((id,n)=>{
+        const p=game.order(id),letter='ABC'[n];
+        if(!p)return `<span class="kit-part done"><b>${letter}</b>${stepChip('IN',`done`,'Assembled')}</span>`;
+        const stock=stockType(p),steps=[{label:stock.toUpperCase(),title:`Collect ${stock} stock`,done:p.started,active:!p.started}]
+          .concat(p.route.map((key,i)=>({label:key==='assemble'?'KIT':launchOp(key).short,title:key==='assemble'?'Drop at the assembly cell':launchOp(key).name,done:i<p.index||(key==='assemble'&&p.location==='kit'),active:p.started&&i===p.index&&p.location!=='kit'})));
+        return `<span class="kit-part${p.location==='kit'?' kitted':''}${held?.id===p.id?' carried':''}" title="${p.name}"><b>${letter}</b>${steps.map(s=>stepChip(s.label,s.done?'done':s.active?'active':'',s.title)).join('<span class="route-arrow">›</span>')}</span>`;
+      }).join('');
+      const tail=k.route.map((key,i)=>stepChip(launchOp(key).short,i<k.index?'done':k.started&&i===k.index?'active':'',launchOp(key).name)).join('<span class="route-arrow">›</span>');
+      el.innerHTML=`<div class="ticket-top"><span>Order #${k.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${k.name}</h3><span class="kit-swatch" aria-hidden="true"></span></div><div class="kit-parts">${parts}</div><div class="route kit-tail"><span class="route-step kit-label">ASSEMBLY</span>${tail}</div><div class="ticket-status sr-only"></div><div class="ticket-progress"><i></i></div>`;
+      $('orders').appendChild(el);
+    }
+    $('orders').appendChild(sourceCard);$('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
+  }
+  for(const k of kits){const el=$('ticket-'+k.id);if(!el)continue;el.classList.toggle('urgent',k.remaining<20);el.querySelector('.due').textContent=Math.ceil(k.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',k.remaining<20);
+    const waiting=game.partsOf(k).filter(p=>p.location!=='kit').length;
+    el.querySelector('.ticket-status').textContent=k.started?(k.location==='assemble'?(game.stations.assemble.ready?'Assembly ready to collect':'Assembling'):`Assembly ${k.location==='hands'?'in your hands':'at '+k.location}`):`${waiting} part${waiting===1?'':'s'} still to kit`;
+    el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,k.remaining/k.deadline)})`;}
+}
+
 function bindControls(){
   syncPhoneOrientation();
   addEventListener('pointerdown',unlockHomeMusic);
@@ -1394,7 +1653,7 @@ function bindControls(){
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
-  $('result-covari-link').onclick=()=>social.track('covari_clicked');
+  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});
@@ -1411,6 +1670,7 @@ function bindControls(){
     if(e.code==='Escape'&&!$('store-panel').hidden){e.preventDefault();closeStore();return;}
     if(e.code==='KeyM'&&game.manager&&game.mode==='playing'){e.preventDefault();toggleStore();return;}
     if(managingView()&&['Equal','NumpadAdd','Minus','NumpadSubtract','Digit0','Numpad0'].includes(e.code)){e.preventDefault();if(e.code.endsWith('0'))resetView();else zoomView(/Equal|Add/.test(e.code)?1.4:1/1.4);return;}
+    if(pad.cinematic&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();skipTerminalCount();return;}
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
     if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
     if(e.code==='KeyE'||e.code==='Space')interact();

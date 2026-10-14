@@ -26,6 +26,7 @@ reorder the legacy indices.
 | 2 | `rush-hour` | Rush Hour | 180s | 5 shipments | 5 / 6 / 8 | Customer calls, optional rush promises |
 | 3 | `night-shift` | Night Shift | 210s | 4 shipments | 4 / 5 / 6 | Deburr and Anodize finishing stations on the `night-shop` map; Covari offers a finishing process the floor lacks; no calls |
 | 4 | `dawn-shift` | Blackout Shift | 180s | 5 shipments | 5 / 6 / 8 | Cellular `dawn-shop` floor around a central QC hub and 3D Backup Generator; zero CAD delay; 1.5× Harmonic Overdrive (2+ machines); 2.0× Office/Lightning Surges; 128 BPM storm-synth music; precision Covari capability gap |
+| 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
 
 The first three scenarios use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
@@ -186,6 +187,33 @@ Case-hardened gear (`Heat treatment`, `"No furnace on this floor"`), or
 Serialized optic mount (`Laser marking`, `"No laser on this floor"`). It follows
 the shared offer rules: optional, 30s decision window, 22s delivery to Receiving,
 `inspect → ship`, 300 points, and no order slot or shipment/star/streak credit.
+### Launch Window (`launch-window`)
+
+The morning after Blackout Shift: the storm that knocked out the grid also
+scrubbed a launch down the coast, and the shop builds flight hardware in the
+hangar beside the pad for the rescheduled dawn window.
+Every order is a kit of two or three parts. Each part has its own stock and a
+short lathe/mill route and ends at the robot assembly cell, which takes parts
+at any time and assembles a kit (6s) as soon as its last part arrives. The
+assembly then goes through Inspection to the pad, where a crane stacks it onto
+the rocket. Stock bins dispatch the earliest-due part of their type; a ready
+cell hands over its assembly when a part is dropped. An expired kit removes its
+parts everywhere and counts one miss. There is no CAD and there are no calls.
+
+Seven kits at most (0s, 16s, then every 23s; deadline 115s, +14 for the first).
+Clear and stars count shipped assemblies: 4 / 5 / 7. The clock shows T−minus,
+and the shift's end, early or on time, starts a ten-second terminal count: at
+the clear target the rocket lifts off, below it the launch scrubs. Covari
+offers metal 3D printing, carbon fiber layup or friction stir welding
+(`LAUNCH_SOURCE_JOBS`) on the shared rules.
+
+The rules are `LaunchGame` in `dist/launch.js` (`engine:'launch'` in the
+catalog); `shiftGame(index)` creates the right rules for any level. Kit parts
+are child orders of their kit, so ShopGame's stock, machine, Hold bench and
+recycling rules apply to them unchanged. The `launch-pad` map replaces the
+workshop shell with `createHangar()` and adds `createLaunchComplex()` east of
+it (`MAPS[...].shell`, `fixed` props and landmark framing). Full record:
+[experiments/launch-window.md](experiments/launch-window.md).
 
 ## Game mode: Open for Business (`open-for-business`)
 
@@ -339,6 +367,9 @@ starts with $1,500, a lathe, a mill and QC.
   recipe schedule, station unlocks, stock types, CAD/sourcing/call flags,
   call times, timer, clear target, and star thresholds. Read the core methods
   for shared rules such as the four-order limit and late-arrival safety check.
+- A level with its own rules sets `engine` in its catalog entry; `shiftGame()`
+  in `dist/launch.js` creates its game for the renderer, server and balance
+  driver. Launch Window is the example.
 - `dist/main.js` renders the catalog into selection, briefings, and progression.
   The “More shifts coming” row in `dist/index.html` is informational, never a
   playable entry. Keep the opening screen concise and its Play button reachable.

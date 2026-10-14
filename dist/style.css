@@ -528,3 +528,35 @@ body.manager-mode #shop-sidebar #orders{height:176px}
 html[data-interface="mobile"][data-phone="true"] .sales-strip.collapsed .sales-head{min-height:36px;align-items:center}
 html[data-interface="mobile"][data-phone="true"] .sales-strip .sales-head{flex-wrap:wrap;row-gap:2px}
 html[data-interface="mobile"][data-phone="true"] .sales-strip .sales-head strong{white-space:normal;text-align:left;flex-basis:100%;order:3}
+/* Launch Window: kit tickets, pad announcements and the terminal count. */
+.kit-ticket{border-top:4px solid var(--kit,#9fe0ff)}
+.kit-ticket .ticket-heading{display:flex;align-items:center;gap:6px}
+.kit-ticket .ticket-heading h3{margin-bottom:6px}
+.kit-swatch{width:14px;height:14px;border-radius:50%;margin:0 0 6px auto;background:var(--kit,#9fe0ff);box-shadow:inset 0 -3px 0 #0003,0 0 0 2px #19323a22}
+.kit-parts{display:flex;flex-direction:column;gap:3px;margin-bottom:5px}
+.kit-part{display:flex;align-items:center;gap:3px;flex-wrap:wrap;padding:2px 4px 2px 2px;border-radius:5px}
+.kit-part>b{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:4px;background:#19323a;color:#fff7dc;font-size:9px;font-weight:900;flex-shrink:0}
+.kit-part.kitted{background:#d5ecdc}
+.kit-part.kitted>b{background:#3a8a62}
+.kit-part.carried{box-shadow:inset 0 0 0 2px var(--orange)}
+.kit-part.done{opacity:.6}
+.kit-tail{gap:3px}
+.kit-tail .kit-label{background:transparent;color:#7a8b86;padding-left:0}
+:where(html[data-interface="desktop"]) .kit-part>b{width:13px;height:13px;font-size:8px}
+.pa-banner{position:absolute;left:50%;top:clamp(150px,22vh,230px);transform:translateX(-50%);z-index:24;pointer-events:none;display:flex;align-items:center;gap:10px;max-width:min(560px,86vw);padding:9px 16px 9px 12px;border-radius:999px;background:#0b141bde;border:1px solid #ffd36b55;color:#ffe9b0;font:700 12px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.3px;box-shadow:0 8px 24px #0006}
+.pa-banner:before{content:'PA';flex-shrink:0;padding:3px 6px;border-radius:999px;background:#ffd36b;color:#0b141b;font-size:10px;letter-spacing:1px}
+.pa-banner.pa-in{animation:pa-in .35s ease-out}
+@keyframes pa-in{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+.launch-overlay{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;text-align:center;background:radial-gradient(ellipse at 50% 45%,transparent 30%,#03080c66 100%)}
+.launch-count{font:900 clamp(72px,14vw,168px)/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#ffd36b;text-shadow:0 0 28px #ff9f3a88,0 6px 0 #00000055;letter-spacing:-4px}
+.launch-count.tick{animation:count-tick .9s ease-out}
+.launch-count.liftoff{font-size:clamp(54px,9vw,112px);color:#9dffb6;text-shadow:0 0 30px #5dffa088,0 6px 0 #00000055;letter-spacing:2px;animation:count-tick 1.2s ease-out}
+.launch-overlay.scrub .launch-count{color:#ff8a5b;text-shadow:0 0 24px #ff5a3a88,0 6px 0 #00000055;letter-spacing:4px}
+@keyframes count-tick{from{transform:scale(1.35);opacity:.2}30%{opacity:1}to{transform:scale(1);opacity:1}}
+.launch-caption{margin:0;max-width:min(560px,86vw);font-size:15px;font-weight:700;color:#f6f2df;text-shadow:0 2px 10px #000a}
+.launch-overlay .text-button{pointer-events:auto;margin-top:18px;opacity:.75}
+body.terminal-count #shop-sidebar,body.terminal-count #station-labels,body.terminal-count #pause-button{opacity:0;pointer-events:none;transition:opacity .6s}
+@media (prefers-reduced-motion:reduce){.launch-count.tick,.launch-count.liftoff,.pa-banner.pa-in{animation:none}}
+/* Kit tickets carry a row per part, so the desktop rail is taller in Launch Window. */
+@media(min-width:760px){:where(html[data-interface="desktop"]) body.launch-mode #shop-sidebar #orders{height:184px}}
+@media(max-width:759px){:where(html[data-interface="desktop"]) body.launch-mode #shop-sidebar #orders{height:196px}}

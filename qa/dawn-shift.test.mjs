@@ -31,7 +31,7 @@ function fresh(shift = DAWN) {
 }
 
 test('Blackout Shift stays at index 4 with stable id dawn-shift and Gemini 4 credit', () => {
-  assert.equal(SHIFTS.length, 5);
+  assert.equal(SHIFTS.length, 6, 'Launch Window appends after Blackout Shift; its index is unchanged');
   assert.equal(dawn.id, 'dawn-shift');
   assert.equal(dawn.mapId, 'dawn-shop');
   assert.equal(dawn.name, 'Blackout Shift');

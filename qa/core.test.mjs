@@ -72,8 +72,8 @@ test('menu rejects interactions and leaves all clocks untouched',()=>{
 });
 
 test('roles share intuitive routes and introduce CAD before optional rush calls',()=>{
-  assert.equal(SHIFTS.length,5);
-  assert.deepEqual(SHIFTS.map(shift=>shift.id),['first-shift','mixed-orders','rush-hour','night-shift','dawn-shift'],'Stable level IDs keep their legacy positions');
+  assert.equal(SHIFTS.length,6);
+  assert.deepEqual(SHIFTS.map(shift=>shift.id),['first-shift','mixed-orders','rush-hour','night-shift','dawn-shift','launch-window'],'Stable level IDs keep their legacy positions; new levels append');
   for(const shift of SHIFTS.slice(0,3))for(const index of shift.recipes){assert.ok([0,1,6].includes(index));assert.ok(RECIPES[index].route.every(key=>['lathe','mill','inspect'].includes(key)));}
   const operator=fresh(0),manager=fresh(1),owner=fresh(2);
   assert.equal(operator.selected.programmed,true);assert.equal(operator.selected.programRemaining,0);

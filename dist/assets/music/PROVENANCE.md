@@ -26,3 +26,15 @@ The portable generator reproduced the current MP3 and WAV byte-for-byte with Pyt
 - Playback integration should use a decoded Web Audio buffer with those loop bounds. Browser playback verification is separate from the generator's numerical QA.
 
 No separate third-party sample or stock-music license was used. This provenance statement does not assign a new software license; repository licensing governs the checked-in source.
+
+# Launch Window countdown score
+
+`launch-base-120.mp3`, `launch-drive-120.mp3` and `launch-climax-120.mp3` are an original procedural 120 BPM D-minor score made for Launch Window (Claude Opus 5.5 in Claude Code). Pad, sub bass, clock ticks, arpeggio, lead and drums are synthesized arithmetically with deterministic noise (seed 20261014). No recordings, samples, downloaded or stock music, or quoted melodies were used.
+
+The three stems share one length (16 bars, exactly 1,411,200 frames, 32 s) and one gain, so the game can layer them: the base always, the drive once the shop is moving, the climax in the last minute. Echo and release tails wrap into bar one so each loops seamlessly.
+
+```sh
+python3 scripts/music/generate_launch_music.py --output-dir ./generated-music
+```
+
+The script writes the MP3s (112 kbps, gapless metadata), WAV masters and `launch-window-120.json` with loop timing, hashes, tool versions and numerical QA (zero clipped samples; decoded length checked through an FFmpeg round trip). Generated with Python 3.14.4, NumPy 2.4.3 and Homebrew FFmpeg. QA is numerical; no listening test is recorded.

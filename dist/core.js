@@ -61,6 +61,13 @@ export const PRECISION_SOURCE_JOBS = [
   {name:'Case-hardened gear',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
   {name:'Serialized optic mount',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
 ];
+// Flight hardware the launch-site shop cannot make: it has a lathe, a mill and
+// an assembly cell, but no metal printer, composite cell or friction-stir welder.
+export const LAUNCH_SOURCE_JOBS = [
+  {name:'Printed injector',capability:'Metal 3D printing',technology:'am',gap:'No metal printer at the pad'},
+  {name:'Carbon fairing panel',capability:'Carbon fiber layup',technology:'cf',gap:'No composite cell at the pad'},
+  {name:'Welded tank dome',capability:'Friction stir welding',technology:'fsw',gap:'No stir welder at the pad'},
+];
 // New-level creative brief: docs/model-experiment.md. Current scenario details:
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
 // Future levels may evolve mechanics; preserve earlier scenarios and their data.
@@ -117,6 +124,22 @@ export const SHIFTS = [
     duration:180,firstArrival:8,interval:21,deadline:112,maxOrders:8,
     recipes:[7,8,5,9,10,7,8,9],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:PRECISION_SOURCE_JOBS,calls:false,callTimes:[],passTarget:5,stars:[5,6,8],
+  },
+  // Launch Window runs on LaunchGame (dist/launch.js): every order is a kit of
+  // parts machined separately and joined in the assembly cell. kits indexes
+  // KITS there; use shiftGame() rather than ShopGame for this level.
+  {
+    id:'launch-window',mapId:'launch-pad',engine:'launch',name:'Launch Window',author:'Claude Opus 5.5',harness:'Claude Code',
+    musicTrack:'launch',
+    subtitle:'Build the rocket’s flight hardware. Beat the count.',
+    goal:'Ship 4 assemblies to the pad before terminal count.',
+    brief:'The storm that blacked out the shop also scrubbed a launch down the coast. The sky has cleared for the next dawn window, and the launch team is short of flight hardware, so the shop is working from the hangar beside the pad. Every order is a kit: machine each part, drop the parts at the assembly cell, then inspect the assembly and send it to the pad. Each one is stacked onto the rocket. At T−10 the count goes terminal: four or more and it flies. Fewer and the launch scrubs.',
+    tip:'Drop each finished part at the assembly cell. It builds a kit on its own as soon as the last part arrives, so start the longest part first.',
+    retryTip:'Cut parts from two different kits at once. The assembly cell and Inspection can run while you walk.',
+    duration:210,firstArrival:16,interval:23,deadline:115,maxOrders:7,
+    kits:[0,1,2,0,3,1,4],unlocks:['lathe','mill','assemble','inspect'],stock:['round','plate','block'],
+    programming:false,sourcing:true,sourceJobs:LAUNCH_SOURCE_JOBS,calls:false,callTimes:[],passTarget:4,stars:[4,5,7],
+    terminalCount:10,
   },
 ];
 

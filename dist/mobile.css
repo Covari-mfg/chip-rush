@@ -1034,3 +1034,21 @@
 :where(html[data-interface="mobile"]) body:has(#overlay:not([hidden])) #mobile-dash {
   display: none;
 }
+
+/* Launch Window: a kit ticket lists each part, so the rail is taller. */
+:where(html[data-interface="mobile"]) body.launch-mode {
+  --mobile-order-height: 136px;
+}
+:where(html[data-interface="mobile"]) body.launch-mode #shop-sidebar #orders .order-ticket.kit-ticket {
+  height: 133px;
+}
+:where(html[data-interface="mobile"]) #shop-sidebar .kit-ticket .kit-parts {
+  gap: 1px;
+  margin-bottom: 1px;
+}
+:where(html[data-interface="mobile"]) #shop-sidebar .kit-ticket .kit-part {
+  padding: 1px 3px 1px 1px;
+}
+:where(html[data-interface="mobile"][data-phone="true"]) body.launch-mode #shop-sidebar #orders .order-ticket.kit-ticket {
+  height: auto;
+}

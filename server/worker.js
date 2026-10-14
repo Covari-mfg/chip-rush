@@ -1,4 +1,5 @@
-import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
+import { RULESET, SHIFTS } from '../dist/core.js';
+import { shiftGame } from '../dist/launch.js';
 import { MANAGER_ROLE, MANAGER_BOARD, MANAGER_SCORE_RULESETS, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
@@ -27,7 +28,8 @@ export function validateResult(value,run,now=Date.now()){
     // Conservative eligibility check, not an authoritative replay. Give the
     // next arrival its longest possible gap; even then it must be ineligible.
     // This shares the game's late-arrival cutoff instead of inventing a timer.
-    const probe=new ShopGame();probe.reset(run.role);probe.orders=[];
+    // Each level's own rules decide arrivals (Launch Window schedules kits).
+    const probe=shiftGame(run.role);probe.orders=[];
     probe.spawnIndex=value.spawned;probe.elapsed=value.elapsed;probe.time=config.duration-value.elapsed;
     // Before four arrivals the queue cannot have been full. Those scheduled
     // arrivals cannot be omitted; allow the engine's 0.1s tick rounding per gap.

@@ -10,6 +10,7 @@ import { TECHNOLOGIES } from '../dist/technology.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 import { validateResult } from '../server/worker.js';
 import { Driver, simulateShift, navigation } from './balance.mjs';
+import { KITS } from '../dist/launch.js';
 
 const NIGHT = 3;
 const START = 1_800_000_000_000;
@@ -41,7 +42,7 @@ function run(game, station, seconds) {
 }
 
 test('Night Shift is appended with a stable identity and its own credit', () => {
-  assert.equal(SHIFTS.length, 5);
+  assert.equal(SHIFTS.indexOf(night), 3, 'Night Shift keeps legacy index 3 as later levels append');
   assert.equal(night.id, 'night-shift');
   assert.equal(night.mapId, 'night-shop');
   assert.ok(night.author && night.harness);
@@ -369,7 +370,8 @@ test('a stalled shift still ends at the clock without extra income', () => {
 
 test('shipment points stay under the shared per-shipment score ceiling for every level', () => {
   for (const shift of SHIFTS) {
-    const richest = Math.max(...shift.recipes.map(index => RECIPES[index].value));
+    // Launch Window orders are kits; their value sits on the kit, not a recipe.
+    const richest = Math.max(...(shift.kits ? shift.kits.map(index => KITS[index].value) : shift.recipes.map(index => RECIPES[index].value)));
     const best = scoreShipment({ value: richest, remaining: shift.deadline + 14 }, 5, { programming: shift.programming, rushBonus: shift.calls ? 100 : 0 });
     assert.ok(best.total <= 1600, `${shift.id} tops out at ${best.total}`);
   }

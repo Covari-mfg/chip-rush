@@ -1,5 +1,16 @@
 # CHIP RUSH verification
 
+## Launch Window (level 6, on Blackout Shift) · 2026-10-14 (local source, not released)
+
+Full record: [docs/experiments/launch-window.md](../docs/experiments/launch-window.md).
+
+- Rebuilt on Blackout Shift (PR #30 head `9f5d270`) as level 6. 342 automated tests pass (20 new in `qa/launch-window.test.mjs`), plus `node qa/balance.mjs --rush --ignore-calls --expert --assert`, `pnpm build` and `pnpm deploy:dry-run`. The serial/flow/expert simulation results of all five earlier levels, Blackout Shift included, are identical to the PR head (pinned by a test).
+- Simulation (not player data): every profile clears; serial 0.5s ships 5 (2 stars), flow 0.5s ships 6 (2 stars), slow serial 1.5s ships 4 (1 star); expert dash routes ship 7/7 (3 stars, 5,918, or 6,126 with Covari) and finish 31s early.
+- Browser (Claude Code built-in Chromium, hardware WebGL; Playwright-core captures at 1440×900 @2x): a full shift through station routes shipped 7/7 plus the Covari job, 3 stars, 6,031 points, early finish, then terminal count, liftoff and results with no page errors. Scrub, skip and HOLD were run separately. Desktop and 740×360 mobile layouts checked. The standalone `CHIP-RUSH.html` boots and plays.
+- Found and fixed: the standalone file on `main` never finished loading (`HALLS is not defined`); the bundler now derives bindings from each module's imports.
+- Untested: human play, listening to the music, phone landscape in an emulated phone, touch, hosted D1.
+
+
 ## Blackout Shift (level 5, Iteration 2) · 2026-10-14 (local source, awaiting review)
 
 Full record (including Iteration 1 critique and Iteration 2 redesign): [docs/experiments/dawn-shift.md](../docs/experiments/dawn-shift.md).
@@ -10,7 +21,6 @@ Full record (including Iteration 1 critique and Iteration 2 redesign): [docs/exp
 - **Covari capability gap (`PRECISION_SOURCE_JOBS`):** offers Wire-cut flexure (`Wire EDM`, "No wire EDM on this floor"), Case-hardened gear (`Heat treatment`, "No furnace on this floor"), or Serialized optic mount (`Laser marking`, "No laser on this floor") using the shared offer rules (after 2 normal shipments, ≥35s elapsed, ≥45s left, 30s decision window, 22s delivery to Receiving, `inspect → ship`, 300 points, no order slot or star credit).
 - **Simulation (deterministic `qa/balance.mjs`, not human player data):** serial 0.5s play ships 5/8 (1 star, 3,126 pts, never triggers Harmonic Overdrive); concurrent 1.0s flow ships 7/8 (2 stars, 4,857 pts); concurrent 0.5s flow ships 8/8 (3 stars, 6,186 pts declining Covari, 6,407 pts accepting Covari); expert 0.1s dash ships 8/8 (3 stars, 6,684 pts declining, 6,978 pts accepting Covari).
 - **Browser verification:** verified shift picker card `05 Blackout Shift` (`Created with Cursor + Gemini 4`) and live `dawn-shop` cellular floor, generator bus, `SURGE CONSOLE`, and HUD overdrive readout in Chromium via Playwright with zero console or page errors.
-
 ## Night Shift (level 4) · 2026-09-29 (local source, not released)
 
 Full record: [docs/experiments/night-shift.md](../docs/experiments/night-shift.md).

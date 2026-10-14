@@ -48,27 +48,27 @@ test('optional call rules preserve unlocks and leave historical records intact',
   for(const version of ['v7','v6','v5','v4','v3','v2']) {
     const old={unlocked:2,bests:[2900,5000,8000],grades:[3,3,3]},key='chip-rush-roles-'+version;
     const {result,data}=migrate({[key]:old});
-    assert.deepEqual(result,{unlocked:3,bests:[0,0,0,0,0],grades:[0,0,0,0,0]},'Clearing the last earlier level unlocks Night Shift');
+    assert.deepEqual(result,{unlocked:3,bests:[0,0,0,0,0,0],grades:[0,0,0,0,0,0]},'Clearing the last earlier level unlocks Night Shift');
     assert.deepEqual(JSON.parse(data.get(key)),old,'Historical records remain intact');
-    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0,0,0]);
+    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0,0,0,0]);
   }
   const {result}=migrate({'chip-rush-roles-v7':{unlocked:2,bests:[1,2,3],grades:[3,2,0]}});
   assert.equal(result.unlocked,2,'An uncleared Rush Hour leaves Night Shift locked');
 });
 test('current-season progress takes precedence over previous progress',()=>{
   const {result}=migrate({'chip-rush-roles-v8':{unlocked:1,bests:[1,2,3],grades:[1,0,0]},'chip-rush-roles-v6':{unlocked:2,bests:[9000,9000,9000]}});
-  assert.deepEqual(result,{unlocked:1,bests:[1,2,3,0,0],grades:[1,0,0,0,0]});
+  assert.deepEqual(result,{unlocked:1,bests:[1,2,3,0,0,0],grades:[1,0,0,0,0,0]});
 });
 test('a save from before Night Shift keeps its records and unlocks it once Rush Hour is cleared',()=>{
   const saved={unlocked:2,bests:[3500,4400,3900],grades:[3,3,1]};
   const {result}=migrate({'chip-rush-roles-v8':saved});
-  assert.deepEqual(result,{unlocked:3,bests:[3500,4400,3900,0,0],grades:[3,3,1,0,0]});
+  assert.deepEqual(result,{unlocked:3,bests:[3500,4400,3900,0,0,0],grades:[3,3,1,0,0,0]});
   assert.equal(migrate({'chip-rush-roles-v8':{...saved,grades:[3,3,0]}}).result.unlocked,2,'Rush Hour must be cleared first');
 });
 test('a save from before Dawn Shift keeps its records and unlocks it once Night Shift is cleared',()=>{
   const saved={unlocked:3,bests:[3500,4400,3900,4800],grades:[3,3,1,2]};
   const {result}=migrate({'chip-rush-roles-v8':saved});
-  assert.deepEqual(result,{unlocked:4,bests:[3500,4400,3900,4800,0],grades:[3,3,1,2,0]});
+  assert.deepEqual(result,{unlocked:4,bests:[3500,4400,3900,4800,0,0],grades:[3,3,1,2,0,0]});
   assert.equal(migrate({'chip-rush-roles-v8':{...saved,grades:[3,3,1,0]}}).result.unlocked,3,'Night Shift must be cleared first');
 });
 test('stars from a friend challenge on a locked level unlock nothing',()=>{
