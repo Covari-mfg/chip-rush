@@ -1052,3 +1052,9 @@
 :where(html[data-interface="mobile"][data-phone="true"]) body.launch-mode #shop-sidebar #orders .order-ticket.kit-ticket {
   height: auto;
 }
+
+
+:where(html[data-interface="mobile"]) #welcome.welcome-panel{width:calc(100% - 32px);margin:0 16px 12px;max-height:200px;padding:0;background:none;border:0;box-shadow:none;gap:7px}
+:where(html[data-interface="mobile"]) #welcome .role-setup{overflow:visible;padding:0 3px}
+:where(html[data-interface="mobile"]) #welcome #start-button{position:static;transform:none;width:calc(100% - 6px);margin:0 3px;padding:10px 15px}
+:where(html[data-interface="mobile"]) #clear-run:not([hidden]){display:flex}

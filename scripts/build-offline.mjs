@@ -9,7 +9,7 @@ if(!match)throw new Error('Expected pinned Three.js named exports.');
 const exports=match[1].split(',').map(s=>{const [local,name]=s.trim().split(/\s+as\s+/);return `${name||local}:${local}`;}).join(',');
 const three=`const THREE=(()=>{${source.slice(0,match.index)}\nreturn {${exports}};})();`;
 // Dependency order: each module is evaluated after the modules it imports.
-const modules=[['assets/models.js','Models'],['core.js','Core'],['manager.js','Manager'],['launch.js','Launch'],['audio.js','Audio'],['analytics.js','Analytics'],['social.js','Social'],['technology.js','Technology'],['workflow.js','Workflow'],['device.js','Device'],['tap-navigation.js','TapNavigation']];
+const modules=[['assets/models.js','Models'],['core.js','Core'],['manager.js','Manager'],['launch.js','Launch'],['audio.js','Audio'],['analytics.js','Analytics'],['records.js','Records'],['social.js','Social'],['technology.js','Technology'],['workflow.js','Workflow'],['device.js','Device'],['tap-navigation.js','TapNavigation']];
 const bundleName=new Map(modules);
 // Every music file a module names is embedded, so the standalone file plays offline.
 const music=new Map();

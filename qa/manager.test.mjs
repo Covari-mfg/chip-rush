@@ -710,12 +710,12 @@ test('shop setup offers one limitless run and one leaderboard tab', async () => 
   assert.match(main, /game\.start\(\{length:0\}\)/);
   assert.match(main, /social\.start\(MANAGER_ROLE,boardId\(0\)\)/);
   assert.doesNotMatch(main, /renderRunLengths/);
-  assert.match(main, /Play until you stop/);
+  assert.match(main, /Open shop/);
   assert.doesNotMatch(main, /3, 5 or 7 days/);
   assert.doesNotMatch(html, /How long to run the shop/);
   assert.match(social, /MANAGER_BOARD = 'manager-v1-endless'/);
   assert.match(social, /\[MANAGER_BOARD,'Open for Business'\]/);
-  assert.match(social, /One board, ranked by net worth/);
+  assert.match(social, /Open for Business · Net worth/);
   assert.doesNotMatch(social, /'3 days'|'5 days'|'7 days'|'Endless'/);
 });
 
@@ -736,8 +736,8 @@ test('manager records load safely beside shift progress in the v8 save', async (
   assert.equal(fresh.unlocked, 0, 'A new player starts at First Shift');
   assert.deepEqual(fresh.managerRecord, {bests:{}, days:0, length:0}, 'and can still open the shop: the mode needs no unlock');
   const cleared = load({'chip-rush-roles-v8':{unlocked:3, bests:[1, 2, 3, 4], grades:[3, 3, 3, 1]}});
-  assert.equal(cleared.unlocked, 4, 'Players who cleared Night Shift unlock Dawn Shift');
-  const saved = load({'chip-rush-roles-v8':{unlocked:1, bests:[0, 0, 0, 0], grades:[1, 0, 0, 0], manager:{bests:{5:9000, 0:'x', 3:-4, 9:500}, days:7.8, length:0}}});
+  assert.equal(cleared.unlocked, SHIFTS.length - 1, 'A save that has played First Shift opens every shift');
+  const saved = load({'chip-rush-roles-v8':{unlocked:1, bests:[0, 0, 0, 0], grades:[0, 0, 0, 0], manager:{bests:{5:9000, 0:'x', 3:-4, 9:500}, days:7.8, length:0}}});
   assert.equal(saved.unlocked, 1, 'Manager records never unlock shifts');
   assert.deepEqual(saved.managerRecord, {bests:{5:9000}, days:7, length:0});
   for (const junk of [null, 'x', [], {length:4, days:-3}]) {

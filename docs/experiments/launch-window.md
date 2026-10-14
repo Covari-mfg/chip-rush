@@ -16,8 +16,8 @@ development record; creator playtest, approval and release are open.
 | Date | 2026-10-14 |
 | Delegation | None. No subagents or other models. All design, code, models, music, simulation and verification were done in this one session |
 
-Launch Window sits on top of Blackout Shift's unreleased branch, so it
-depends on that PR. `LaunchGame` finds its level by `engine`, not by index; if
+Launch Window was built on Blackout Shift. PR #30 has since merged into
+`main`; this PR includes the sixth level and the entry/speed-record update. `LaunchGame` finds its level by `engine`, not by index; if
 the order of unreleased levels changes, only `SHIFTS`, the test constant
 `LAUNCH` and index-based test fixtures move.
 
@@ -307,6 +307,7 @@ music was checked only numerically and as a spectrogram, never by ear.
 
 ## Release
 
-Open: awaiting creator playtest and approval. Local commit on branch
-`claude/launch-window-on-blackout` (based on PR #30), not pushed. No deployment.
+The original level implementation is commit `5d2be52`, built on PR #30.
+The creator approved the revised entry UI for PR preparation; a full human
+Launch Window playtest remains open. No deployment has been performed.
 The earlier `main`-based build stays on `claude/next-shift` for reference.

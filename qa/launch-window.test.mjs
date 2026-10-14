@@ -352,7 +352,7 @@ test('hosted scores and challenge links accept Launch Window results within its 
   assert.equal(parseChallenge(new URL(challengeURL({ ...challenge, shipped:8 }, 'https://play.example/')).search), null);
 });
 
-test('a save with Blackout Shift cleared opens Launch Window; earlier saves do not skip it', async () => {
+test('Launch Window opens with the rest once First Shift has been played', async () => {
   const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
   const migration = main.slice(main.indexOf('const SAVE_KEY='), main.indexOf('const STATION_LAYOUT='));
   const load = save => {
@@ -361,8 +361,9 @@ test('a save with Blackout Shift cleared opens Launch Window; earlier saves do n
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,bests,grades};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };
-  assert.deepEqual(load({ unlocked:4, bests:[1,2,3,4,5], grades:[3,3,3,1,1] }), { unlocked:5, bests:[1,2,3,4,5,0], grades:[3,3,3,1,1,0] });
-  assert.equal(load({ unlocked:4, bests:[1,2,3,4,0], grades:[3,3,3,1,0] }).unlocked, 4, 'Blackout Shift must be cleared first');
+  assert.deepEqual(load({ unlocked:0, bests:[640], grades:[0] }), { unlocked:LAUNCH, bests:[640,0,0,0,0,0], grades:[0,0,0,0,0,0] }, 'A failed First Shift run still counts');
+  assert.equal(load({ unlocked:0, bests:[], grades:[] }).unlocked, 0, 'A new player starts at First Shift');
+  assert.equal(load({ unlocked:0, bests:[0,0,9000], grades:[0,0,3] }).unlocked, 0, 'Friend-challenge stars elsewhere open nothing');
 });
 
 test('the countdown score is three looped stems of one length, layered by the count', async () => {

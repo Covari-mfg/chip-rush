@@ -163,6 +163,7 @@ export class ShopGame {
     this.config = SHIFTS[shift];
     this.time = this.config.duration;
     this.elapsed = 0;
+    this.clearElapsed = null;
     this.orders = [];
     this.selectedId = null;
     this.hand = null;
@@ -693,6 +694,7 @@ export class ShopGame {
       for(const key of ['base','program','speed','streak','rush'])this.scoreDetails[key]+=breakdown[key];
       this.score += points;
       this.shipped++;
+      if (this.clearElapsed === null && this.shipped >= this.config.passTarget) this.clearElapsed = this.elapsed;
       if (rushBonus) {
         this.rushesWon++;
         this.emit('rushWon', {orderId:order.id,bonus:rushBonus});
@@ -752,7 +754,7 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,finishReason:this.finishReason,score:this.score,ruleset:RULESET,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,clearElapsed:this.clearElapsed,finishReason:this.finishReason,score:this.score,ruleset:RULESET,
       sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing,route:[...this.sourcing.route]}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),

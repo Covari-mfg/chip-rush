@@ -21,6 +21,7 @@ export function validateResult(value,run,now=Date.now()){
   for(const [key,[min,max]] of Object.entries(ranges))if(!Number.isInteger(value[key])||value[key]<min||value[key]>max)return 'That result is outside this shift’s limits.';
   if(value.finishReason!==undefined&&!['work-complete','time-up'].includes(value.finishReason))return 'Finish this shift before posting.';
   if(value.elapsed!==undefined&&(!Number.isFinite(value.elapsed)||value.elapsed<0||value.elapsed>config.duration+.1||wallSeconds<value.elapsed-5))return 'That finish time does not match this run.';
+  if(value.clearElapsed!==undefined&&value.clearElapsed!==null&&(!Number.isFinite(value.clearElapsed)||value.clearElapsed<config.passTarget*4||value.shipped<config.passTarget||!Number.isFinite(value.elapsed)||value.clearElapsed>value.elapsed+.01))return 'That clear time does not match the shipment target.';
   if(value.finishReason==='work-complete'){
     if(!Number.isFinite(value.elapsed)||!Number.isInteger(value.spawned)||value.spawned<1||value.spawned>(config.maxOrders??8)||value.spawned!==value.shipped+value.missed)return 'Finish every outstanding order before posting.';
     const lastArrival=value.spawned<2?0:config.firstArrival+(value.spawned-2)*config.interval;
@@ -94,8 +95,8 @@ export default {
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
-        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
-        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,...row})=>({...row,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
+        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
+        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name,elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
         const value=await body(request);
@@ -120,7 +121,7 @@ export default {
         const name=typeof value.name==='string'?value.name.trim().replace(/\s+/g,' '):'';
         if(!/^[\p{L}\p{N} ._'-]{2,24}$/u.test(name))return fail('Use a display name with 2–24 letters, numbers, spaces or . _ - apostrophe.');
         if(manager)await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,days,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,run.ruleset,value.score,value.score,value.shipped,value.missed,value.sourced,0,value.days,Date.now()).run();
-        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,RULESET,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Date.now()).run();
+        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,RULESET,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Number.isFinite(value.elapsed)?Math.round(value.elapsed*1000):null,Number.isFinite(value.clearElapsed)?Math.round(value.clearElapsed*1000):null,Date.now()).run();
         return json({posted:true,id:run.id});
       }
       return fail('Not found.',404);

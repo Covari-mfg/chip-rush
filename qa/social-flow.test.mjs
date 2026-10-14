@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { RULESET, SHIFTS } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
+import { runTime } from '../dist/records.js';
 
 const source=await readFile(new URL('../dist/social.js',import.meta.url),'utf8');
 const executable=source.replace(/^import .*;\n/gm,'').replaceAll('export function ','function ')
@@ -30,7 +31,7 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,a
     if(path==='/api/scores')return response({posted:true});
     return response({entries:[]});
   };
-  const context=vm.createContext({RULESET,SHIFTS,URL,URLSearchParams,AbortSignal,
+  const context=vm.createContext({RULESET,SHIFTS,runTime,URL,URLSearchParams,AbortSignal,
     document:{getElementById:$,createElement:element},location:new URL(url),navigator,fetch,localStorage});
   vm.runInContext(executable,context);
   const social=context.createSocial({onChallenge(role){acceptedChallenges.push(role);},analytics});
@@ -122,17 +123,17 @@ test('an older run-registration response cannot replace the new shift ownership 
   assert.equal(f.requests.find(request=>request.path==='/api/scores').body.runId,'current-run');
 });
 
-test('one unfiltered board shows server scores in rank order without role labels',async()=>{
+test('one unfiltered shift board shows server scores with shift attribution',async()=>{
   const f=setup({fetcher:request=>request.path==='/api/leaderboard'?response({entries:[
-    {name:'First Player',score:5100,shipped:SHIFTS[2].stars[2],stars:3},
+    {name:'First Player',shiftName:'Rush Hour',score:5100,shipped:SHIFTS[2].stars[2],stars:3},
     {name:'Second Player',score:3500,shipped:SHIFTS[1].stars[2],stars:3},
   ]}):undefined});
-  f.$('board-open').onclick();await settle();
-  assert.deepEqual(f.requests.map(request=>request.path),['/api/leaderboard']);
+  f.$('home-board-tabs').children[1].onclick();await settle();f.$('board-open').onclick();await settle();
+  assert.deepEqual(f.requests.map(request=>request.path),['/api/leaderboard','/api/leaderboard']);
   const rows=f.$('board-list').children;
   assert.equal(rows.length,2);assert.equal(rows[0].children[0].textContent,'01');
   assert.equal(rows[0].children[1].children[0].textContent,'First Player');
-  assert.equal(rows[0].children[1].children[1].textContent,'8 shipped · 3 ★');
+  assert.equal(rows[0].children[1].children[1].textContent,'Rush Hour · 8 shipped · 3 ★');
   assert.equal(rows[0].children[2].textContent,'5,100');
   assert.equal(rows[1].children[2].textContent,'3,500');
 });
@@ -214,16 +215,16 @@ test('denied clipboard permission leaves the challenge text selected for manual 
 });
 
 
-test('start page shows the first ten real server scores while the full board retains all ranks',async()=>{
+test('start page shows the first five real scores while the full board retains all ranks',async()=>{
   const entries=Array.from({length:18},(_,i)=>({name:i===0?'<img src=x onerror=alert(1)>':'Player '+i,score:6800-i*211,shipped:SHIFTS[2].stars[2],stars:3}));
   const f=setup({fetcher:request=>request.path==='/api/leaderboard'?response({entries}):undefined});
-  await f.social.refreshBoard();
+  f.$('home-board-tabs').children[1].onclick();await settle();f.$('board-open').onclick();await settle();
   const small=f.$('home-board-list').children,full=f.$('board-list').children;
-  assert.equal(small.length,10);assert.equal(full.length,18);
+  assert.equal(small.length,5);assert.equal(full.length,18);
   assert.equal(small[0].children[1].children[0].textContent,entries[0].name);
   assert.equal(small[0].children[1].children[0].innerHTML,undefined,'Names are assigned as text, never HTML');
-  assert.equal(small[9].children[2].textContent,entries[9].score.toLocaleString());
-  assert.equal(f.$('leaderboard-dialog').open,false,'Loading the start-page board does not open a modal');
+  assert.equal(small[4].children[2].textContent,entries[4].score.toLocaleString());
+  assert.equal(f.$('leaderboard-dialog').open,true,'The full-board action opens all records');
 });
 
 test('Skip leaderboard closes the form without posting this score, and Post still posts',async()=>{
@@ -270,7 +271,7 @@ test('a saved checkbox opt-out does not hide the score form or block posting',as
 test('an empty community board has no fabricated scores on either surface',async()=>{
   const f=setup();await f.social.refreshBoard();
   assert.equal(f.$('home-board-list').children.length,0);assert.equal(f.$('board-list').children.length,0);
-  assert.match(f.$('home-board-status').textContent,/No scores yet/);
+  assert.match(f.$('home-board-status').textContent,/No records yet/);
 });
 
 test('score posting preserves the early completion snapshot',async()=>{
@@ -279,4 +280,17 @@ test('score posting preserves the early completion snapshot',async()=>{
   await f.submit();
   const posted=f.requests.find(request=>request.path==='/api/scores').body;
   assert.equal(posted.elapsed,150);assert.equal(posted.spawned,6);assert.equal(posted.finishReason,'work-complete');
+});
+
+test('homepage defaults to the business board and stale tab responses cannot replace shift records',async()=>{
+  const business=deferred();
+  const f=setup({fetcher:r=>r.path.includes('manager-v1')?business.promise:r.path==='/api/leaderboard'?response({entries:[{name:'Runner',shiftName:'First Shift',score:4000,shipped:3,stars:1,clearTime:63.7,elapsed:140}]}):undefined});
+  const loading=f.social.refreshBoard();
+  assert.equal(f.requests[0].path,'/api/leaderboard?board=manager-v1-endless');
+  f.$('home-board-tabs').children[1].onclick();await settle();
+  business.resolve(response({entries:[{name:'Owner',score:9000,days:5,shipped:40}]}));await loading;
+  const rows=f.$('home-board-list').children;assert.equal(rows.length,1);
+  assert.equal(rows[0].children[1].children[0].textContent,'Runner');
+  assert.match(rows[0].children[1].children[1].textContent,/First Shift.*Clear 1:03.7.*End 2:20.0/);
+  f.$('board-open').onclick();await settle();assert.equal(f.requests.at(-1).path,'/api/leaderboard');
 });

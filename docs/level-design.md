@@ -14,6 +14,10 @@ set, and one ruleset. Night Shift, the fourth level, keeps the same room and add
 a second map variant (see below). No further chapters, maps, or challenges
 are defined here.
 
+Every shift is available immediately. First Shift is the recommended learning
+route; later shifts are independent model-created challenges. Legacy unlock
+values remain in saves for compatibility but no longer gate entry.
+
 Stable level IDs identify scenarios permanently; display names can evolve. Legacy numeric role indices remain
 compatible with saves, leaderboard records, and challenge links unless a
 deliberate migration is announced. New levels append stable IDs and never
@@ -403,3 +407,34 @@ and remaining time and award no additional time bonus. Score posting carries
 completion metadata and validates elapsed time, outcome counts, and remaining
 arrival eligibility; it no longer requires an already-finished shift to wait
 for the full clock. Scores remain self-reported rather than replay-verified.
+
+## Shop-first entry and speed records
+
+The home keeps the 3D shop visible behind a compact shift rail, or a bottom
+strip in small windows. Shifts and Open for Business have separate tabs.
+Every existing shift is selectable immediately and displays its model/harness
+credit, with the model name highlighted in gold. Play starts directly;
+How to play opens an optional briefing. Saved business runs continue directly.
+
+Offline-compatible hash routes select the collection (`#/challenges`), a stable
+challenge briefing (`#/challenges/launch-window`) or the shop-manager choice
+(`#/open-for-business`). Home is the empty hash. Browser back/forward follows
+these entries. An in-progress manager run still saves and resumes normally.
+
+A shift's **clear time** is the first ordinary shipment reaching its existing
+`passTarget`; outsourced jobs add points but never advance that split. Paused
+time and the Launch Window cinematic do not count. The clock freezes at clear
+while the run continues for more points. Results show clear time, full shift
+end time, points, shipments and stars. The fastest clear is stored separately
+by stable level ID in `chip-rush-speed-v1`, so improving time does not require
+improving score. Previous runs have no invented timing records.
+
+High scores is one surface with Open for Business and Shift Records tabs.
+Home defaults to the business board and shows five records; the full board
+retains thirty. Shift points rank all shifts together, with shift identity,
+clear time and end time shown where known. New rows persist nullable timing
+columns through additive migration 0003; historical rows retain their scores
+and unknown times. Timing remains self-reported and bounded, not replay-verified.
+Times across different shifts are descriptive, not an overall speed ranking.
+Business ranking remains net worth from completed or retired runs; active
+shops are not auto-published. Migration 0003 must be applied before deploying the updated Worker.

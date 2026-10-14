@@ -4,12 +4,15 @@ import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType } from './core.js';
 import { ShopAudio } from './audio.js';
 import { LaunchGame, launchOp } from './launch.js';
 import { createSocial } from './social.js';
+import { runTime, readSpeedRecords, recordClear } from './records.js';
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
 import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, INSTALL_SECONDS, rentFor, opInfo, boardId, POLICY_STEPS } from './manager.js';
 import { deviceInterface, isPhoneDevice } from './device.js';
 import { createTapNavigation } from './tap-navigation.js';
 
+const speedRecords=(()=>{try{return readSpeedRecords(localStorage,SHIFTS);}catch{return {};}})();
+let homeView='challenges',titleFrame=null;
 const interfaceMode=deviceInterface(navigator);
 document.documentElement.dataset.interface=interfaceMode;
 const phoneDevice=isPhoneDevice(navigator);
@@ -31,6 +34,10 @@ function readUnlocked(value){return Math.max(0,Math.min(SHIFTS.length-1,Math.tru
 // A level cleared before its successor existed unlocks that successor. Stars
 // earned on a still-locked level (friend challenges) never unlock anything.
 function unlockCleared(level,stars){for(let i=0;i<SHIFTS.length-1;i++)if(i<=level&&Number(stars?.[i])>0)level=Math.max(level,i+1);return level;}
+// Playing First Shift once, cleared or not, opens every shift. A save that
+// already has a First Shift score or star counts as played.
+function playedFirstShift(bests,stars){return Number(bests?.[0])>0||Number(stars?.[0])>0;}
+function unlockForSave(level,bests,stars){return playedFirstShift(bests,stars)?SHIFTS.length-1:unlockCleared(level,stars);}
 // Open for Business keeps its own records beside the shift records in the same save:
 // best net worth (including older per-length bests), longest run, last length.
 // A new run is always limitless (length 0). A saved 3-, 5-, or 7-day run can still finish.
@@ -41,13 +48,13 @@ if(roleSave){
   unlocked=readUnlocked(roleSave.unlocked);
   bests=bests.map((_,i)=>Math.max(0,Number(roleSave.bests?.[i])||0));
   grades=grades.map((_,i)=>Math.max(0,Math.min(3,Math.trunc(Number(roleSave.grades?.[i]))||0)));
-  unlocked=unlockCleared(unlocked,grades);
+  unlocked=unlockForSave(unlocked,bests,grades);
   managerRecord=readManagerRecord(roleSave.manager);
 }else{
   const previousRoles=['v7','v6','v5','v4','v3','v2'].map(version=>readRoleSave('chip-rush-roles-'+version)).find(Boolean);
   if(previousRoles){
     // Preserve access and historical saves; changed workflows start fresh records.
-    unlocked=unlockCleared(readUnlocked(previousRoles.unlocked),previousRoles.grades);
+    unlocked=unlockForSave(readUnlocked(previousRoles.unlocked),previousRoles.bests,previousRoles.grades);
     save();
   }
 }
@@ -406,10 +413,10 @@ function boot(){
   shopFrame=measureShopFrame();
   const layoutObserver=new ResizeObserver(()=>{layoutDirty=true;});
   for(const id of ['live-hud','orders','game-footer','shop-sidebar'])layoutObserver.observe($(id));
-  resize();buildShiftPicker();buildModeCard();bindControls();updateCamera(0,true);renderer.render(scene,camera);$('loading').hidden=true;
+  resize();bindControls();applyHomeRoute();updateCamera(0,true);renderer.render(scene,camera);$('loading').hidden=true;
   requestAnimationFrame(frame);
   window.__chipRush={snapshot:()=>({...game.snapshot(),player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),version:'2.5.0'};
-  registerTools();social.refreshBoard();
+  registerTools();
 }
 function measureShopFrame(){
   // Fit the whole miniature shop, excluding the enormous backdrop. Keep
@@ -432,6 +439,14 @@ function measureShopFrame(){
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
   }
   return frame;
+}
+function measureMenuFrame(){
+  const rail=$('welcome').getBoundingClientRect(),side=viewport.w>=760&&viewport.h>=600;
+  const left=side?rail.right+24:18,rightEdge=viewport.w-24,top=90,bottom=side?Math.min(viewport.h-40,$('home-leaders').getBoundingClientRect().top-16):rail.top-18;
+  const scale=Math.max((shopFrame.right-shopFrame.left)/Math.max(180,rightEdge-left),(shopFrame.top-shopFrame.bottom)/Math.max(100,bottom-top))*1.12;
+  const cx=(left+rightEdge)/2,cy=(top+bottom)/2;
+  const look=right.clone().multiplyScalar((shopFrame.left+shopFrame.right)/2-(cx-viewport.w/2)*scale).addScaledVector(cameraUp,(shopFrame.top+shopFrame.bottom)/2+(cy-viewport.h/2)*scale);
+  return {halfHeight:viewport.h*scale/2,look};
 }
 function measurePlayFrame(){
   const footer=$('game-footer').getBoundingClientRect(),orders=$('orders').getBoundingClientRect();
@@ -473,8 +488,9 @@ function updateCamera(dt,instant=false){
   const offset=mobile?0:-4.0;
   const look=new THREE.Vector3(right.x*offset,0,right.z*offset);
   look.y=mobile?-7.2:.25;
+  if(menuMode){if(!$('welcome').hidden||!titleFrame)titleFrame=measureMenuFrame();halfHeight=titleFrame.halfHeight;look.copy(titleFrame.look);}
   if(!menuMode&&(layoutDirty||!playFrame)){playFrame=measurePlayFrame();layoutDirty=false;}
-  if(playFrame){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
+  if(playFrame&&!menuMode){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
   if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
   camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
@@ -687,6 +703,7 @@ function nextTarget(){if(game.manager)return managerNextTarget();if(onPhone())re
 function stationAction(id){if(id==='assemble'&&launching())return cellAction();if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
   if(game.manager){const action=managerStationAction(id);if(action)return action;}if(id.startsWith('material-')){const type=id.slice(9);const next=game.nextMaterial(type);return o?.id===201?'Inspect and ship this customer part':game.hand?`Recycle #${o.id} · restart route`:next?`Collect ${type} stock · #${next.id}`:game.orders.some(job=>stockType(job)===type&&!job.programmed)?'Complete CAD at the office first':`No ${type} job ready`;}if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${opInfo(id).name.toLowerCase()}`:`${opInfo(id)?.name||id} station`;}
 function updateUI(force=false){
+  $('clear-run').hidden=!!game.manager;$('clear-clock').textContent=runTime(game.clearElapsed??game.elapsed);$('clear-run').classList.toggle('cleared',game.clearElapsed!==null);$('clear-clock-label').textContent=game.clearElapsed!==null?'CLEARED IN':'CLEAR CLOCK';
   if(game.manager)updateManagerHUD(force);else{
   $('score-label').textContent='SCORE';$('timer-label').textContent='SHIFT ENDS';$('score').classList.remove('negative');
   $('score').textContent=game.score.toLocaleString();
@@ -808,8 +825,42 @@ function frame(now){
   renderer.render(scene,camera);
 }
 const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5'};
-function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];const named=/^(Created with )(.+)$/.exec(credit||'');const creditHtml=named?`<small class="shift-credit">${named[1]}<b>${named[2]}</b></small>`:'';b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${creditHtml}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
-function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
+function buildShiftPicker(){
+  const holder=$('shift-picker');holder.replaceChildren();
+  SHIFTS.forEach((s,i)=>{
+    const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=false;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',s.name);
+    const tool=s.harness.replace(' Cloud Agent','');const creditHtml=`<small class="shift-credit"><b>${s.author}</b><span>${tool}</span></small>`;
+    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${grades[i]?'★'.repeat(grades[i]):`${Math.round(s.duration/60*10)/10} min`}</span>`;
+    b.onclick=()=>{selectedShift=i;buildShiftPicker();showHomeView('challenges');};holder.appendChild(b);
+  });
+  const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].id])}`:''].filter(Boolean);
+  $('selection-record').textContent=records.join(' · ');$('selection-record').hidden=!records.length;
+}
+function showHomeView(view='challenges'){
+  homeView=view==='business'?'business':'challenges';$('home-view').hidden=false;$('challenges-view').hidden=homeView==='business';$('business-view').hidden=homeView!=='business';$('start-button').hidden=false;
+  $('mode-challenges').setAttribute('aria-selected',String(homeView==='challenges'));$('mode-manager').setAttribute('aria-selected',String(homeView==='business'));
+  const run=savedRunSummary();$('new-shop').hidden=homeView!=='business'||!run;
+  $('start-button').innerHTML=`${homeView==='business'?(run?'Continue shop':'Open shop'):'Play '+SHIFTS[selectedShift].name} <span aria-hidden="true">↗</span>`;
+}
+
+function playSelection(){
+  if(homeView!=='business'){startShift(selectedShift);return;}
+  if(savedRunSummary()){resumeManager();if(game.manager&&game.mode==='paused')resume();}
+  else startManager();
+}
+function navigateHome(route=''){
+  const hash=route?'#/'+route:'';
+  if(location.hash===hash)applyHomeRoute();else location.hash=hash;
+}
+function applyHomeRoute(){
+  const route=location.hash.replace(/^#\/?/,'');showMenu();
+  if(route==='open-for-business'){showHomeView('business');return;}
+  if(route.startsWith('challenges')){
+    showHomeView('challenges');const id=route.split('/')[1],index=SHIFTS.findIndex(s=>s.id===id);if(index>=0)showBriefing(index);
+  }else showHomeView('home');
+}
+
+function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
 function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
@@ -847,7 +898,7 @@ function savedRunSummary(){
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
 function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
-function pause(){if(game.mode!=='playing')return;closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
@@ -857,10 +908,10 @@ function showHelp(){
 }
 function closeHelp(){
   if(!helpReturn)return;const previous=helpReturn;helpReturn=null;game.mode=previous.mode;hidePanels();
-  $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;
+  $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(){if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=Math.min(selectedShift,unlocked);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();social.refreshBoard();}
+function showMenu(){if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=Math.min(selectedShift,SHIFTS.length-1);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -874,7 +925,7 @@ function showModelCredit(credit){
 function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
-  $('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?`${cfg.goal} The count starts at T−${clock(cfg.duration+(cfg.terminalCount??0))}.`:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
+  $('briefing-back').textContent='Back to challenges';$('briefing-targets').setAttribute('aria-label','Shipment targets');$('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?`${cfg.goal} The count starts at T−${clock(cfg.duration+(cfg.terminalCount??0))}.`:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -884,25 +935,31 @@ function showManagerBriefing(){
   const run=savedRunSummary();$('briefing-continue').hidden=!run;$('briefing-replace').hidden=!run;
   if(run)$('briefing-continue').innerHTML=`CONTINUE · DAY ${run.day}${run.length?' OF '+run.length:' · ENDLESS'} · ${money(run.cash)} <span>↗</span>`;
   $('briefing-lengths').hidden=true;$('briefing-lengths').replaceChildren();$('briefing-start').innerHTML=`${run?'START A NEW RUN':'OPEN THE SHOP'} <span>↗</span>`;$('briefing-start').classList.toggle('secondary',!!run);
-  $('briefing-role').textContent=cfg.name;showModelCredit();$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
+  $('briefing-back').textContent='Choose how to play';$('briefing-targets').setAttribute('aria-label','Days survived milestones');$('briefing-role').textContent=cfg.name;showModelCredit();$('briefing-goal').textContent=`Start with ${money(START_CASH)}, a lathe, a mill and QC. Each working day lasts 2½ minutes. Stop any evening and bank the shop.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>days survived</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$(run?'briefing-continue':'briefing-start').focus({preventScroll:true});
 }
 // The mode card on the welcome screen, beside (not inside) the shift list.
 function buildModeCard(){
-  const card=$('mode-manager'),best=Math.max(0,...Object.values(managerRecord.bests));
+  const best=Math.max(0,...Object.values(managerRecord.bests));
   const run=savedRunSummary();
-  card.querySelector('.mode-best').textContent=run?`Saved run · day ${run.day}${run.length?' of '+run.length:' · Endless'} · ${money(run.cash)}`:best?`Best ${money(best)}${managerRecord.days?` · ${managerRecord.days} days`:''}`:'Play until you stop.';
+  $('manager-summary').textContent=run?`Day ${run.day} · ${money(run.cash)}`:best?`Endless · Best ${money(best)}`:'Endless';
 }
 function showResults(){
   if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(SHIFTS.length-1,game.shiftIndex+1));
+  // Finishing a First Shift run, pass or fail, opens every shift. Friend challenges unlock nothing.
+  const opensAll=!challengeRun&&game.shiftIndex===0&&unlocked<SHIFTS.length-1;if(!challengeRun&&game.shiftIndex===0)unlocked=SHIFTS.length-1;
   const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
   const stars=game.stars(),shiftMastery=stars===3;
   $('results-panel').classList.toggle('owner-mastery',shiftMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
   $('result-title').textContent=shiftMastery?'Absolute machine.':passed?'That’s a good shift.':'One more shift?';
   if(game===launchGame){$('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'FULL STACK':passed?'LIFTOFF':'SCRUBBED'}`;$('result-title').textContent=shiftMastery?'Full stack. Clean flight.':passed?'Liftoff!':'Launch scrubbed.';}
-  $('result-message').textContent=game===launchGame?`${game.shipped} section${game.shipped===1?'':'s'} stacked on the rocket. It needed ${game.config.passTarget} to fly. ${passed?(challengeRun?'Challenge shift complete.':game.shiftIndex<SHIFTS.length-1?'Next shift unlocked.':'All available shifts cleared. More shifts coming.'):game.config.retryTip}`:`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.finishReason==='work-complete'?`${game.missed?'No jobs remaining':'All jobs finished'}. ${Math.ceil(game.time)}s to spare.`:`${game.unfinished} unfinished at closing.`} `+(passed?(challengeRun?'Challenge shift complete.':game.shiftIndex<SHIFTS.length-1?'Next shift unlocked.':'All available shifts cleared. More shifts coming.') : game.config.retryTip);
+  $('result-message').textContent=game===launchGame?`${game.shipped} sections stacked. ${passed?'The shop built that rocket.':game.config.retryTip}`:`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.finishReason==='work-complete'?'No work remaining.':`${game.unfinished} unfinished at closing.`}`;
+  const faster=recordClear(speedRecords,game);try{localStorage.setItem('chip-rush-speed-v1',JSON.stringify(speedRecords));}catch{}
+  $('result-speed').hidden=false;$('result-clear-time').textContent=runTime(game.clearElapsed);
+  $('result-speed-record').textContent=passed?`${faster?'NEW BEST · ':''}PB ${runTime(speedRecords[game.config.id])} · End ${runTime(game.elapsed)}`:`Not cleared · End ${runTime(game.elapsed)}`;
+
   const nextStar=game.config.stars.findIndex(target=>game.shipped<target);
   $('result-progress').textContent=nextStar<0?(shiftMastery?'Three stars. Exceptional precision under pressure.':'All three stars earned.'):`${game.config.stars[nextStar]-game.shipped} more shipped order${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;
   $('result-score-label').textContent='SCORE';$('result-shipped-label').textContent='SHIPPED';$('result-missed-label').textContent='MISSED';
@@ -912,7 +969,7 @@ function showResults(){
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} SHIPPED`;
   $('result-covari-message').textContent='More work than your shop can handle? Outsource with Covari. Keep the customer. Keep earning.';
   $('next-button').innerHTML=passed&&!challengeRun&&game.shiftIndex<SHIFTS.length-1?'NEXT SHIFT <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
-  social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,finishReason:game.finishReason,spawned:game.spawnIndex});
+  social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,clearElapsed:game.clearElapsed,finishReason:game.finishReason,spawned:game.spawnIndex});
 }
 function selectSourceJob(){
   if(game.mode!=='playing'||game.sourcing?.state!=='offer'||onPhone())return false;
@@ -1392,7 +1449,7 @@ function managerEvent(ev){
   return false;
 }
 function showManagerResults(){
-  resultShown=true;audio.update(false);clearMovement();closeStore();closePopover();$('overlay').classList.remove('evening');
+  $('result-speed').hidden=true;resultShown=true;audio.update(false);clearMovement();closeStore();closePopover();$('overlay').classList.remove('evening');
   const length=game.length,reason=game.finishReason,stars=game.stars(),key=String(length),previous=managerRecord.bests[key]||0;
   managerRecord.bests[key]=Math.max(previous,game.score);if(!length)managerRecord.days=Math.max(managerRecord.days,game.daysCompleted);save();clearRun();
   hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
@@ -1649,10 +1706,10 @@ function bindControls(){
   addEventListener('resize',resize);$('scene').tabIndex=-1;
   $('source-accept').onclick=()=>{selectSourceJob();};$('source-decline').onclick=()=>{game.declineSource();updateUI(true);};
   $('source-collect').onclick=selectSourceCard;
-  $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=(event)=>{if(event.target.closest('a')){window.open(event.target.closest('a').href,'_blank','noopener,noreferrer');event.preventDefault();return;}showManagerBriefing();};$('briefing-back').onclick=showMenu;
+  $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=(event)=>{if(event.target.closest('a')){window.open(event.target.closest('a').href,'_blank','noopener,noreferrer');event.preventDefault();return;}navigateHome('open-for-business');};$('briefing-back').onclick=()=>navigateHome(briefingManager?'':'challenges');
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
-  $('start-button').onclick=()=>showBriefing(selectedShift);$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=showMenu;$('results-menu').onclick=showMenu;$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');

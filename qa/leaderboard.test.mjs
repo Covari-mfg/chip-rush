@@ -338,3 +338,24 @@ test('early results cannot omit arrivals before the queue could have filled',()=
     assert.equal(validateResult({role,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,spawned:game.spawnIndex,finishReason:game.finishReason},{role,ruleset:RULESET,started_at:START},START+Math.ceil(game.elapsed*1000)),null);
   }
 });
+
+test('new public shift records preserve clear and end times while legacy rows remain unknown',async t=>{
+  const f=fixture(t),run=await f.start(0);
+  assert.equal((await f.post(run,{calls:0,elapsed:150,clearElapsed:64.275})).status,200);
+  const row=(await (await f.send('/api/leaderboard')).json()).entries[0];
+  assert.equal(row.shiftId,'first-shift');assert.equal(row.shiftName,'First Shift');
+  assert.equal(row.elapsed,150);assert.equal(row.clearTime,64.275);
+  assert.equal('player' in row,false);assert.equal('role' in row,false);
+  const legacy=await f.start(1);assert.equal((await f.post(legacy,{calls:0})).status,200);
+  const old=(await (await f.send('/api/leaderboard')).json()).entries.find(r=>r.shiftId==='mixed-orders');
+  assert.equal(old.elapsed,null);assert.equal(old.clearTime,null);
+});
+
+test('clear time requires enough shipments, a plausible split, and an end time',async t=>{
+  const f=fixture(t),run=await f.start(0);
+  for(const clearElapsed of [-1,0,3,151,'60'])assert.equal((await f.post(run,{elapsed:150,clearElapsed,calls:0})).status,400);
+  assert.equal((await f.post(run,{clearElapsed:60,calls:0})).status,400);
+  assert.equal((await f.post(run,{elapsed:150,clearElapsed:60,shipped:2,calls:0})).status,400);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,0);
+  assert.equal((await f.post(run,{elapsed:150,clearElapsed:60,calls:0})).status,200);
+});
