@@ -61,8 +61,9 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
-  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:'night-shop'},
-  {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:'night-shop'},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop']},
+  {id:'grind',name:'GRINDER',x:-3.25,z:-.45,height:2.12,w:2.04,d:1.31,map:'dawn-shop'},
+  {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:['night-shop','dawn-shop']},
   // Open for Business machine bays. Island and front-wall bays are in the
   // original room; the east wing adds four large bays and two small ones.
   {id:'bay-1',name:'BAY',bay:'compact',x:-.9,z:-.5,height:.7,w:2.3,d:1.35,map:['owner-shop','owner-wing']},
@@ -96,6 +97,7 @@ const openHalls=new Set();
 const MAPS={
   'first-shop':{theme:'day'},
   'night-shop':{theme:'night'},
+  'dawn-shop':{theme:'dawn',place:{deburr:{x:-.45,z:.85},anodize:{x:2.4,z:.85}}},
   // place moves a shared station for this map only. In the owner's shop QC and
   // Shipping part to leave a doorway east; the wing map also widens the room.
   'owner-shop':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}}},
@@ -313,6 +315,7 @@ function createMaterialBin(type){
 const THEMES={
   day:{sky:0x102c38,backdrop:0x163845,hemi:[0xdafff3,0x466374,2.25],sun:[0xffe6b5,3.8],fill:[0x86d8ee,2],exposure:1.22},
   night:{sky:0x070f19,backdrop:0x0a1620,hemi:[0x9db8f4,0x22303f,1.55],sun:[0xffc98d,2.9],fill:[0x4f7fd6,1.5],exposure:1.16},
+  dawn:{sky:0x132232,backdrop:0x192c3e,hemi:[0xffe7c2,0x354d63,1.95],sun:[0xffb870,3.55],fill:[0x74c7e5,1.85],exposure:1.20},
   // Open for Business runs a working day: morning light drifts to dusk by closing.
   morning:{sky:0x18394a,backdrop:0x1d4252,hemi:[0xfff1dc,0x4a6474,2.3],sun:[0xffe0a8,3.9],fill:[0x9fdcf0,1.9],exposure:1.24},
   dusk:{sky:0x2a2438,backdrop:0x2b2a3c,hemi:[0xffc9a6,0x3c3346,1.85],sun:[0xff9d62,3.2],fill:[0x7f86d8,1.6],exposure:1.18},
@@ -587,8 +590,8 @@ function animateShop(dt){
     const spindle=s.model.userData.spindle;
     if(op==='heat')s.model.userData.heat.material.emissiveIntensity=busy&&active?.95+Math.sin(clockTime*5)*.3:ready?.6:.3;
     if(op==='laser')s.model.userData.beam.visible=busy&&active;
-    if(spindle&&busy&&active){if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15;else if(op==='mill'){spindle.rotation.y+=dt*11;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
-      if((op==='lathe'||op==='mill'||op==='deburr')&&Math.random()<dt*7&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,0xffd67b,1);}
+    if(spindle&&busy&&active){if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15;else if(op==='grind'){spindle.rotation.x+=dt*22;spindle.position.x=-.14+Math.sin(clockTime*6)*.16;}else if(op==='mill'){spindle.rotation.y+=dt*11;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
+      if((op==='lathe'||op==='mill'||op==='deburr'||op==='grind')&&Math.random()<dt*7&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,op==='grind'?0xffa85c:0xffd67b,1);}
     }
     if(state?.part){const mesh=parts.get(state.part.orderId)?.mesh;if(mesh){const wp=s.model.userData.workPoint;if(wp){mesh.position.y=wp.y+(ready&&!reduced?Math.sin(clockTime*3.5)*.055:0);if(ready)mesh.rotation.y+=dt*.8;}}}
   }
@@ -740,7 +743,7 @@ function frame(now){
   if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
-const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5'};
+const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4'};
 function buildShiftPicker(){const holder=$('shift-picker');holder.replaceChildren();SHIFTS.forEach((s,i)=>{const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=i>unlocked;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',`${i+1}. ${s.name}${i>unlocked?', clear the previous shift to unlock':''}`);const credit=SHIFT_CREDIT[s.id];b.innerHTML=`<span class="num">${String(i+1).padStart(2,'0')}</span><span><b>${s.name}</b><small>${s.subtitle}</small>${credit?`<small class="shift-credit">${credit}</small>`:''}</span><span class="pick-mark">${i>unlocked?'⌑':grades[i]?'★'.repeat(grades[i]):i===selectedShift?'↗':'·'}</span>`;b.onclick=()=>{selectedShift=i;buildShiftPicker();};holder.appendChild(b);});}
 function hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}

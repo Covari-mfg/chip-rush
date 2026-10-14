@@ -1,5 +1,15 @@
 # CHIP RUSH verification
 
+## Dawn Shift (level 5) · 2026-10-14 (local source, awaiting review)
+
+Full record: [docs/experiments/dawn-shift.md](../docs/experiments/dawn-shift.md).
+
+- **320 automated tests pass** (`pnpm test`, including 15 new checks in `qa/dawn-shift.test.mjs`), along with `pnpm run build`, `pnpm deploy:dry-run`, and `git diff --check`. Released levels (`first-shift`, `mixed-orders`, `rush-hour`, `night-shift`) keep their exact indices (`0..3`), station sets, and simulation outcomes.
+- **New machine & map (`dawn-shop`):** adds a procedural 3D **Surface Grinder** (`grind` / `GRINDER`, 6s duration) with a spinning abrasive wheel, reciprocating magnetic chuck, and grinding spark particles alongside `DEBURR` and `ANODIZE` under the golden-hour `THEMES.dawn` palette. All 11 station access points are distinct and reachable via production A* routing.
+- **Covari capability gap (`PRECISION_SOURCE_JOBS`):** offers Wire-cut flexure (`Wire EDM`, "No wire EDM on this floor"), Case-hardened gear (`Heat treatment`, "No furnace on this floor"), or Serialized optic mount (`Laser marking`, "No laser on this floor") using the shared offer rules (after 2 normal shipments, ≥35s elapsed, ≥45s left, 30s decision window, 22s delivery to Receiving, `inspect → ship`, 300 points, no order slot or star credit).
+- **Simulation (deterministic `qa/balance.mjs`, not human player data):** serial 0.5s play ships 4/7 (0 stars, 2,694 pts, fails the 5-shipment target); concurrent 1.0s flow ships 6/7 (2 stars, 3,844 pts); concurrent 0.5s flow ships 7/7 (3 stars, 5,104 pts declining Covari, 5,266 pts accepting Covari); expert 0.1s dash ships 7/7 (3 stars, 6,216 pts declining, 6,378 pts with both morning rushes, 6,594 pts with both rushes + Covari).
+- **Browser verification:** verified shift picker card `05 Dawn Shift` (`Created with Cursor + Gemini 4`) and live `dawn-shop` gameplay in headless Chromium via Playwright with zero console or page errors.
+
 ## Night Shift (level 4) · 2026-09-29 (local source, not released)
 
 Full record: [docs/experiments/night-shift.md](../docs/experiments/night-shift.md).

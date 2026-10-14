@@ -14,6 +14,7 @@ export const OPS = {
   lathe:{name:'Lathe',short:'TURN',duration:8,color:'#7cdeca'},
   mill:{name:'Mill',short:'MILL',duration:10,color:'#8dc9f1'},
   deburr:{name:'Deburr',short:'EDGE',duration:4,color:'#ffbf7d'},
+  grind:{name:'Grinder',short:'GRIND',duration:6,color:'#ff9b6a'},
   anodize:{name:'Anodize',short:'DIP',duration:8,color:'#c3a0ed'},
   inspect:{name:'Inspect',short:'QC',duration:4,color:'#ffd670'},
   ship:{name:'Shipping',short:'SHIP',duration:0,color:'#85ddaa'},
@@ -26,6 +27,10 @@ export const RECIPES = [
   {name:'Satin bracket',kind:'bracket',route:['mill','deburr','anodize','inspect'],value:270,color:0xc2a0f2},
   {name:'Ocean collar',kind:'shaft',route:['lathe','anodize','inspect'],value:220,color:0x65d3ec},
   {name:'Bearing housing',kind:'block',route:['lathe','mill','inspect'],value:230,color:0xffab8c},
+  {name:'Gauge block',kind:'block',route:['mill','grind','inspect'],value:195,color:0x7fd4e6},
+  {name:'Spindle shaft',kind:'shaft',route:['lathe','grind','deburr','inspect'],value:215,color:0xf2b866},
+  {name:'Datum plate',kind:'plate',route:['mill','deburr','grind','inspect'],value:220,color:0x9ad8b8},
+  {name:'Aero manifold',kind:'block',route:['lathe','mill','grind','anodize','inspect'],value:232,color:0x64b5f6},
 ];
 export const STOCK_TYPES = {
   round: 'Round stock',
@@ -48,6 +53,13 @@ export const FINISHING_SOURCE_JOBS = [
   {name:'Heat-treated pin',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
   {name:'Powder-coated panel',capability:'Powder coating',technology:'pc',gap:'No coating booth on this floor'},
   {name:'Laser-marked plate',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
+];
+// Capabilities Dawn Shift's floor has no station for. The surface grinder is on
+// the floor, so precision jobs needing wire EDM, heat treatment, or laser marking go to Covari.
+export const PRECISION_SOURCE_JOBS = [
+  {name:'Wire-cut flexure',capability:'Wire EDM',technology:'edm',gap:'No wire EDM on this floor'},
+  {name:'Case-hardened gear',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
+  {name:'Serialized optic mount',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
 ];
 // New-level creative brief: docs/model-experiment.md. Current scenario details:
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
@@ -95,6 +107,16 @@ export const SHIFTS = [
     recipes:[2,5,4,3,4,2],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
     programming:true,sourcing:true,sourceJobs:FINISHING_SOURCE_JOBS,calls:false,callTimes:[],passTarget:4,stars:[4,5,6],
   },
+  {
+    id:'dawn-shift',mapId:'dawn-shop',name:'Dawn Shift',author:'Gemini 4',harness:'Cursor Cloud Agent',
+    subtitle:'Grind to tolerance. Field morning calls.',
+    brief:'Daybreak brings precision aerospace orders and the surface grinder online. Hold tight tolerances across turning, milling, grinding, and finishing while morning customers call in rush requests. Outsource jobs needing processes the floor lacks through Covari.',
+    tip:'Surface grinding takes 6 seconds. Overlap grinding and anodizing with CAD or customer calls, and use Covari for wire EDM, heat-treat, or laser-marked parts.',
+    retryTip:'Keep the surface grinder fed between milling and inspection. Answer morning calls between machine cycles.',
+    duration:240,firstArrival:18,interval:26,deadline:132,maxOrders:7,
+    recipes:[8,7,9,10,9,8,7],unlocks:['lathe','mill','deburr','grind','anodize','inspect'],stock:['round','plate','block'],
+    programming:true,sourcing:true,sourceJobs:PRECISION_SOURCE_JOBS,calls:true,callTimes:[40,120],passTarget:5,stars:[5,6,7],
+  },
 ];
 
 export const PROGRAM_DURATION = 6;
@@ -121,7 +143,7 @@ export class ShopGame {
     this.selectedId = null;
     this.hand = null;
     this.buffer = null;
-    this.stations = Object.fromEntries(Object.keys(OPS).filter(key => key !== 'ship').map(key => [key, {part:null,remaining:0,ready:false}]));
+    this.stations = Object.fromEntries(Object.keys(OPS).filter(key => key !== 'ship' && (['lathe','mill','deburr','anodize','inspect'].includes(key) || this.config.unlocks.includes(key))).map(key => [key, {part:null,remaining:0,ready:false}]));
     this.office = {present:false,orderId:null};
     this.call = null;
     this.callIndex = 0;
@@ -612,9 +634,10 @@ export class ShopGame {
       return true;
     }
 
+    if (!Object.prototype.hasOwnProperty.call(OPS, key)) return false;
+    if (!this.config.unlocks.includes(key)) return this.fail(`${OPS[key].name} is not needed in this shift.`);
     const station = this.stations[key];
     if (!station) return false;
-    if (!this.config.unlocks.includes(key)) return this.fail(`${OPS[key].name} is not needed in this shift.`);
     if (station.part) {
       if (!station.ready) return this.fail(`${OPS[key].name} is working. Handle another order.`);
       if (this.hand) {

@@ -241,6 +241,45 @@ function makeAnodize(g) {
   beacon(g,.91,1.75,-.44);
   g.userData.workPoint=new THREE.Vector3(-.1,1.37,.15);
 }
+function makeGrinder(g) {
+  feet(g,1.78,1.04);safetyMat(g,2.04,.46,.88);
+  box(g,1.96,.72,1.22,0,.52,0,C.navy,.065);
+  box(g,1.92,.16,1.24,0,.94,0,C.creamDark,.035);
+  box(g,.68,1.14,.44,-.14,1.52,-.36,C.tealDark,.045);
+  box(g,.56,.34,.52,-.14,1.82,-.06,C.cream,.04);
+  // Reciprocating saddle and magnetic chuck table with fine pole lines.
+  box(g,1.36,.09,.56,-.12,1.06,.08,C.teal,.022);
+  box(g,1.08,.08,.42,-.12,1.14,.08,C.steel,.018,mat(C.steel,.28,.65));
+  for(let i=0;i<7;i++)box(g,.016,.01,.36,-.54+i*.14,1.186,.08,C.gold,.002);
+  // Splash guards around the magnetic chuck.
+  for(const x of [-.70,.46])box(g,.035,.18,.48,x,1.19,.08,C.cream,.008);
+  box(g,1.20,.14,.03,-.12,1.17,-.15,C.creamDark,.006);
+  // Wheelhead spindle with abrasive wheel and amber spark guard.
+  const spindle=new THREE.Group();spindle.position.set(-.14,1.52,.08);g.add(spindle);
+  const wheel=cyl(spindle,.22,.22,.09,0,0,0,C.orange,24,mat(0xe87a48,.48,.18));wheel.rotation.z=Math.PI/2;
+  const hub=cyl(spindle,.085,.085,.11,0,0,0,C.shiny,16,mat(C.shiny,.25,.7));hub.rotation.z=Math.PI/2;
+  for(let i=0;i<4;i++){
+    const a=i*Math.PI/2;
+    box(spindle,.115,.032,.32,0,Math.cos(a)*.13,Math.sin(a)*.13,C.gold,.004);
+  }
+  g.userData.spindle=spindle;g.userData.animated=[spindle];
+  // Upper wheel hood and translucent spark shield.
+  box(g,.22,.24,.48,-.14,1.62,.08,C.orange,.028);
+  box(g,.32,.025,.28,-.14,1.38,.28,C.gold,.006,glow(0xffa952,.35));
+  // Precision downfeed and crossfeed handwheels.
+  const topWheel=cyl(g,.11,.11,.04,-.14,2.04,-.06,C.navy,16);
+  cyl(g,.03,.03,.08,-.14,1.99,-.06,C.steel,10);
+  const frontWheel=cyl(g,.12,.12,.04,.38,.78,.64,C.navy,16);frontWheel.rotation.x=Math.PI/2;
+  const frontAxle=cyl(g,.032,.032,.06,.38,.78,.62,C.steel,10);frontAxle.rotation.x=Math.PI/2;
+  // Coolant nozzle and line.
+  tube(g,[[.22,1.76,-.24],[.16,1.62,.02],[.02,1.44,.08]],.02,C.gold);
+  panel(g,.68,1.38,.40,.32,.52);
+  vent(g,-.48,.52,.62,.44,.22,4);
+  hazard(g,.46,.54,.62,.13);
+  textPlate(g,'SURFACE GRINDER',1.14,.13,-.08,.94,.63,{color:'#fff3df',bg:'#174954',size:36});
+  beacon(g,.74,1.74,-.36);
+  g.userData.workPoint=new THREE.Vector3(-.14,1.22,.08);
+}
 // Open for Business equipment. Both sit against the front wall with the
 // operator behind them, so their signs and glow read from either side.
 function makeFurnace(g) {
@@ -417,7 +456,7 @@ function batchStatic(root) {
 }
 export function createMachine(type) {
   const g=new THREE.Group();g.name=`station-${type}`;g.userData.type=type;
-  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
+  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,grind:makeGrinder,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
   return batchStatic(g);
 }
 export function createPart(stage=0,color=C.cyan,kind='shaft') {

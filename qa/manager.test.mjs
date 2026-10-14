@@ -87,7 +87,7 @@ function assertIntegrity(game) {
 
 test('Open for Business is a separate mode outside the shift catalog', () => {
   const level = MANAGER_MODE;
-  assert.equal(SHIFTS.length, 4, 'The released shift list is unchanged');
+  assert.equal(SHIFTS.length, 5, 'The shift catalog includes Dawn Shift');
   assert.ok(!SHIFTS.some(shift => shift.id === level.id || shift.mode), 'The mode is not a level');
   assert.ok(MANAGER_ROLE < 0, 'Its server role can never collide with a level index');
   assert.equal(new ManagerGame().start().shiftIndex, MANAGER_ROLE);
@@ -735,7 +735,7 @@ test('manager records load safely beside shift progress in the v8 save', async (
   assert.equal(fresh.unlocked, 0, 'A new player starts at First Shift');
   assert.deepEqual(fresh.managerRecord, {bests:{}, days:0, length:0}, 'and can still open the shop: the mode needs no unlock');
   const cleared = load({'chip-rush-roles-v8':{unlocked:3, bests:[1, 2, 3, 4], grades:[3, 3, 3, 1]}});
-  assert.equal(cleared.unlocked, 3, 'The shift unlock chain ends at Night Shift as released');
+  assert.equal(cleared.unlocked, 4, 'Players who cleared Night Shift unlock Dawn Shift');
   const saved = load({'chip-rush-roles-v8':{unlocked:1, bests:[0, 0, 0, 0], grades:[1, 0, 0, 0], manager:{bests:{5:9000, 0:'x', 3:-4, 9:500}, days:7.8, length:0}}});
   assert.equal(saved.unlocked, 1, 'Manager records never unlock shifts');
   assert.deepEqual(saved.managerRecord, {bests:{5:9000}, days:7, length:0});
