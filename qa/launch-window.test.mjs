@@ -1,4 +1,4 @@
-// Launch Window is the fifth level. These checks cover its catalog entry, the
+// Launch Window is the sixth level. These checks cover its catalog entry, the
 // kit and assembly-cell rules, the hangar map, save/score compatibility, the
 // layered score, the standalone bundle, and reproducible balance bounds.
 // Balance rows are simulations of scripted play, not player data.
@@ -405,7 +405,9 @@ test('the countdown score is three looped stems of one length, layered by the co
 });
 
 test('the standalone bundle binds every import, including Launch Window and the halls', async () => {
-  const bundle = await readFile(new URL('./offline-syntax.js', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../dist/CHIP-RUSH.html', import.meta.url), 'utf8');
+  const bundle = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(bundle, 'The committed standalone file contains the game script');
   assert.doesNotThrow(() => new vm.Script(bundle), 'The bundle parses');
   assert.doesNotMatch(bundle, /\.\/assets\/music\//, 'Music is embedded');
   for (const name of ['createHangar','createLaunchComplex','LaunchGame','HALLS','createHall']) assert.match(bundle, new RegExp(`const \\{[^}]*\\b${name}\\b[^}]*\\}=(Models|Launch|Manager);`), name);
