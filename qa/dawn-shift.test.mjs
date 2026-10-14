@@ -1,7 +1,10 @@
-// Dawn Shift is the fifth level. These checks cover its catalog entry, the
-// Surface Grinder station, the per-map layout, precision Covari outsourcing,
-// morning rush calls, save/score compatibility, and reproducible balance bounds.
-// Balance rows are simulations, not player data.
+// Blackout Shift (`dawn-shift`, legacy index 4) is the fifth level (Iteration 2).
+// Instead of adding "one more machine", it reconfigures the floor into West/East
+// machining cells around a central Inspection hub and a 3D Backup Generator,
+// drops CAD programming so every ticket starts immediately on the floor, adds
+// 1.5x Harmonic Overdrive when 2+ machines run in parallel, 2.0x Generator
+// Surges from the Office Surge Console and scheduled coastal lightning strikes,
+// a synthesized 128 BPM storm-synth soundtrack, and Covari capability-gap offers.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -26,26 +29,13 @@ function fresh(shift = DAWN) {
   game.drain();
   return game;
 }
-function program(game, id) {
-  game.setOfficePresence(true);
-  let guard = 0;
-  while (!game.order(id).programmed) {
-    assert.ok(guard++ < 8, 'CAD fixture reaches its target');
-    assert.equal(game.interact('office'), true);
-    advance(game, game.order(game.office.orderId).programRemaining + .05);
-  }
-  game.setOfficePresence(false);
-}
-function run(game, station, seconds) {
-  assert.equal(game.interact(station), true, `load ${station}`);
-  advance(game, seconds + .05);
-}
 
-test('Dawn Shift is appended at index 4 with a stable identity and Gemini 4 credit', () => {
+test('Blackout Shift stays at index 4 with stable id dawn-shift and Gemini 4 credit', () => {
   assert.equal(SHIFTS.length, 5);
   assert.equal(dawn.id, 'dawn-shift');
   assert.equal(dawn.mapId, 'dawn-shop');
-  assert.equal(dawn.name, 'Dawn Shift');
+  assert.equal(dawn.name, 'Blackout Shift');
+  assert.equal(dawn.musicTrack, 'storm');
   assert.equal(dawn.author, 'Gemini 4');
   assert.equal(dawn.harness, 'Cursor Cloud Agent');
   assert.equal(new Set(SHIFTS.map(shift => shift.id)).size, SHIFTS.length);
@@ -62,49 +52,82 @@ test('the four earlier shifts keep their exact configuration', () => {
   ]);
 });
 
-test('Dawn Shift adds the Surface Grinder, finishing routes, morning calls, and precision Covari jobs', () => {
-  assert.deepEqual(dawn.unlocks, ['lathe', 'mill', 'deburr', 'grind', 'anodize', 'inspect']);
-  assert.equal(dawn.programming, true);
-  assert.equal(dawn.calls, true);
-  assert.deepEqual(dawn.callTimes, [40, 120]);
+test('Blackout Shift does not add another station: it uses existing 5 stations with zero CAD delay and overdrive', () => {
+  assert.deepEqual(Object.keys(OPS), ['lathe', 'mill', 'deburr', 'anodize', 'inspect', 'ship']);
+  assert.deepEqual(dawn.unlocks, ['lathe', 'mill', 'deburr', 'anodize', 'inspect']);
+  assert.equal(dawn.programming, false, 'Emergency storm orders arrive pre-programmed');
+  assert.equal(dawn.overdrive, true, 'Generator overdrive mechanic is enabled');
+  assert.equal(dawn.calls, false);
   assert.equal(dawn.sourcing, true);
   assert.equal(dawn.sourceJobs, PRECISION_SOURCE_JOBS);
-  const operations = new Set(dawn.recipes.flatMap(index => RECIPES[index].route));
-  for (const key of ['lathe', 'mill', 'deburr', 'grind', 'anodize', 'inspect']) {
-    assert.ok(operations.has(key), `${key} is used by a Dawn Shift order`);
-  }
+  assert.equal(dawn.maxOrders, 8);
+  assert.deepEqual(dawn.stars, [5, 6, 8]);
   for (const index of dawn.recipes) {
     const recipe = RECIPES[index];
-    assert.ok(recipe.route.every(key => dawn.unlocks.includes(key)), `${recipe.name} only needs stations Dawn Shift provides`);
+    assert.ok(recipe.route.every(key => dawn.unlocks.includes(key)), `${recipe.name} only needs existing stations`);
     assert.ok(dawn.stock.includes(stockType(recipe)), `${recipe.name} has a stock bin`);
   }
 });
 
-test('the Surface Grinder stays unavailable in earlier shifts and processes precision parts on Dawn Shift', () => {
-  for (const shift of [0, 1, 2, 3]) {
-    const game = fresh(shift);
-    assert.equal(game.interact('grind'), false);
-    assert.match(game.drain().find(event => event.type === 'hint').message, /not needed in this shift/);
-  }
+test('Harmonic Overdrive accelerates machine cycles 1.5x when 2+ machines run simultaneously', () => {
   const game = fresh(DAWN);
+  game.surgeRemaining = 0;
+  game.stormStrikes = [];
+  assert.equal(game.machineSpeed(), 1, 'Idle shop runs at 1.0x');
+
+  assert.equal(game.spawn(), true); // Turbine coupling: lathe -> mill -> deburr -> inspect (round)
+  game.spawnIndex = 1; // Breaker busbar: mill -> deburr -> anodize -> inspect (plate)
   assert.equal(game.spawn(), true);
-  const shaft = game.orders[0];
-  assert.equal(shaft.name, 'Spindle shaft');
-  program(game, shaft.id);
+
   assert.equal(game.interact('material-round'), true);
-  run(game, 'lathe', OPS.lathe.duration);
   assert.equal(game.interact('lathe'), true);
-  assert.equal(game.heldOrder.route[game.heldOrder.index], 'grind');
-  run(game, 'grind', OPS.grind.duration);
-  assert.equal(game.stations.grind.ready, true);
-  assert.equal(game.interact('grind'), true);
-  assert.equal(game.heldOrder.route[game.heldOrder.index], 'deburr');
-  run(game, 'deburr', OPS.deburr.duration);
-  assert.equal(game.interact('deburr'), true);
-  assert.equal(game.heldOrder.route[game.heldOrder.index], 'inspect');
+  assert.equal(game.runningStations(), 1);
+  assert.equal(game.machineSpeed(), 1, 'Single running machine stays at 1.0x');
+
+  // Advance 2s at 1.0x: lathe goes from 8s -> 6s
+  advance(game, 2.0);
+  assert.ok(Math.abs(game.stations.lathe.remaining - 6.0) < 0.06);
+
+  // Load mill in parallel -> 2 running stations engage 1.5x Harmonic Overdrive!
+  assert.equal(game.interact('material-plate'), true);
+  assert.equal(game.interact('mill'), true);
+  assert.equal(game.runningStations(), 2);
+  assert.equal(game.machineSpeed(), 1.5, '2+ running machines engage 1.5x Harmonic Overdrive');
+
+  // Advance 4s of wall clock -> 6s of machine work! Lathe finishes its remaining 6s in 4s.
+  advance(game, 4.05);
+  assert.equal(game.stations.lathe.ready, true, 'Lathe finishes 6s of work in 4s under 1.5x Harmonic Overdrive');
 });
 
-test('Dawn Shift Covari jobs are real capability gaps with no station on the floor', () => {
+test('Office Surge Console and coastal lightning strikes trigger 2.0x Generator Surge', () => {
+  const game = fresh(DAWN);
+  assert.ok(game.surgeRemaining > 0, 'Blackout Shift starts with an opening capacitor boost');
+  assert.equal(game.machineSpeed(), 2.0);
+
+  // Drain opening surge and cooldown
+  game.surgeRemaining = 0;
+  game.surgeCooldown = 0;
+  game.stormStrikes = [50, 105, 148];
+  game.stormIndex = 0;
+  assert.equal(game.machineSpeed(), 1.0);
+
+  // Walking into the Office triggers the manual 16s 2.0x Generator Surge
+  game.setOfficePresence(true);
+  assert.equal(game.surgeRemaining, 16);
+  assert.equal(game.machineSpeed(), 2.0);
+  const events = game.drain();
+  assert.ok(events.some(e => e.type === 'surge' && e.source === 'office'));
+  game.setOfficePresence(false);
+
+  // Scheduled lightning strike at 50s elapsed supercharges the floor
+  game.surgeRemaining = 0;
+  game.elapsed = 49.9;
+  advance(game, 0.2);
+  assert.ok(game.surgeRemaining > 9.5, 'Lightning strike at 50s triggers a 10s 2.0x surge');
+  assert.ok(game.drain().some(e => e.type === 'surge' && e.source === 'lightning'));
+});
+
+test('Blackout Shift Covari jobs are real capability gaps with no station on the floor', () => {
   assert.equal(PRECISION_SOURCE_JOBS.length, SOURCE_JOBS.length);
   const stations = new Set([...Object.keys(OPS), ...Object.values(OPS).map(op => op.name.toLowerCase())]);
   for (const job of PRECISION_SOURCE_JOBS) {
@@ -117,61 +140,44 @@ test('Dawn Shift Covari jobs are real capability gaps with no station on the flo
   assert.equal(SHIFTS[3].sourceJobs, FINISHING_SOURCE_JOBS, 'Night Shift keeps its finishing source pool');
 });
 
-test('dawn-shop registers all precision and finishing stations and uses the dawn theme', async () => {
-  const ids = mapId => Array.from(navigation.layout.filter(def => navigation.has(def, mapId)), def => def.id).sort();
-  const base = ['buffer', 'inspect', 'lathe', 'material-block', 'material-plate', 'material-round', 'mill', 'office', 'receiving', 'ship'];
-  assert.deepEqual(ids('dawn-shop'), [...base, 'anodize', 'deburr', 'grind'].sort());
+test('dawn-shop reconfigures stations around a central Inspection hub and Backup Generator obstacle', async () => {
+  const firstAccess = navigation.accessesFor('first-shop');
+  const dawnAccess = navigation.accessesFor('dawn-shop');
+  assert.notDeepEqual(dawnAccess.inspect, firstAccess.inspect, 'Inspection moves to the central hub on dawn-shop');
+  assert.ok(Math.abs(dawnAccess.inspect.x - 0) < 0.5 && Math.abs(dawnAccess.inspect.z - (-0.32)) < 0.5, 'Inspection is centered on the shop floor');
+  assert.ok(dawnAccess.deburr.x < -1.5, 'Deburr is in the West cell with Lathe');
+  assert.ok(dawnAccess.anodize.x > 1.5, 'Anodize is in the East cell with Mill');
 
-  navigation.activate('first-shop');
-  const grind = navigation.layout.find(station => station.id === 'grind');
-  assert.ok(navigation.safe(grind.x, grind.z), 'Grinder leaves the first-shop floor walkable');
-  navigation.activate('night-shop');
-  assert.ok(navigation.safe(grind.x, grind.z), 'Grinder leaves the night-shop floor walkable');
   navigation.activate('dawn-shop');
-  assert.equal(navigation.safe(grind.x, grind.z), false, 'Grinder is a solid collider on dawn-shop');
+  assert.equal(navigation.safe(-0.4, -4.65), false, 'Backup Generator rig is a solid collider on dawn-shop');
+  for (const [id, point] of Object.entries(dawnAccess)) {
+    assert.ok(navigation.safe(point.x, point.z), `${id} access point is walkable on dawn-shop`);
+    const route = navigation.route({ x: -1.1, z: 1.55 }, point, 'dawn-shop');
+    assert.ok(route.length >= 1, `A* route reaches ${id} on dawn-shop`);
+  }
   navigation.activate('first-shop');
 
   const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
   const start = main.indexOf('const THEMES='), end = main.indexOf('\nfunction activeMapId');
   const themes = vm.runInNewContext(`(${main.slice(start + 'const THEMES='.length, end).replace(/;\s*$/, '')})`);
-  assert.ok(themes.dawn, 'dawn theme exists');
-  const luminance = hex => ((hex >> 16) & 255) * .2126 + ((hex >> 8) & 255) * .7152 + (hex & 255) * .0722;
-  assert.ok(luminance(themes.dawn.sky) > luminance(themes.night.sky), 'Dawn sky is brighter than night sky');
-  assert.ok(luminance(themes.dawn.sky) < luminance(themes.day.sky), 'Dawn sky is warmer/dimmer than midday sky');
+  assert.ok(themes.dawn, 'dawn storm theme exists');
 });
 
-test('Dawn Shift requires concurrent overlap to clear and rewards brisk flow with three stars', () => {
+test('Blackout Shift rewards multi-machine parallel overdrive with three stars', () => {
   const serial = simulateShift(DAWN, { strategy: 'serial', reaction: .5 });
-  assert.equal(serial.pass, false, 'One-part-at-a-time play cannot clear all 5 target orders before the bell');
-  const steadyFlow = simulateShift(DAWN, { strategy: 'flow', reaction: 1 });
-  assert.ok(steadyFlow.pass, 'Concurrent flow at 1.0s reaction clears Dawn Shift');
-  assert.equal(steadyFlow.stars, 2);
+  assert.equal(serial.stars, 1, 'Serial one-part-at-a-time play misses Harmonic Overdrive and gets 1 star');
   const briskFlow = simulateShift(DAWN, { strategy: 'flow', reaction: .5 });
-  assert.equal(briskFlow.stars, 3, '0.5s concurrent flow reaches three stars');
+  assert.equal(briskFlow.stars, 3, '0.5s concurrent flow engages Harmonic Overdrive and reaches three stars');
   assert.equal(briskFlow.shipped, dawn.maxOrders);
   assert.equal(briskFlow.missed, 0);
   const withCovari = simulateShift(DAWN, { strategy: 'flow', reaction: .5, covari: 'accept' });
-  assert.equal(withCovari.stars, 3, '0.5s concurrent flow with Covari outsourcing still reaches three stars');
+  assert.equal(withCovari.stars, 3, '0.5s concurrent flow with Covari outsourcing reaches three stars');
   assert.equal(withCovari.sourced, 1);
   assert.ok(withCovari.score > briskFlow.score);
 });
 
-test('Dawn Shift expert routes handle both morning rush calls and the Covari offer inside the clock', () => {
-  const full = simulateShift(DAWN, { reaction: .1, dash: true, phonePolicy: 'accept', covari: 'accept' });
-  assert.deepEqual(full, simulateShift(DAWN, { reaction: .1, dash: true, phonePolicy: 'accept', covari: 'accept' }));
-  assert.equal(full.stars, 3);
-  assert.equal(full.shipped, dawn.maxOrders);
-  assert.equal(full.callsReceived, 2);
-  assert.equal(full.callsAnswered, 2);
-  assert.equal(full.rushesWon, 2);
-  assert.equal(full.sourced, 1);
-  assert.equal(full.finishReason, 'work-complete');
-  assert.ok(full.lastShipmentAt <= dawn.duration);
-  assert.equal(full.score, Object.values(full.scoreDetails).reduce((total, points) => total + points, 0));
-});
-
-test('the hosted score board and challenge links accept Dawn Shift results with calls and Covari', () => {
-  const result = simulateShift(DAWN, { reaction: .1, dash: true, phonePolicy: 'accept', covari: 'accept' });
+test('the hosted score board and challenge links accept Blackout Shift results', () => {
+  const result = simulateShift(DAWN, { reaction: .1, dash: true, covari: 'accept' });
   const value = {
     role: DAWN,
     score: result.score,
@@ -186,7 +192,7 @@ test('the hosted score board and challenge links accept Dawn Shift results with 
   const run = { role: DAWN, ruleset: RULESET, started_at: START };
   const now = START + result.elapsed * 1000;
   assert.equal(validateResult(value, run, now), null);
-  assert.ok(validateResult({ ...value, calls: 3 }, run, now), 'At most two calls on Dawn Shift');
+  assert.ok(validateResult({ ...value, calls: 1 }, run, now), 'No customer calls on Blackout Shift');
   assert.ok(validateResult({ ...value, sourced: 2 }, run, now), 'At most one Covari job per shift');
   assert.ok(validateResult({ ...value, shipped: dawn.maxOrders + 1 }, run, now));
 

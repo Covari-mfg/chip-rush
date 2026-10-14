@@ -11,10 +11,10 @@ for(const role of [0,1,2,3,4])test(`role ${role} route tells the player exactly 
   const game=new ShopGame();game.reset(role);game.nextArrival=Infinity;game.nextCallAt=Infinity;
   const order=game.selected;
   let steps=orderWorkflow(order,game.config.programming);
-  assert.equal(steps.find(s=>s.active).key,role?'cad':`material-${stockType(order)}`);
+  assert.equal(steps.find(s=>s.active).key,game.config.programming?'cad':`material-${stockType(order)}`);
   assert.equal(steps.find(s=>s.key===`material-${stockType(order)}`).done,false);
   assert.ok(!steps.find(s=>s.key===order.route[0]).active);
-  if(role){
+  if(game.config.programming){
     game.setOfficePresence(true);game.interact('office');advance(game,PROGRAM_DURATION+.05);
     steps=orderWorkflow(order,true);
     assert.equal(steps.find(s=>s.key==='cad').done,true);

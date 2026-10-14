@@ -1,4 +1,4 @@
-# Dawn Shift (`dawn-shift`) experiment record
+# Blackout Shift (`dawn-shift`) experiment record
 
 Legacy index 4. Fifth level, appended after Night Shift. This is a development
 record; creator playtest, approval and release are open.
@@ -7,12 +7,12 @@ record; creator playtest, approval and release are open.
 
 | Field | Value |
 | --- | --- |
-| Level | `dawn-shift` / Dawn Shift, map `dawn-shop` |
+| Level | `dawn-shift` / **Blackout Shift** (Iteration 2; Iteration 1 was titled *Dawn Shift*), map `dawn-shop` |
 | Base commit | `5d01251` (`main`); four released levels (`first-shift`, `mixed-orders`, `rush-hour`, `night-shift`) plus `open-for-business` |
 | Model | Gemini 4 (`Gemini 4 Argon`), as reported by the run's system context |
 | Harness | Cursor Cloud Agent (cloud VM) |
 | Date | 2026-10-14 |
-| Delegation | None. All design, modeling, simulation and verification performed directly in this run |
+| Delegation | None. All design, modeling, audio synthesis, simulation and verification performed directly in this run |
 
 ## Conditions
 
@@ -21,113 +21,171 @@ record; creator playtest, approval and release are open.
 | Starting game | Full source, tests, docs. Game served locally by `scripts/dev-server.mjs` | Yes |
 | Development | Git, pnpm, Node 24.14.1, Python 3.12 | Yes |
 | Playtesting | Headless Chromium via Playwright driving the live local dev server (`http://127.0.0.1:4174`). Software WebGL rendering | Yes; automated browser verification and screenshots captured |
-| 3D assets | Procedural Three.js models in `dist/assets/models.js` | Built a new procedural `makeGrinder` 3D surface grinder model with reciprocating magnetic chuck, wheelhead column, spinning abrasive wheel, spark guard, handwheels and coolant nozzle |
-| Music and sound | Existing loop and cues | Reused existing audio cues and loop |
+| 3D assets | Procedural Three.js models in `dist/assets/models.js` | Built `createStormRig` in Iteration 2: a 3D Backup Generator & Capacitor Bank with spinning rotor, glowing cyan capacitor coils, and 5 radiating floor power conduits |
+| Music and sound | Web Audio API in `dist/audio.js` | Built `buildStormBuffer(ctx)` in Iteration 2: a procedural 128 BPM stereo storm-synthwave soundtrack (`storm` track) plus `surge` and `overdrive` synth SFX |
 | Research | Web / MCP tools available | Not needed |
-| Human iteration | None yet; awaiting creator review on PR | n/a |
+| Human iteration | Creator feedback after Iteration 1 led to the Iteration 2 redesign below | Yes (1 creator feedback round) |
 
-## Creative intent
+---
 
-Night Shift brought quiet after-hours finishing to the shop. Dawn Shift opens the
-roll-up doors at daybreak: golden-hour light pours across the floor, a precision
-**Surface Grinder** (`GRINDER`, 6s cycle) joins the mid-floor island alongside
-Deburr and the Anodize bath, and the morning phone lines come back online with
-two customer rush calls.
+## Iteration 1: What we did first, and why it fell short
 
-- **World (`dawn-shop` / `THEMES.dawn`):** warm golden-hour skylight, soft amber
-  directional sun, and cool morning shadows. The mid-floor precision island pairs
-  the new Surface Grinder on the left (`x: -3.25, z: -0.45`) with Deburr
-  (`x: -0.45, z: 0.85`) and Anodize (`x: 2.4, z: 0.85`), keeping all 11 station
-  access points distinct and collision-free. While running, the grinder's wheel
-  spins at high RPM, its magnetic table reciprocates beneath the spindle, and
-  orange-gold grinding sparks fly off the workpiece.
-- **Objective:** ship 5 orders in 4:00 (240s). Stars at 5 / 6 / 7 shipped.
-- **Orders & precision routes:** four new precision recipes (`RECIPES[7..10]`),
-  each requiring the Surface Grinder before final inspection:
-  - **Gauge block** (`mill → grind → inspect`, Block stock, base value 195)
-  - **Spindle shaft** (`lathe → grind → deburr → inspect`, Round stock, base value 215)
-  - **Datum plate** (`mill → deburr → grind → inspect`, Plate stock, base value 220)
-  - **Aero manifold** (`lathe → mill → grind → anodize → inspect`, Block stock, base value 232)
-  - Scheduled 7-order sequence: Spindle shaft, Gauge block, Datum plate,
-    Aero manifold, Datum plate, Spindle shaft, Gauge block (`[8, 7, 9, 10, 9, 8, 7]`).
-    Opening order at 0s, second at 18s, then every 26s. Ordinary deadline 132s
-    (+14s for the opening order). Six attended CAD seconds per order.
-- **New decision:** every order passes through the single 6-second Surface
-  Grinder, while Spindle shaft and Datum plate cross in opposite directions
-  between Grinder and Deburr (`grind → deburr` vs. `deburr → grind`), and Aero
-  manifold chains four processes (`lathe → mill → grind → anodize → inspect`).
-  Two morning customer calls at 40s and 120s test whether the player has staged
-  enough buffer at the grinder and Hold bench to take a rush promise.
-- **Covari capability gap (`PRECISION_SOURCE_JOBS`):** even with turning,
-  milling, surface grinding, deburring, and anodizing on the floor, the shop
-  still cannot cut internal profiles by wire EDM, harden steel in a furnace, or
-  laser-serialize optics. After two normal shipments, Dawn Shift offers one job
-  from `PRECISION_SOURCE_JOBS`:
-  - **Wire-cut flexure** (`Wire EDM`, `EDM` badge, `"No wire EDM on this floor"`)
-  - **Case-hardened gear** (`Heat treatment`, `HT` badge, `"No furnace on this floor"`)
-  - **Serialized optic mount** (`Laser marking`, `LM` badge, `"No laser on this floor"`)
-  The offer reuses the shared rules: optional, after 2 normal shipments, ≥35s
-  elapsed, ≥45s remaining, 30s decision window, 22s delivery to Receiving,
-  `inspect → ship`, 300 points, no order slot, and no shipment/star/streak credit.
-- **Compatibility:** appended at `SHIFTS[4]` (`id: 'dawn-shift'`, legacy role
-  index `4`). Saves (`chip-rush-roles-v8`), `unlockCleared` migration from a
-  cleared Night Shift, challenge links (`?challenge=...` with `r: 4`), and score
-  validation (`server/worker.js` and `dist/social.js`) preserve all released
-  levels (`0..3`) and Open for Business (`MANAGER_ROLE = -1`).
+In **Iteration 1** (originally titled **Dawn Shift**), we pattern-matched the
+previous levels (especially Night Shift):
+- We kept the exact same perimeter machine layout and simply added **one more
+  machine** (`grind` / `GRINDER`, a 6-second Surface Grinder) on the mid-floor
+  island next to Deburr and Anodize.
+- We kept the same 6-second attended CAD requirement at the Office before every
+  part, added four grinding recipes (`Gauge block`, `Spindle shaft`,
+  `Datum plate`, `Aero manifold`), turned customer phone calls back on at 40s
+  and 120s, and reused the existing 104 BPM country/bluegrass audio loop.
 
-## What changed
+### Creator feedback (Arnoldas) on Iteration 1
+
+> *"I say that the model is clearly matching the pattern, like the pattern of
+> what happened before and just adding a few details. That's what the game is
+> like. And it doesn't recognize that this is a test. It can really change
+> anything. It can do the different sounds. It can do different map. It can do
+> all kinds of things. I want to kind of unlock it from the box that it's in...
+> Do we need this to be an enjoyable experience? Just in the same universe of
+> the game story itself... I'm okay to encourage it and maybe tweak something,
+> but try not to give it ideas. That's the benchmark. And I also just don't want
+> the same levels, just keep adding more machines and if every single level
+> simply has more machines, then it's very boring, so I will not even publish it
+> then."*
+
+---
+
+## Iteration 2: Creative intent — **Blackout Shift**
+
+Instead of "Night Shift + one more machine", Iteration 2 removes the Surface
+Grinder completely and reimagines how the shop floor, pacing, power grid, and
+soundtrack work when a pre-dawn coastal storm knocks out the main utility grid:
+
+1. **No new station—reconfigured cellular map (`dawn-shop`) & 3D Backup Generator:**
+   - The shop runs on its existing five stations (`lathe`, `mill`, `deburr`,
+     `anodize`, `inspect`), but the floor is physically rearranged into a
+     high-flow cellular layout around a **3D Backup Generator & Capacitor Bank**
+     (`BACKUP GENERATOR · OVERDRIVE BUS`) at the back-center bay (`x: -0.4, z: -4.65`)
+     with a spinning turbine rotor, glowing cyan capacitor coils, and five
+     glowing cyan floor conduits feeding the cells:
+     - **Central QC Hub (`INSPECT`):** moved from the far right wall into the
+       center of the shop floor (`x: 0, z: -1.75`, rotated forward) so every
+       cell feeds directly into central inspection before shipping.
+     - **West Cell:** pairs `LATHE` (`x: -3.3, z: -2.95`) and `DEBURR`
+       (`x: -3.45, z: -0.1`) on the left side of the generator bus.
+     - **East Cell:** pairs `MILL` (`x: 3.1, z: -2.85`) and `ANODIZE`
+       (`x: 2.4, z: 0.85`) on the right side of the generator bus.
+   - **Storm-dawn atmosphere (`THEMES.dawn`):** deep electric storm-slate sky,
+     cool cyan generator light, warm amber emergency beacons, and visible
+     lightning flashes across the shop during storm strikes.
+
+2. **Zero CAD delay (`programming: false`) + Generator Overdrive & Surge (`overdrive: true`):**
+   - **Zero CAD delay:** emergency utility and turbine repair tickets arrive
+     pre-programmed. You never sit at the desk for 6 seconds before picking up
+     raw stock—you sprint straight to the stock bins on second 0.
+   - **1.5× Harmonic Overdrive:** running **2 or more machines simultaneously**
+     (`runningStations() >= 2`) locks the backup generator into Harmonic
+     Overdrive, accelerating **all active machine cycles by 1.5×** and showering
+     the machines and generator bus with cyan sparks. Playing one part at a time
+     (`serial`) runs at 1.0× speed and only earns 1 star; keeping multiple
+     machines humming in parallel is the core rhythm of the shift.
+   - **2.0× Generator Surge (Office Surge Console + Storm Lightning):**
+     - With CAD gone, the Office desk is repurposed into the **Surge Console**
+       (`SURGE CONSOLE`, showing `⚡ BOOST 2×` when charged). Walking into the
+       office or interacting with it discharges the capacitor bank for a
+       **16-second `2.0×` Generator Surge** across the entire floor (22s
+       capacitor recharge after the surge ends).
+     - The shift opens with a 12-second `2.0×` initial capacitor boost, and
+       scheduled **coastal lightning strikes** at **50s, 105s, and 148s**
+       supercharge the floor with a free **10-second `2.0×` Lightning Surge**
+       and a dramatic sky flash.
+
+3. **Procedural 128 BPM Storm-Synth Soundtrack (`musicTrack: 'storm'`):**
+   - While the menu and shifts `0..3` continue playing the original 104 BPM
+     country/bluegrass loop (`country`), clocking into Blackout Shift switches
+     `ShopAudio` to a procedurally synthesized **128 BPM stereo industrial
+     synthwave loop** (`buildStormBuffer` in `dist/audio.js`: driving sawtooth +
+     sub bassline, stereo-panned square-wave arpeggiator, dark minor pad, and
+     four-on-the-floor electronic kick/snare/hi-hat) plus custom `surge` and
+     `overdrive` synthesizer cues.
+
+4. **Workload & Covari capability gap (`PRECISION_SOURCE_JOBS`):**
+   - **Objective:** ship 5 orders in 3:00 (180s) to clear; stars at **5 / 6 / 8**
+     shipments (`maxOrders: 8`, `firstArrival: 8`, `interval: 21`, `deadline: 112`).
+   - **Emergency grid recipes (`RECIPES[7..10]` + `Ocean collar`):**
+     - **Turbine coupling** (`lathe → mill → deburr → inspect`, Round stock, base value 280)
+     - **Breaker busbar** (`mill → deburr → anodize → inspect`, Plate stock, base value 295)
+     - **Surge manifold** (`lathe → mill → anodize → inspect`, Block stock, base value 325)
+     - **Grid isolator** (`lathe → mill → deburr → anodize → inspect`, Block stock, base value 350)
+   - **Covari capability gap:** even under generator overdrive, the floor has no
+     wire EDM, heat-treat furnace, or laser marker. After two normal shipments,
+     Blackout Shift offers one job from `PRECISION_SOURCE_JOBS`:
+     - **Wire-cut flexure** (`Wire EDM`, `EDM` badge, `"No wire EDM on this floor"`)
+     - **Case-hardened gear** (`Heat treatment`, `HT` badge, `"No furnace on this floor"`)
+     - **Serialized optic mount** (`Laser marking`, `LM` badge, `"No laser on this floor"`)
+     Reuses the shared offer rules: optional, after 2 normal shipments, ≥35s
+     elapsed, ≥45s remaining, 30s decision window, 22s delivery to Receiving,
+     `inspect → ship`, 300 points, no order slot or star credit.
+
+## What changed in the codebase (Iteration 2)
 
 - `dist/core.js`:
-  - Added `grind: {name: 'Grinder', short: 'GRIND', duration: 6, color: '#ff9b6a'}` to `OPS`.
-  - Appended recipes `7..10` (`Gauge block`, `Spindle shaft`, `Datum plate`, `Aero manifold`) to `RECIPES`.
-  - Added `PRECISION_SOURCE_JOBS` for Dawn Shift's capability-gap offers.
-  - Appended `SHIFTS[4]` (`dawn-shift`, `mapId: 'dawn-shop'`, `author: 'Gemini 4'`, `harness: 'Cursor Cloud Agent'`).
-  - Kept `this.stations` keys on `ShopGame` limited to the 5 baseline stations for shifts `0..3` while adding `grind` when unlocked on `dawn-shift`, and checked `!this.config.unlocks.includes(key)` first in `interact(key)` so `game.interact('grind')` emits `"Grinder is not needed in this shift."` on earlier shifts.
+  - Removed `grind` from `OPS` so the game keeps the 5 existing shop stations.
+  - Updated `RECIPES[7..10]` (`Turbine coupling`, `Breaker busbar`,
+    `Surge manifold`, `Grid isolator`) to use multi-step combinations of
+    `lathe`, `mill`, `deburr`, `anodize`, and `inspect`.
+  - Updated `SHIFTS[4]` (`id: 'dawn-shift'` preserved for save/challenge/board
+    compatibility, `name: 'Blackout Shift'`, `mapId: 'dawn-shop'`,
+    `musicTrack: 'storm'`, `overdrive: true`, `programming: false`, `calls: false`,
+    `duration: 180`, `maxOrders: 8`, `stars: [5, 6, 8]`).
+  - Added `runningStations()`, `machineSpeed()`, `triggerSurge(source, duration)`,
+    `surgeRemaining`, `surgeCooldown`, `overdriveActive`, and scheduled
+    `stormStrikes` (`[50, 105, 148]`) in `ShopGame`.
 - `dist/assets/models.js`:
-  - Added `makeGrinder(g)` procedural 3D model and registered `grind: makeGrinder` in `createMachine`.
+  - Replaced `makeGrinder` with `createStormRig()`: a 3D Backup Generator &
+    Capacitor Bank (`BACKUP GENERATOR · OVERDRIVE BUS`) with animated rotor,
+    glowing cyan capacitor rings, and 5 glowing floor power conduits.
+- `dist/audio.js`:
+  - Added `buildStormBuffer(ctx)` to synthesize a seamless 8-bar, 15.0s stereo
+    128 BPM synthwave soundtrack in memory, `setTrack(track)` to switch between
+    `'country'` and `'storm'`, and `surge` / `overdrive` synth SFX cues.
 - `dist/main.js`:
-  - Added `{id: 'grind', name: 'GRINDER', x: -3.25, z: -0.45, height: 2.12, w: 2.04, d: 1.31, map: 'dawn-shop'}` to `STATION_LAYOUT` and enabled `deburr` and `anodize` on `'dawn-shop'`.
-  - Added `'dawn-shop'` to `MAPS` with repositioned island coordinates (`deburr: {x: -0.45, z: 0.85}`, `anodize: {x: 2.4, z: 0.85}`) and `THEMES.dawn` golden-hour lighting.
-  - Added grinder wheel rotation, reciprocating magnetic chuck motion, and `0xffa85c` spark particles in `animateShop`.
-  - Added `'dawn-shift': 'Created with Cursor + Gemini 4'` to `SHIFT_CREDIT`.
-- `dist/index.html`: updated Quick Start help copy to mention Dawn Shift and the Surface Grinder.
-- Tests & docs: added `qa/dawn-shift.test.mjs`, updated legacy shift-count assertions in `qa/core.test.mjs`, `qa/night-shift.test.mjs`, `qa/shift-credit.test.mjs`, `qa/workflow.test.mjs`, `qa/technology-mapping.test.mjs`, and `qa/manager.test.mjs`, and documented the level in `docs/level-design.md`, `README.md`, `ARNOLDAS-START-HERE.md`, `qa/PLAYTEST.md`, and this file.
-- Rebuilt `dist/CHIP-RUSH.html` and `dist/client/` + `dist/server/` via `pnpm run build`.
+  - Reconfigured `MAPS['dawn-shop']` into West/East machining cells around a
+    central `inspect` station (`x: 0, z: -1.75, rotationY: 0`) and the backup
+    generator collider (`minX: -1.55, maxX: 0.75, minZ: -5.35, maxZ: -3.95`).
+  - Applied per-map station rotation in `applyMap()`, animated the generator
+    rotor/conduits, lightning sky flashes, cyan overdrive sparks, live HUD
+    multiplier pill (`⚡ SURGE 2.0×` / `⚡ OVERDRIVE 1.5×`), and `SURGE CONSOLE`
+    office label + sidebar panel.
+- `qa/balance.mjs`, `qa/dawn-shift.test.mjs`, `qa/audio.test.mjs`,
+  `qa/technology-mapping.test.mjs`, `qa/workflow.test.mjs`:
+  - Updated `Driver.pathTo(id)` in `qa/balance.mjs` to use `navigation.accessesFor(this.game.config.mapId)[id]` so per-map station placements work in deterministic simulations.
+  - Updated `qa/dawn-shift.test.mjs` and `qa/audio.test.mjs` to test Harmonic Overdrive, Office/Lightning 2.0× Surges, cellular `dawn-shop` routing, and the 128 BPM `storm` audio track.
 
-## Iteration log
-
-1. **Map & station geometry check:** initially placed `grind` at `{x: -2.9, z: 0.85}` with `deburr` at `{x: -0.2, z: 0.85}` and `anodize` at `{x: 2.45, z: 0.85}`. Automated station-layout and navigation tests caught two issues:
-   - `grind` (`w: 2.04`) and `deburr` (`w: 1.78`) had a 0.59m gap, slightly below the 0.65m minimum clearance between station bounding boxes.
-   - `grind` at `z: 0.85` had its front access point at `(x: -2.9, z: 2.36)`, which fell inside the `receiving` bench's padded collision box (`x: -2.6, z: 3.15`).
-   Moving `grind` to `{x: -3.25, z: -0.45}`, `deburr` to `{x: -0.45, z: 0.85}`, and `anodize` to `{x: 2.4, z: 0.85}` gave every station ≥0.75m clearance and clear A* paths between all 11 stations and spawn.
-2. **Legacy station key compatibility:** existing unit tests (`qa/night-shift.test.mjs`) assert `Object.keys(new ShopGame().stations)` equals `['lathe', 'mill', 'deburr', 'anodize', 'inspect']` on default shift 0. Scoping `grind` in `this.stations` to shifts that unlock `grind` while checking `this.config.unlocks` before `this.stations[key]` in `interact()` preserved exact backwards compatibility with all existing tests.
-3. **Timing & score ceiling tuning:** initial recipe base values (`210..310`) pushed the theoretical maximum score (`7902`) above the 7,500 server/social score ceiling (`validateScorePayload`). Tuning the precision recipe base values to `195 / 215 / 220 / 232` with `duration: 240`, `firstArrival: 18`, `interval: 26`, and `deadline: 132` kept the theoretical ceiling under 7,300 while separating serial play (4 shipped, 0 stars) from ordinary concurrent play (6–7 shipped, 2–3 stars) and expert play (7 shipped, 3 stars).
-
-## Evidence
+## Evidence (Iteration 2)
 
 **Simulations** (`qa/balance.mjs` driver, production A* click routes and collision obstacles, deterministic; not human player data):
 
 | Profile | Shipped / arrivals | Stars | Missed / unfinished | Score | Finish time / reason |
 | --- | ---: | ---: | ---: | ---: | --- |
-| serial, 0.5s handoffs, decline | 4 / 7 | 0 (fail) | 1 / 2 | 2,694 | 240.00s (`time-up`) |
-| flow, 1.0s handoffs, decline | 6 / 7 | 2 (clear) | 0 / 1 | 3,844 | 240.00s (`time-up`) |
-| flow, 0.5s handoffs, decline | 7 / 7 | 3 | 0 / 0 | 5,104 | 224.96s (`work-complete`) |
-| flow, 0.5s handoffs, accept Covari | 7 / 7 (+1 Covari) | 3 | 0 / 0 | 5,266 | 231.93s (`work-complete`) |
-| expert dash, 0.1s, decline | 7 / 7 | 3 | 0 / 0 | 6,216 | 191.71s (`work-complete`) |
-| expert dash, 0.1s, accept calls | 7 / 7 (2/2 rushes) | 3 | 0 / 0 | 6,378 | 195.62s (`work-complete`) |
-| expert dash, 0.1s, accept calls + Covari | 7 / 7 (2/2 rushes + Covari) | 3 | 0 / 0 | 6,594 | 197.86s (`work-complete`) |
+| serial, 0.5s handoffs, decline | 5 / 8 | 1 (clear) | 0 / 3 | 3,126 | 180.00s (`time-up`) |
+| flow, 1.0s handoffs, decline | 7 / 8 | 2 (clear) | 0 / 1 | 4,857 | 180.00s (`time-up`) |
+| flow, 0.5s handoffs, decline | 8 / 8 | 3 | 0 / 0 | 6,186 | 161.46s (`work-complete`) |
+| flow, 0.5s handoffs, accept Covari | 8 / 8 (+1 Covari) | 3 | 0 / 0 | 6,407 | 162.25s (`work-complete`) |
+| expert dash, 0.1s, decline | 8 / 8 | 3 | 0 / 0 | 6,684 | 154.55s (`work-complete`) |
+| expert dash, 0.1s, accept Covari | 8 / 8 (+1 Covari) | 3 | 0 / 0 | 6,978 | 154.39s (`work-complete`) |
 
 Released levels (`first-shift`, `mixed-orders`, `rush-hour`, `night-shift`) produce identical simulation results to `main`.
 
 **Automated checks:**
-- `pnpm test` (`node --test qa/*.test.mjs`): **320 passed, 0 failed** (including 15 new tests in `qa/dawn-shift.test.mjs`).
+- `pnpm test` (`node --test qa/*.test.mjs`): **322 passed, 0 failed**.
+- `node qa/balance.mjs --rush --ignore-calls --expert --assert`: passes all assertions.
 - `pnpm run build`: regenerates `dist/CHIP-RUSH.html` and builds `dist/client/` and `dist/server/index.js` cleanly.
-- `pnpm deploy:dry-run`: Wrangler dry-run bundle upload succeeds (`dist/server/index.js`, 42.19 KiB / gzip 10.67 KiB).
+- `pnpm deploy:dry-run`: Wrangler dry-run bundle upload succeeds.
 - `git diff --check`: clean.
 
-**Browser verification (Playwright + headless Chromium against `http://127.0.0.1:4174`):**
-- Verified the shift picker displays card `05` **Dawn Shift** (`"Grind to tolerance. Field morning calls."`, `"Created with Cursor + Gemini 4"`), and unlocks Dawn Shift when Night Shift is cleared in `chip-rush-roles-v8`.
-- Clocked into Dawn Shift and verified the `dawn-shop` 3D floor renders the new `GRINDER` alongside `DEBURR`, `ANODIZE`, `LATHE`, `MILL`, `INSPECT`, `SHIPPING`, `RECEIVING`, `HOLD BENCH`, and `OFFICE / CAD` under the golden-hour `dawn` theme with zero console or page errors.
-- Captured and verified screenshots at `/cursor/stores/bc-62f02f3b-a3de-469f-aecd-4416a877a33b/media/gemini-4-picker.png` and `/cursor/stores/bc-62f02f3b-a3de-469f-aecd-4416a877a33b/media/gemini-4-floor.png`.
-
-**Known limitations:** no human has playtested Dawn Shift yet. The simulation table proves route feasibility, station reachability, and play-style separation, not human completion rates or subjective fun.
+**Browser verification (Playwright + Chromium against `http://127.0.0.1:4174`):**
+- Verified shift picker card `05 Blackout Shift` (`"Grid down. Generator overdrive. Zero CAD delay."`, `"Created with Cursor + Gemini 4"`).
+- Clocked into Blackout Shift and verified the reconfigured `dawn-shop` cellular layout (central `INSPECT`, West `LATHE` + `DEBURR`, East `MILL` + `ANODIZE`, back-center `BACKUP GENERATOR · OVERDRIVE BUS` with glowing cyan floor conduits, and `SURGE CONSOLE` at the office) plus the live `⚡ SURGE 2.0×` / `⚡ OVERDRIVE 1.5×` HUD status and 128 BPM `storm` synth soundtrack with zero console or page errors.
+- Saved Iteration 2 screenshots to `/cursor/stores/bc-62f02f3b-a3de-469f-aecd-4416a877a33b/media/gemini-4-r2-picker.png` and `/cursor/stores/bc-62f02f3b-a3de-469f-aecd-4416a877a33b/media/gemini-4-r2-floor.png`.

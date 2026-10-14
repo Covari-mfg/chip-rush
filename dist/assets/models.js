@@ -241,45 +241,6 @@ function makeAnodize(g) {
   beacon(g,.91,1.75,-.44);
   g.userData.workPoint=new THREE.Vector3(-.1,1.37,.15);
 }
-function makeGrinder(g) {
-  feet(g,1.78,1.04);safetyMat(g,2.04,.46,.88);
-  box(g,1.96,.72,1.22,0,.52,0,C.navy,.065);
-  box(g,1.92,.16,1.24,0,.94,0,C.creamDark,.035);
-  box(g,.68,1.14,.44,-.14,1.52,-.36,C.tealDark,.045);
-  box(g,.56,.34,.52,-.14,1.82,-.06,C.cream,.04);
-  // Reciprocating saddle and magnetic chuck table with fine pole lines.
-  box(g,1.36,.09,.56,-.12,1.06,.08,C.teal,.022);
-  box(g,1.08,.08,.42,-.12,1.14,.08,C.steel,.018,mat(C.steel,.28,.65));
-  for(let i=0;i<7;i++)box(g,.016,.01,.36,-.54+i*.14,1.186,.08,C.gold,.002);
-  // Splash guards around the magnetic chuck.
-  for(const x of [-.70,.46])box(g,.035,.18,.48,x,1.19,.08,C.cream,.008);
-  box(g,1.20,.14,.03,-.12,1.17,-.15,C.creamDark,.006);
-  // Wheelhead spindle with abrasive wheel and amber spark guard.
-  const spindle=new THREE.Group();spindle.position.set(-.14,1.52,.08);g.add(spindle);
-  const wheel=cyl(spindle,.22,.22,.09,0,0,0,C.orange,24,mat(0xe87a48,.48,.18));wheel.rotation.z=Math.PI/2;
-  const hub=cyl(spindle,.085,.085,.11,0,0,0,C.shiny,16,mat(C.shiny,.25,.7));hub.rotation.z=Math.PI/2;
-  for(let i=0;i<4;i++){
-    const a=i*Math.PI/2;
-    box(spindle,.115,.032,.32,0,Math.cos(a)*.13,Math.sin(a)*.13,C.gold,.004);
-  }
-  g.userData.spindle=spindle;g.userData.animated=[spindle];
-  // Upper wheel hood and translucent spark shield.
-  box(g,.22,.24,.48,-.14,1.62,.08,C.orange,.028);
-  box(g,.32,.025,.28,-.14,1.38,.28,C.gold,.006,glow(0xffa952,.35));
-  // Precision downfeed and crossfeed handwheels.
-  const topWheel=cyl(g,.11,.11,.04,-.14,2.04,-.06,C.navy,16);
-  cyl(g,.03,.03,.08,-.14,1.99,-.06,C.steel,10);
-  const frontWheel=cyl(g,.12,.12,.04,.38,.78,.64,C.navy,16);frontWheel.rotation.x=Math.PI/2;
-  const frontAxle=cyl(g,.032,.032,.06,.38,.78,.62,C.steel,10);frontAxle.rotation.x=Math.PI/2;
-  // Coolant nozzle and line.
-  tube(g,[[.22,1.76,-.24],[.16,1.62,.02],[.02,1.44,.08]],.02,C.gold);
-  panel(g,.68,1.38,.40,.32,.52);
-  vent(g,-.48,.52,.62,.44,.22,4);
-  hazard(g,.46,.54,.62,.13);
-  textPlate(g,'SURFACE GRINDER',1.14,.13,-.08,.94,.63,{color:'#fff3df',bg:'#174954',size:36});
-  beacon(g,.74,1.74,-.36);
-  g.userData.workPoint=new THREE.Vector3(-.14,1.22,.08);
-}
 // Open for Business equipment. Both sit against the front wall with the
 // operator behind them, so their signs and glow read from either side.
 function makeFurnace(g) {
@@ -456,7 +417,7 @@ function batchStatic(root) {
 }
 export function createMachine(type) {
   const g=new THREE.Group();g.name=`station-${type}`;g.userData.type=type;
-  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,grind:makeGrinder,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
+  ({lathe:makeLathe,mill:makeMill,deburr:makeDeburr,anodize:makeAnodize,heat:makeFurnace,laser:makeLaser,inspect:makeInspect,material:makeMaterial,ship:makeShip,buffer:makeBuffer}[type]||makeBuffer)(g);
   return batchStatic(g);
 }
 export function createPart(stage=0,color=C.cyan,kind='shaft') {
@@ -874,4 +835,44 @@ export function createHall({x0,z0,x1,z1,col,name,northDoors,westDoor}) {
   };
   dash(x0+.2,z0+.2,x1-.2,z0+.2);dash(x0+.2,z1-.2,x1-.2,z1-.2);dash(x0+.2,z0+.2,x0+.2,z1-.2);dash(x1-.2,z0+.2,x1-.2,z1-.2);
   return {built:batchStatic(built),plot:batchStatic(plot)};
+}
+export function createStormRig() {
+  const g=new THREE.Group();g.name='storm-rig';
+  // High-voltage backup generator & capacitor bank mounted along the back-center bay (-0.4, -4.65).
+  const gen=new THREE.Group();gen.position.set(-.4,0,-4.65);g.add(gen);
+  box(gen,1.9,.18,1.1,0,.12,0,C.navy,.04);
+  box(gen,1.76,1.15,.94,0,.76,0,C.tealDark,.05);
+  box(gen,1.82,.12,.98,0,1.38,0,C.cream,.03);
+  for(const x of [-.55,0,.55]){
+    cyl(gen,.16,.16,.56,x,1.72,-.12,C.navy,16);
+    for(let r=0;r<4;r++)cyl(gen,.21,.21,.04,x,1.52+r*.12,-.12,C.cyan,16,glow(0x4be8ff,.65));
+    cyl(gen,.06,.06,.18,x,2.06,-.12,C.gold,12);
+  }
+  const rotor=new THREE.Group();rotor.position.set(0,.78,.49);gen.add(rotor);
+  cyl(rotor,.28,.28,.06,0,0,0,C.navy,20).rotation.x=Math.PI/2;
+  const coreRing=cyl(rotor,.20,.20,.07,0,0,.01,0x4be8ff,18,glow(0x4be8ff,.9));coreRing.rotation.x=Math.PI/2;
+  for(let i=0;i<6;i++){
+    const a=i*Math.PI/3;
+    const spoke=box(rotor,.04,.38,.08,0,0,.01,C.gold,.005);spoke.rotation.z=a;
+  }
+  textPlate(gen,'BACKUP GENERATOR · OVERDRIVE BUS',1.58,.14,0,1.22,.485,{color:'#dffcff',bg:'#133642',size:34});
+  hazard(gen,-.72,.78,.485,.12);hazard(gen,.72,.78,.485,.12);
+  // Glowing floor power conduits radiating from the generator to the rearranged cells.
+  const busMat=glow(0x38e2ff,.55);
+  const conduits=[];
+  for(const [x,z,w,d] of [
+    [-.4,-2.4, .11,3.5],
+    [-2.0,-3.9, 3.2,.11],
+    [1.65,-3.9, 4.1,.11],
+    [-1.9,.65, 3.4,.11],
+    [1.55,.85, 3.5,.11],
+  ]){
+    const strip=box(g,w,.016,d,x,.042,z,0x38e2ff,.003,busMat);strip.castShadow=false;
+    conduits.push(strip);
+  }
+  g.userData.rotor=rotor;
+  g.userData.coreRing=coreRing;
+  g.userData.conduits=conduits;
+  g.userData.animated=[rotor,coreRing,...conduits];
+  return batchStatic(g);
 }

@@ -60,7 +60,7 @@ test('every recipe card receives only its required cutting technologies in route
   f.game.orders=RECIPES.map((recipe,index)=>ticket(recipe,101+index));
   f.game.selectedId=f.game.orders[0].id;
   f.context.updateTickets(true);
-  const expected=[['lathe'],['mill'],['lathe'],['lathe','mill'],['mill'],['lathe'],['lathe','mill'],['mill'],['lathe'],['mill'],['lathe','mill']];
+  const expected=[['lathe'],['mill'],['lathe'],['lathe','mill'],['mill'],['lathe'],['lathe','mill'],['lathe','mill'],['mill'],['lathe','mill'],['lathe','mill']];
   assert.deepEqual(f.badgeCalls.map(call=>call.keys),expected);
   for(let index=0;index<RECIPES.length;index++) {
     const card=f.$('ticket-'+(101+index));

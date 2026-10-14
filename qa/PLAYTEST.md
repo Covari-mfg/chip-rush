@@ -1,14 +1,15 @@
 # CHIP RUSH verification
 
-## Dawn Shift (level 5) · 2026-10-14 (local source, awaiting review)
+## Blackout Shift (level 5, Iteration 2) · 2026-10-14 (local source, awaiting review)
 
-Full record: [docs/experiments/dawn-shift.md](../docs/experiments/dawn-shift.md).
+Full record (including Iteration 1 critique and Iteration 2 redesign): [docs/experiments/dawn-shift.md](../docs/experiments/dawn-shift.md).
 
-- **320 automated tests pass** (`pnpm test`, including 15 new checks in `qa/dawn-shift.test.mjs`), along with `pnpm run build`, `pnpm deploy:dry-run`, and `git diff --check`. Released levels (`first-shift`, `mixed-orders`, `rush-hour`, `night-shift`) keep their exact indices (`0..3`), station sets, and simulation outcomes.
-- **New machine & map (`dawn-shop`):** adds a procedural 3D **Surface Grinder** (`grind` / `GRINDER`, 6s duration) with a spinning abrasive wheel, reciprocating magnetic chuck, and grinding spark particles alongside `DEBURR` and `ANODIZE` under the golden-hour `THEMES.dawn` palette. All 11 station access points are distinct and reachable via production A* routing.
+- **322 automated tests pass** (`pnpm test`, including `qa/dawn-shift.test.mjs` and `qa/audio.test.mjs`), along with `node qa/balance.mjs --rush --ignore-calls --expert --assert`, `pnpm run build`, `pnpm deploy:dry-run`, and `git diff --check`. Released levels (`first-shift`, `mixed-orders`, `rush-hour`, `night-shift`) keep their exact indices (`0..3`), station sets, and simulation outcomes.
+- **No new machine — cellular map (`dawn-shop`) & 3D Backup Generator:** removes Iteration 1's Surface Grinder and reconfigures the 5 existing stations into West (`LATHE` + `DEBURR`) and East (`MILL` + `ANODIZE`) cells around a central `INSPECT` hub (`x: 0, z: -1.75`) and a procedural 3D **Backup Generator & Capacitor Bank** (`BACKUP GENERATOR · OVERDRIVE BUS`) with glowing cyan floor conduits under the electric `THEMES.dawn` storm palette.
+- **Zero CAD delay + Generator Overdrive & Surges (`overdrive: true`):** emergency grid/turbine tickets arrive pre-programmed (`programming: false`). Running 2+ machines simultaneously triggers **1.5× Harmonic Overdrive** (`dt * 1.5`), while visiting the Office (`SURGE CONSOLE`) or hitting scheduled lightning strikes (`50s`, `105s`, `148s`) triggers a **2.0× Generator Surge** accompanied by a procedural **128 BPM storm-synthwave soundtrack** (`musicTrack: 'storm'`).
 - **Covari capability gap (`PRECISION_SOURCE_JOBS`):** offers Wire-cut flexure (`Wire EDM`, "No wire EDM on this floor"), Case-hardened gear (`Heat treatment`, "No furnace on this floor"), or Serialized optic mount (`Laser marking`, "No laser on this floor") using the shared offer rules (after 2 normal shipments, ≥35s elapsed, ≥45s left, 30s decision window, 22s delivery to Receiving, `inspect → ship`, 300 points, no order slot or star credit).
-- **Simulation (deterministic `qa/balance.mjs`, not human player data):** serial 0.5s play ships 4/7 (0 stars, 2,694 pts, fails the 5-shipment target); concurrent 1.0s flow ships 6/7 (2 stars, 3,844 pts); concurrent 0.5s flow ships 7/7 (3 stars, 5,104 pts declining Covari, 5,266 pts accepting Covari); expert 0.1s dash ships 7/7 (3 stars, 6,216 pts declining, 6,378 pts with both morning rushes, 6,594 pts with both rushes + Covari).
-- **Browser verification:** verified shift picker card `05 Dawn Shift` (`Created with Cursor + Gemini 4`) and live `dawn-shop` gameplay in headless Chromium via Playwright with zero console or page errors.
+- **Simulation (deterministic `qa/balance.mjs`, not human player data):** serial 0.5s play ships 5/8 (1 star, 3,126 pts, never triggers Harmonic Overdrive); concurrent 1.0s flow ships 7/8 (2 stars, 4,857 pts); concurrent 0.5s flow ships 8/8 (3 stars, 6,186 pts declining Covari, 6,407 pts accepting Covari); expert 0.1s dash ships 8/8 (3 stars, 6,684 pts declining, 6,978 pts accepting Covari).
+- **Browser verification:** verified shift picker card `05 Blackout Shift` (`Created with Cursor + Gemini 4`) and live `dawn-shop` cellular floor, generator bus, `SURGE CONSOLE`, and HUD overdrive readout in Chromium via Playwright with zero console or page errors.
 
 ## Night Shift (level 4) · 2026-09-29 (local source, not released)
 

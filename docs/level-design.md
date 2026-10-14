@@ -25,14 +25,15 @@ reorder the legacy indices.
 | 1 | `mixed-orders` | Mixed Orders | 180s | 4 shipments | 4 / 5 / 6 | Six seconds of attended CAD, overlapping orders, and optional outsourcing |
 | 2 | `rush-hour` | Rush Hour | 180s | 5 shipments | 5 / 6 / 8 | Customer calls, optional rush promises |
 | 3 | `night-shift` | Night Shift | 210s | 4 shipments | 4 / 5 / 6 | Deburr and Anodize finishing stations on the `night-shop` map; Covari offers a finishing process the floor lacks; no calls |
-| 4 | `dawn-shift` | Dawn Shift | 240s | 5 shipments | 5 / 6 / 7 | Surface Grinder (`GRINDER`, 6s) on the `dawn-shop` map alongside Deburr and Anodize, four precision recipes, two morning calls, and a precision Covari capability gap |
+| 4 | `dawn-shift` | Blackout Shift | 180s | 5 shipments | 5 / 6 / 8 | Cellular `dawn-shop` floor around a central QC hub and 3D Backup Generator; zero CAD delay; 1.5× Harmonic Overdrive (2+ machines); 2.0× Office/Lightning Surges; 128 BPM storm-synth music; precision Covari capability gap |
 
 The first three scenarios use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
 the scenario permits them. Deburring and Anodizing exist in the machine model
 but are not available in those three scenarios. Night Shift is the first to use
-them on the `night-shop` map; Dawn Shift adds the Surface Grinder (`grind`) alongside
-Deburr and Anodize on the `dawn-shop` map.
+them on the `night-shop` map; Blackout Shift (`dawn-shift`) reconfigures those
+same five stations into West and East cells around a central Inspection hub and
+a 3D Backup Generator on the `dawn-shop` map.
 
 ## Scenario briefs
 
@@ -147,32 +148,44 @@ obstacles, on `first-shop`. Every level's `mapId` must be a key of `MAPS` in
 `dist/main.js`; `MAPS` lists the stations a map adds (`def.map`) or hides
 (`hide`) and names a theme in `THEMES`.
 
-### Dawn Shift (`dawn-shift`)
+### Blackout Shift (`dawn-shift`)
 
-Daybreak opens the shop for precision work (`docs/experiments/dawn-shift.md`).
-A 6-second **Surface Grinder** (`grind`, labeled `GRINDER`) joins Deburr (4s) and
-the Anodize color bath (8s) on the `dawn-shop` map, while the morning phone
-lines reopen with two scheduled customer calls at 40s and 120s.
+A pre-dawn coastal storm knocks out the main utility grid (`docs/experiments/dawn-shift.md`).
+Instead of adding another machine to the line, Blackout Shift reconfigures the
+existing five stations (`lathe`, `mill`, `deburr`, `anodize`, `inspect`) on the
+`dawn-shop` map into a West Cell (`lathe` + `deburr`) and an East Cell (`mill` +
+`anodize`) around a central **Inspection hub** (`x: 0, z: -1.75`) and a 3D
+**Backup Generator & Capacitor Bank** (`BACKUP GENERATOR · OVERDRIVE BUS`) with
+radiating cyan power conduits and a procedural **128 BPM storm-synthwave
+soundtrack** (`musicTrack: 'storm'`).
 
-The scheduled seven-order sequence is Spindle shaft
-(`lathe → grind → deburr → inspect`), Gauge block (`mill → grind → inspect`),
-Datum plate (`mill → deburr → grind → inspect`), Aero manifold
-(`lathe → mill → grind → anodize → inspect`), Datum plate, Spindle shaft,
-Gauge block. Every order requires six attended seconds of CAD before stock
-pickup. The opening order arrives at 0s, the second at 18s, and later arrivals
-every 26s. The ordinary deadline is 132s (+14s for the opening order). Clear
-means five shipments before the 240s timer ends; stars are 5, 6, and 7
+Emergency utility and turbine repair tickets arrive pre-programmed (`programming: false`),
+so the player sprints straight to raw stock without sitting at CAD. Running **2
+or more machines simultaneously** locks the generator into **1.5× Harmonic
+Overdrive**, accelerating all active machine timers by 1.5×. Walking to the
+Office (`SURGE CONSOLE`) when its capacitor bank is charged triggers a **16s
+2.0× Generator Surge** (22s recharge), and scheduled coastal lightning strikes
+at **50s, 105s, and 148s** unleash a **10s 2.0× Lightning Surge**.
+
+The scheduled eight-order sequence is Turbine coupling
+(`lathe → mill → deburr → inspect`), Breaker busbar
+(`mill → deburr → anodize → inspect`), Ocean collar
+(`lathe → anodize → inspect`), Surge manifold
+(`lathe → mill → anodize → inspect`), Grid isolator
+(`lathe → mill → deburr → anodize → inspect`), Turbine coupling, Breaker busbar,
+Surge manifold. The opening order arrives at 0s, the second at 8s, and later
+arrivals every 21s. The ordinary deadline is 112s (+14s for the opening order).
+Clear means five shipments before the 180s timer ends; stars are 5, 6, and 8
 shipments.
 
-**Covari capability gap.** Even with turning, milling, surface grinding,
-deburring, and anodizing on the floor, the shop has no wire EDM, heat-treat
-furnace, or laser marker. After two normal shipments, at least 35s in and with
-at least 45s left, Dawn Shift offers one job from `PRECISION_SOURCE_JOBS`:
-Wire-cut flexure (`Wire EDM`, `"No wire EDM on this floor"`), Case-hardened gear
-(`Heat treatment`, `"No furnace on this floor"`), or Serialized optic mount
-(`Laser marking`, `"No laser on this floor"`). It follows the shared offer
-rules: optional, 30s decision window, 22s delivery to Receiving, `inspect → ship`,
-300 points, and no order slot or shipment/star/streak credit.
+**Covari capability gap.** Even under generator overdrive, the floor has no wire
+EDM, heat-treat furnace, or laser marker. After two normal shipments, at least
+35s in and with at least 45s left, Blackout Shift offers one job from
+`PRECISION_SOURCE_JOBS`: Wire-cut flexure (`Wire EDM`, `"No wire EDM on this floor"`),
+Case-hardened gear (`Heat treatment`, `"No furnace on this floor"`), or
+Serialized optic mount (`Laser marking`, `"No laser on this floor"`). It follows
+the shared offer rules: optional, 30s decision window, 22s delivery to Receiving,
+`inspect → ship`, 300 points, and no order slot or shipment/star/streak credit.
 
 ## Game mode: Open for Business (`open-for-business`)
 
