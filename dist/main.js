@@ -472,6 +472,8 @@ function measurePlayFrame(){
   const cx=(left+rightEdge)/2,cy=(top+bottom)/2;
   const look=right.clone().multiplyScalar((shopFrame.left+shopFrame.right)/2-(cx-viewport.w/2)*scale)
     .addScaledVector(cameraUp,(shopFrame.top+shopFrame.bottom)/2+(cy-viewport.h/2)*scale);
+  // Use spare width for the sailing channel without shrinking or clipping the shop.
+  if(beaconing())look.addScaledVector(right,Math.min(1.8,Math.max(0,((rightEdge-left)*scale-(shopFrame.right-shopFrame.left))/2)));
   return {halfHeight:viewport.h*scale/2,look};
 }
 // Browsers on iPhone cannot reliably lock orientation. Require landscape
