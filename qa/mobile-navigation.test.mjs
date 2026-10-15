@@ -1,3 +1,4 @@
+import {versionLevelRecords} from '../dist/records.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -37,7 +38,7 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
   const player = {x:0,z:0,angle:0};
   const game = {mode:'playing',call:null,config:{sourcing:true},
     reset(){events.push('reset');throw new Error('An allowed start needs the full game fixture');}};
-  const context = vm.createContext({Math,Number,isPlayableShift,performance:{now:()=>time},$,game,player,
+  const context = vm.createContext({versionLevelRecords,Math,Number,isPlayableShift,performance:{now:()=>time},$,game,player,
     interfaceMode,phoneDevice,innerWidth:portrait?390:844,innerHeight:portrait?844:390,
     mobileTaps:createTapNavigation(),keys:new Set(),path:[],pathStation:null,
     dashTime:0,dashCooldown:0,last:0,helpReturn:null,

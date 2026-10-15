@@ -4,14 +4,14 @@
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {stockType,SHIFTS,RULESET} from '../dist/core.js';
-import {BEACON_LEVEL,CROSSING_SECONDS,TENDER_CAPACITY} from '../dist/beacon.js';
+import {stockType,SHIFTS,RULESET,shiftRuleset} from '../dist/core.js';
+import {BEACON_LEVEL,CROSSING_SECONDS,TENDER_CAPACITY,crossingWindow} from '../dist/beacon.js';
 import {validateResult} from '../server/worker.js';
 import {Driver,navigation} from './balance.mjs';
 
 const DT=.05;
 export class BeaconDriver extends Driver {
-  constructor({strategy='flow',reaction=.5,dash=false,batch=1,covari='decline'}={}){
+  constructor({strategy='flow',reaction=.5,dash=false,batch=2,covari='decline'}={}){
     super(BEACON_LEVEL,strategy,'ignore',{reaction,dash,covari});
     assert.ok(Number.isInteger(batch)&&batch>=1&&batch<=TENDER_CAPACITY,'Choose a legal batch size');
     this.batch=batch;this.checkedSegments=0;this.crossings=[];
@@ -51,8 +51,9 @@ export class BeaconDriver extends Driver {
   }
   pendingLocal(){return this.game.orders.filter(order=>!['quay','tender'].includes(order.location));}
   shouldSail(){
-    const game=this.game;if(game.tender.phase!=='docked'||!game.quay.length||game.hand)return false;
+    const game=this.game;if(game.tender.phase!=='docked'||!game.quay.length||game.hand||!crossingWindow(game.elapsed).open)return false;
     if(game.quay.length>=this.batch)return true;
+    if(crossingWindow(game.elapsed).remaining<=this.distanceTo('ship')/4.4+this.actionDelay+2.5)return true;
     // Leave enough real walking time to reach the quay and cross. A short
     // batch is also valid when no further local work can fill it.
     const urgent=game.time<=CROSSING_SECONDS+this.distanceTo('ship')/4.4+this.actionDelay+2;
@@ -113,7 +114,7 @@ export class BeaconDriver extends Driver {
     const game=this.game;
     const value={role:BEACON_LEVEL,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:0,elapsed:game.elapsed,clearElapsed:game.clearElapsed,spawned:game.spawnIndex,finishReason:game.finishReason};
     const start=1_800_000_000_000;
-    assert.equal(validateResult(value,{role:BEACON_LEVEL,ruleset:RULESET,started_at:start},start+Math.ceil(game.elapsed*1000)),null,'A legal simulated finish is accepted by the hosted score boundary');
+    assert.equal(validateResult(value,{role:BEACON_LEVEL,ruleset:shiftRuleset(BEACON_LEVEL),started_at:start},start+Math.ceil(game.elapsed*1000)),null,'A legal simulated finish is accepted by the hosted score boundary');
     return {role:game.config.name,strategy:this.strategy,reaction:this.actionDelay,dash:this.dash,batch:this.batch,covari:this.covari,
       spawned:game.spawnIndex,shipped:game.shipped,stars:game.stars(),pass:game.passed(),missed:game.missed,unfinished:game.unfinished,
       score:game.score,sourced:game.sourced,sourcePoints:game.sourcePoints,clearElapsed:game.clearElapsed,
@@ -123,12 +124,12 @@ export class BeaconDriver extends Driver {
 }
 export const simulateBeacon=options=>new BeaconDriver(options).run();
 export function assertBeaconBalance(rows){
-  assert.ok(rows.filter(row=>row.strategy==='serial').every(row=>row.pass),'A slower serial route clears');
-  assert.ok(rows.filter(row=>row.strategy==='flow'&&!row.dash).every(row=>row.pass),'Normal walking clears');
-  assert.ok(rows.filter(row=>row.dash).every(row=>row.shipped===SHIFTS[BEACON_LEVEL].maxOrders&&row.stars===3&&row.missed===0),'Expert routes legally install all eight parts');
+  assert.ok(rows.filter(row=>row.strategy==='flow'&&row.batch>=2).every(row=>row.pass),'Planned batches can clear');
+  assert.ok(rows.filter(row=>row.dash&&row.batch>=2).every(row=>row.shipped===SHIFTS[BEACON_LEVEL].maxOrders&&row.stars===3&&row.missed===0),'Expert batch routes install the full lantern');
+  assert.ok(rows.filter(row=>row.batch===1).every(row=>row.stars<3),'Sending every part alone cannot earn full marks');
 }
 if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
-  const rows=[simulateBeacon({strategy:'serial',reaction:1.5}),simulateBeacon({reaction:.5}),
+  const rows=[simulateBeacon({strategy:'serial',reaction:1.5,batch:1}),simulateBeacon({reaction:.5}),
     simulateBeacon({reaction:.1,dash:true}),simulateBeacon({reaction:.1,dash:true,batch:3}),
     simulateBeacon({reaction:.5,covari:'accept'})];
   console.table(rows.map(({log,crossings,...summary})=>({...summary,elapsed:+summary.elapsed.toFixed(2),clearElapsed:summary.clearElapsed===null?null:+summary.clearElapsed.toFixed(2),walkingSeconds:+summary.walkingSeconds.toFixed(1),trips:crossings.length})));

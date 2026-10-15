@@ -583,3 +583,7 @@ body:not(.playing):not(.paused) .overlay:not(.centered){background:linear-gradie
 @media(max-width:759px){.tender-panel{left:16px;bottom:90px;padding:9px 12px;gap:15px}.tender-panel strong{font-size:11px}.tender-panel small{font-size:9px}.tender-panel button{font-size:10px;padding:8px}.beacon-ending{bottom:4%;padding:16px 25px}.beacon-ending h2{font-size:32px}}
 @media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:150px;bottom:auto;left:18px}}
 :where(html[data-interface="mobile"]) .tender-panel{top:64px;right:16px;bottom:auto;left:auto;gap:12px;max-width:calc(100% - 220px);padding:9px 12px}
+
+.tender-panel.channel-open{border-color:#9ff0cb;box-shadow:0 0 20px #9ff0cb25}.tender-panel.channel-open strong{color:#b7f4d8}
+
+@media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:139px;padding:6px 10px;gap:12px}:where(html[data-interface="desktop"]) .tender-panel strong{font-size:10px;line-height:12px}:where(html[data-interface="desktop"]) .tender-panel small{font-size:9px;line-height:11px;margin-top:2px}:where(html[data-interface="desktop"]) .tender-panel button{font-size:10px;padding:6px 9px}}

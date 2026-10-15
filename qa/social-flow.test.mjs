@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { RULESET, SHIFTS, isPlayableShift } from '../dist/core.js';
+import { RULESET, SHIFTS, shiftRuleset, isPlayableShift } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 import { runTime } from '../dist/records.js';
 
@@ -31,7 +31,7 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,a
     if(path==='/api/scores')return response({posted:true});
     return response({entries:[]});
   };
-  const context=vm.createContext({RULESET,SHIFTS,isPlayableShift,runTime,URL,URLSearchParams,AbortSignal,
+  const context=vm.createContext({RULESET,SHIFTS,shiftRuleset,isPlayableShift,runTime,URL,URLSearchParams,AbortSignal,
     document:{getElementById:$,createElement:element},location:new URL(url),navigator,fetch,localStorage});
   vm.runInContext(executable,context);
   const social=context.createSocial({onChallenge(role){acceptedChallenges.push(role);},analytics});

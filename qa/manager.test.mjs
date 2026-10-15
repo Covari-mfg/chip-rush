@@ -1,3 +1,4 @@
+import {versionLevelRecords} from '../dist/records.js';
 // Open for Business: rules, floor, staff, bids, contracts, breakdowns, economy,
 // server validation, boards and saves. Balance rows come from
 // qa/manager-balance.mjs and are simulations, not player data.
@@ -265,7 +266,7 @@ test('a contract quote with a gap shows the missing process and no Covari price'
   const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
   const cards = main.slice(main.indexOf('function routeChips('), main.indexOf('function managerTicketState('));
   const game = fresh();game.partnerCovari();
-  const context = vm.createContext({game, opInfo, stockType:() => 'round', money:n => `$${n}`, technologyBadges:() => '', stockIcon:() => '', $:() => ({src:'logo.png'})});
+  const context = vm.createContext({versionLevelRecords,game, opInfo, stockType:() => 'round', money:n => `$${n}`, technologyBadges:() => '', stockIcon:() => '', $:() => ({src:'logo.png'})});
   vm.runInContext(`${cards};this.quoteHTML=quoteHTML;`, context);
   const note = html => html.match(/<small class="quote-note[^"]*">([^<]*)<\/small>/)[1];
   const job = quoteFor(game, 'collar'), contract = quoteFor(game, 'collar', {contract:true});
@@ -319,7 +320,7 @@ test('buying or placing a station over the player leaves the player able to move
   };
   const game = fresh();
   game.cash = 30000;
-  const context = vm.createContext({Math, HALLS, game});
+  const context = vm.createContext({versionLevelRecords,Math, HALLS, game});
   vm.runInContext(`${section('const STATION_LAYOUT=', '\nlet renderer')}
     ${section('const BASE_BOUNDS=', '\nfunction save')}
     const player={x:0,z:0,angle:0};
@@ -729,7 +730,7 @@ test('manager records load safely beside shift progress in the v8 save', async (
   const migration = main.slice(main.indexOf('const SAVE_KEY='), main.indexOf('const STATION_LAYOUT='));
   const load = initial => {
     const data = new Map(Object.entries(initial).map(([k, v]) => [k, JSON.stringify(v)]));
-    const context = vm.createContext({SHIFTS, RUN_LENGTHS, nextShiftIndex, localStorage:{getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v)}});
+    const context = vm.createContext({versionLevelRecords,SHIFTS, RUN_LENGTHS, nextShiftIndex, localStorage:{getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v)}});
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,managerRecord};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };

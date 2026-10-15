@@ -34,7 +34,7 @@ function setup({beacon=false}={}) {
     };
   }
   const $=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
-  const game=beacon?new BeaconGame():new ShopGame();if(beacon)game.reset();else game.reset(0);
+  const game=beacon?new BeaconGame():new ShopGame();if(beacon){game.reset();for(let i=0;i<200;i++)game.tick(.1);}else game.reset(0);
   const context=vm.createContext({
     game,OPS,stockType,stockIcon,orderWorkflow,$,beaconing:()=>beacon,sourceCard:$('source-card'),
     document:{activeElement:null,createElement:element},

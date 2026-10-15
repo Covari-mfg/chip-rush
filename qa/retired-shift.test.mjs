@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-import {SHIFTS,isPlayableShift,nextShiftIndex} from '../dist/core.js';
+import {SHIFTS,isPlayableShift,nextShiftIndex,shiftRuleset} from '../dist/core.js';
 
 const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 function productionFunction(name){
@@ -16,7 +16,7 @@ function fixture(){
     replaceChildren(...children){this.children=[...children];},appendChild(child){this.children.push(child);},
     setAttribute(){},focus(){}});
   const $=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
-  const context=vm.createContext({SHIFTS,isPlayableShift,nextShiftIndex,$,
+  const context=vm.createContext({shiftRuleset,SHIFTS,isPlayableShift,nextShiftIndex,$,
     document:{createElement:element},selectedShift:0,bests:SHIFTS.map(()=>0),grades:SHIFTS.map(()=>0),speedRecords:{},
     runTime:String,showHomeView(){},hidePanels(){},showModelCredit(){},clock:String,SHIFT_CREDIT:{},
     location:{hash:''},showMenu(){},briefingManager:false,

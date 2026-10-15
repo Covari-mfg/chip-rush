@@ -19,7 +19,9 @@ Existing scores, saves, friend links and numeric catalog order remain compatible
 Legacy unlock values are retained but no longer gate the picker. Mixed Orders
 is retired; its index remains reserved, and old scores retain their identity.
 First Shift is the introduction; Rush Hour is Astra's main submission. Last Light
-adds GPT-6.1 Sol's pier, tender dispatch and lighthouse chapter.
+adds GPT-6.1 Sol's pier, timed tender crossings and lighthouse chapter. Its
+second edition keeps the camera close, brings boats past the shop during play,
+and uses separate records while retaining first-edition history.
 
 ## Database rollout
 
@@ -30,7 +32,7 @@ the existing leaderboard trust model, rather than replay verification.
 
 ## Verification
 
-All 387 automated tests passed, together with the Rush Hour expert balance
+All 396 automated tests passed, together with the Rush Hour expert balance
 assertion, standalone and hosted builds, Worker dry run and diff whitespace
 check.
 Browser review covered desktop and narrow layouts, direct Launch Window entry,

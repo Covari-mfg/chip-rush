@@ -35,7 +35,7 @@ count playable entries independently of these legacy identities.
 | 3 | `night-shift` | Night Shift | 210s | 4 shipments | 4 / 5 / 6 | Deburr and Anodize finishing stations on the `night-shop` map; Covari offers a finishing process the floor lacks; no calls |
 | 4 | `dawn-shift` | Blackout Shift | 180s | 5 shipments | 5 / 6 / 8 | Cellular `dawn-shop` floor around a central QC hub and 3D Backup Generator; zero CAD delay; 1.5× Harmonic Overdrive (2+ machines); 2.0× Office/Lightning Surges; 128 BPM storm-synth music; precision Covari capability gap |
 | 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
-| 6 | `last-light` | Last Light | 240s | 4 deliveries | 4 / 6 / 8 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
+| 6 | `last-light` | Last Light | 220s | 6 deliveries | 6 / 9 / 12 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
 
 First Shift and Rush Hour use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
@@ -458,29 +458,37 @@ An original 92 BPM procedural harbor piece accompanies the work.
 
 The new decision is batch dispatch. Machined and inspected parts load onto a
 three-slot quay. With empty hands, use the quay again to send all staged parts.
-The crossing is 12 seconds, followed by a 12-second empty return. Making the
+Swell permits departure for 12 seconds every 36, starting at 0:20. The crossing is 12 seconds, followed by a 12-second empty return. Making the
 next batch while the tender sails keeps the shop productive. Quay deadlines
 continue; aboard the tender, they stop, fixing the early-delivery bonus at
 departure. Points, stars and clear time are awarded only at arrival. The
 player's currently carried part is preserved across autonomous deliveries.
 
 Lantern spindles use the lathe, Fresnel carriers the mill, and gimbal cradles
-both, followed by inspection. No attended CAD or calls. The fixed eight-order
-sequence uses a 20-second first gap, then 23-second arrivals, with 120-second
+both, followed by inspection. No attended CAD or calls. Up to twelve orders
+use a 10-second first gap, then 12-second arrivals, with 65-second
 deadlines (+14 for the first), the shared four-order limit, and a late-arrival
-check that reserves time for the crossing. Four deliveries clear, six and
-eight earn the higher stars. The run can finish early after all eligible work
+check that reserves time for the next safe crossing after machining. Six
+deliveries clear, nine and twelve earn the higher stars. The clock is 220 seconds. The run can finish early after all eligible work
 is resolved; a closing-time arrival counts, an unfinished crossing does not.
 
 After two ordinary deliveries, the customer may need a ground Fresnel optic.
 There is no optical-grinding machine on the pier: Covari supplies it, Receiving
 and QC remain required, and it also travels on the tender. Its 300 points do
-not count toward the lighthouse's four-part target. Stable index 6 appends to
+not count toward the lighthouse's six-part target. Stable index 6 appends to
 the catalog, leaving all historical IDs and slots intact. Existing score bounds
 apply; no extra schema migration is needed beyond PR #31's timing migration.
 
-Every ordinary delivery adds a visible rib to the lantern. At four, the beacon
-turns. The ending briefly follows the light and the departing fishing boats;
+Every ordinary delivery adds a visible rib to the lantern and brings a fishing
+boat past the quay during play. Six progress lamps inside the workshop show the
+objective; at six, the full beacon turns. The camera fits the shop throughout.
+The ending briefly pans toward the light without zooming out;
 it is skippable, does not run the shift clock and cannot award extra work.
 See [the experiment record](experiments/last-light.md) for actual conditions,
 delegation, verification and release status.
+
+Last Light uses edition `last-light-v2-crossings`. First-edition points and
+stars are archived inside existing local saves; clear times use a new record
+key while retaining the old one. The shared board labels old rows as first
+edition and derives their original 4/6/8 stars. Current runs and challenge
+links require the new edition. No additional database migration is required.

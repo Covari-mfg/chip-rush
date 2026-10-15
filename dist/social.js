@@ -1,4 +1,4 @@
-import { RULESET, SHIFTS, isPlayableShift } from './core.js';
+import { RULESET, SHIFTS, isPlayableShift, shiftRuleset } from './core.js';
 import { createGameAnalytics } from './analytics.js';
 import { runTime } from './records.js';
 
@@ -15,14 +15,14 @@ export function parseChallenge(search) {
   const values=['role','score','shipped'].map(k=>/^\d{1,5}$/.test(p.get(k)||'')?Number(p.get(k)):NaN);
   const [role,score,shipped]=values;
   // Keep legacy numeric role indices stable when appending campaign shifts.
-  if(p.get('rules')!==RULESET)return null;
+  if(p.get('rules')!==shiftRuleset(role))return null;
   if(!isPlayableShift(role)||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+(SHIFTS[role].sourcing&&shipped>=2?300:0)+(SHIFTS[role].calls?SHIFTS[role].callTimes.length*25:0))return null;
   return Object.freeze({role,score,shipped,stars:SHIFTS[role].stars.filter(n=>shipped>=n).length});
 }
 export function challengeURL(result,base) {
   if(!isPlayableShift(result.role))throw new RangeError('This shift is retired or unavailable.');
   const url=new URL(base);url.search='';url.hash='';
-  for(const [key,value] of Object.entries({challenge:1,rules:RULESET,role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
+  for(const [key,value] of Object.entries({challenge:1,rules:shiftRuleset(result.role),role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
   return url.href;
 }
 export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
@@ -160,7 +160,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role,ruleset=RULESET){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role,ruleset=shiftRuleset(role)){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
     // A saved manager run picks its board run back up; it was registered when the run began.
     resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;skipped=false;},
     runId:()=>run,

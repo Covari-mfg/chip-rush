@@ -1,3 +1,4 @@
+import {versionLevelRecords} from '../dist/records.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -40,7 +41,7 @@ const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 const migration=main.slice(main.indexOf("const SAVE_KEY="),main.indexOf('const STATION_LAYOUT='));
 function migrate(initial){
   const data=new Map(Object.entries(initial).map(([k,v])=>[k,JSON.stringify(v)]));
-  const context=vm.createContext({SHIFTS,RUN_LENGTHS,nextShiftIndex,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
+  const context=vm.createContext({versionLevelRecords,SHIFTS,RUN_LENGTHS,nextShiftIndex,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
   vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}${migration};this.result={unlocked,bests,grades};`,context);
   return {result:JSON.parse(JSON.stringify(context.result)),data};
 }

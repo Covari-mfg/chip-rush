@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { ShopGame, SHIFTS, isPlayableShift } from '../dist/core.js';
 import { shiftGame } from '../dist/launch.js';
-import { runTime, readSpeedRecords, recordClear } from '../dist/records.js';
+import { runTime, readSpeedRecords, recordClear, versionLevelRecords, saveSpeedRecords } from '../dist/records.js';
 
 // Shipping is the production command; these fixtures represent inspected parts
 // already in the player's hands so the split can be tested without a renderer.
@@ -66,4 +66,34 @@ test('one Play action starts a shift, starts a shop, or resumes its saved day di
   vm.runInContext(body,context);context.playSelection();assert.deepEqual(calls,[['shift',5]]);
   calls.length=0;context.homeView='business';context.playSelection();assert.deepEqual(calls,[['new shop']]);
   calls.length=0;context.savedRunSummary=()=>({day:4});context.playSelection();assert.deepEqual(calls,[['restore'],['resume']]);assert.equal(game.mode,'playing');
+});
+
+
+test('revised Last Light archives first-edition points and stars exactly once',()=>{
+  const saved={bests:SHIFTS.map((s,i)=>1000+i),grades:SHIFTS.map(()=>3),unlocked:6};
+  const migrated=versionLevelRecords(saved,SHIFTS);
+  assert.deepEqual(migrated.bests.slice(0,6),saved.bests.slice(0,6));
+  assert.deepEqual(migrated.levelArchives['last-light@first-edition'],{best:1006,stars:3});
+  assert.equal(migrated.bests[6],0);assert.equal(migrated.grades[6],0);
+  assert.equal(saved.bests[6],1006,'Migration leaves input unchanged');
+  migrated.bests[6]=2500;migrated.grades[6]=1;
+  assert.deepEqual(versionLevelRecords(migrated,SHIFTS),migrated,'Reload preserves new results');
+});
+
+test('revised clear times use their own edition and retain the old time in storage',()=>{
+  let stored=JSON.stringify({'last-light':90,'first-shift':64});
+  const storage={getItem:()=>stored,setItem:(key,value)=>{stored=value;}};
+  const records=readSpeedRecords(storage,SHIFTS);
+  assert.deepEqual(records,{'first-shift':64});
+  assert.equal(recordClear(records,{config:SHIFTS[6],clearElapsed:143,passed:()=>true}),true);
+  saveSpeedRecords(storage,records);
+  assert.deepEqual(JSON.parse(stored),{'first-shift':64,'last-light':90,'last-light-v2-crossings':143});
+  assert.deepEqual(readSpeedRecords(storage,SHIFTS),records);
+});
+
+
+test('a damaged old speed save does not prevent recording a new clear',()=>{
+  let stored='broken';const storage={getItem:()=>stored,setItem:(key,value)=>{stored=value;}};
+  saveSpeedRecords(storage,{'last-light-v2-crossings':145});
+  assert.deepEqual(JSON.parse(stored),{'last-light-v2-crossings':145});
 });

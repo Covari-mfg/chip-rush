@@ -1,4 +1,4 @@
-import { RULESET, SHIFTS, isPlayableShift } from '../dist/core.js';
+import { RULESET, SHIFTS, isPlayableShift, shiftRuleset } from '../dist/core.js';
 import { shiftGame } from '../dist/launch.js';
 import { MANAGER_ROLE, MANAGER_BOARD, MANAGER_SCORE_RULESETS, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
@@ -14,7 +14,7 @@ async function body(request){
   text+=decoder.decode();const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw new SyntaxError('Expected an object.');return value;
 }
 export function validateResult(value,run,now=Date.now()){
-  if(!run||!validRole(run.role)||run.ruleset!==RULESET||value.role!==run.role)return 'Start a new shift before posting.';
+  if(!run||!validRole(run.role)||run.ruleset!==shiftRuleset(run.role)||value.role!==run.role)return 'Start a new shift before posting.';
   const config=SHIFTS[run.role],wallSeconds=(now-run.started_at)/1000;
   if(wallSeconds>86400)return 'This score submission has expired. Play another shift.';
   const ranges={score:[0,20000],shipped:[0,config.maxOrders??8],missed:[0,15],sourced:[0,config.sourcing?1:0],calls:[0,config.calls?config.callTimes.length:0]};
@@ -95,13 +95,13 @@ export default {
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
-        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
-        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
+        const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6)).all();
+        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':role===6&&edition!==shiftRuleset(6)?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:(role===6&&edition!==shiftRuleset(6)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
         const value=await body(request);
         const managerRun=value.role===MANAGER_ROLE&&parseBoard(value.ruleset)!==null;
-        if(!managerRun&&(!validRole(value.role)||value.ruleset!==RULESET))return fail('Reload the game to start a current shift.');
+        if(!managerRun&&(!validRole(value.role)||value.ruleset!==shiftRuleset(value.role)))return fail('Reload the game to start a current shift.');
         const player=playerId(request)||crypto.randomUUID(),now=Date.now();
         const recent=await env.DB.prepare('SELECT COUNT(*) AS count FROM runs WHERE player=? AND started_at>?').bind(player,now-60000).first();
         if(recent.count>=10)return fail('Too many restarts. Try again in a minute.',429);
@@ -121,7 +121,7 @@ export default {
         const name=typeof value.name==='string'?value.name.trim().replace(/\s+/g,' '):'';
         if(!/^[\p{L}\p{N} ._'-]{2,24}$/u.test(name))return fail('Use a display name with 2–24 letters, numbers, spaces or . _ - apostrophe.');
         if(manager)await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,days,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,run.ruleset,value.score,value.score,value.shipped,value.missed,value.sourced,0,value.days,Date.now()).run();
-        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,RULESET,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Number.isFinite(value.elapsed)?Math.round(value.elapsed*1000):null,Number.isFinite(value.clearElapsed)?Math.round(value.clearElapsed*1000):null,Date.now()).run();
+        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,run.ruleset,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Number.isFinite(value.elapsed)?Math.round(value.elapsed*1000):null,Number.isFinite(value.clearElapsed)?Math.round(value.clearElapsed*1000):null,Date.now()).run();
         return json({posted:true,id:run.id});
       }
       return fail('Not found.',404);

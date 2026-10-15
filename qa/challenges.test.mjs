@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RULESET, SHIFTS, isPlayableShift } from '../dist/core.js';
+import { RULESET, SHIFTS, shiftRuleset, isPlayableShift } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 
 function query(extra={}) {
-  return '?'+new URLSearchParams({challenge:'1',rules:RULESET,role:'2',score:'4173',shipped:String(SHIFTS[2].stars[2]),...extra});
+  return '?'+new URLSearchParams({challenge:'1',rules:shiftRuleset(Number(extra.role??2)),role:'2',score:'4173',shipped:String(SHIFTS[2].stars[2]),...extra});
 }
 
 test('challenge links round-trip each role and keep only current challenge parameters',()=>{
@@ -14,7 +14,7 @@ test('challenge links round-trip each role and keep only current challenge param
     const url=new URL(challengeURL(result,'https://example.test/chip-rush/?watch=owner&old=1#results'));
     assert.equal(url.origin,'https://example.test');assert.equal(url.pathname,'/chip-rush/');
     assert.equal(url.hash,'');assert.equal(url.searchParams.has('watch'),false);assert.equal(url.searchParams.has('old'),false);
-    assert.equal(url.searchParams.get('rules'),RULESET);assert.equal(url.searchParams.size,5);
+    assert.equal(url.searchParams.get('rules'),shiftRuleset(role));assert.equal(url.searchParams.size,5);
     assert.deepEqual(parseChallenge(url.search),{...result,stars:3});
   }
 });
@@ -89,4 +89,10 @@ test('challenge links cannot claim points unsupported by shipments, sourcing, an
 test('retired Mixed Orders cannot be parsed or used to create a friend challenge',()=>{
   assert.equal(parseChallenge(query({role:'1',score:'2500',shipped:'6'})),null);
   assert.throws(()=>challengeURL({role:1,score:2500,shipped:6},'https://example.test/'),RangeError);
+});
+
+
+test('first-edition Last Light links cannot challenge the changed crossing workload',()=>{
+  assert.equal(parseChallenge(query({role:'6',rules:RULESET,score:'2500',shipped:'6'})),null);
+  assert.ok(parseChallenge(query({role:'6',score:'2500',shipped:'6'})));
 });

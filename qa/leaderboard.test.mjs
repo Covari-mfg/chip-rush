@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import worker, { validateResult } from '../server/worker.js';
-import { RULESET, SHIFTS, ShopGame, isPlayableShift } from '../dist/core.js';
+import { RULESET, SHIFTS, ShopGame, shiftRuleset, isPlayableShift } from '../dist/core.js';
 import { simulateShift } from './balance.mjs';
 
 const journal=JSON.parse(await readFile(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'));
@@ -37,7 +37,7 @@ function fixture(t) {
     try{return await worker.fetch(request,env);}finally{Date.now=realNow;}
   }
   async function start(role=2,options={}) {
-    const response=await send('/api/runs',{method:'POST',data:{role,ruleset:RULESET},...options});
+    const response=await send('/api/runs',{method:'POST',data:{role,ruleset:shiftRuleset(role)},...options});
     assert.equal(response.status,201,await response.clone().text());
     return {id:(await response.json()).id,role,cookie:response.headers.get('set-cookie').split(';')[0],response};
   }
@@ -87,7 +87,7 @@ test('only same-origin POSTs are accepted, including run creation',async t=>{
 test('run creation rejects invalid roles and stale rulesets',async t=>{
   const f=fixture(t);
   for(const role of [-1,1,SHIFTS.length,.5,'2',null]) {
-    assert.equal((await f.send('/api/runs',{method:'POST',data:{role,ruleset:RULESET}})).status,400);
+    assert.equal((await f.send('/api/runs',{method:'POST',data:{role,ruleset:shiftRuleset(role)}})).status,400);
   }
   assert.equal((await f.send('/api/runs',{method:'POST',data:{role:2,ruleset:'old-rules'}})).status,400);
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM runs').get().n,0);
@@ -120,7 +120,7 @@ test('display-name validation rejects markup, control content, and length violat
 test('result validation enforces full-shift eligibility, one-day expiry, and ruleset/role identity',()=>{
   for(const role of SHIFTS.keys()) {
     if(!isPlayableShift(role))continue;
-    const run={role,ruleset:RULESET,started_at:START};
+    const run={role,ruleset:shiftRuleset(role),started_at:START};
     const value={role,score:1000,shipped:SHIFTS[role].passTarget,missed:0,sourced:0,calls:role===2?3:0};
     const eligibleAt=START+(SHIFTS[role].duration-5)*1000;
     assert.match(validateResult(value,run,eligibleAt-1),/full shift/);
@@ -331,12 +331,12 @@ test('early results cannot omit arrivals before the queue could have filled',()=
     const elapsed=SHIFTS[role].duration-20;
     for(const spawned of [1,2,3]){
       const result={role,score:1600,shipped:spawned,missed:0,sourced:0,calls:0,elapsed,spawned,finishReason:'work-complete'};
-      assert.match(validateResult(result,{role,ruleset:RULESET,started_at:START},START+elapsed*1000),/scheduled orders/);
+      assert.match(validateResult(result,{role,ruleset:shiftRuleset(role),started_at:START},START+elapsed*1000),/scheduled orders/);
     }
     // Genuine queue saturation/expiry must remain postable.
     const game=new ShopGame();game.reset(role);
     while(game.mode==='playing')game.tick(.1);
-    assert.equal(validateResult({role,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,spawned:game.spawnIndex,finishReason:game.finishReason},{role,ruleset:RULESET,started_at:START},START+Math.ceil(game.elapsed*1000)),null);
+    assert.equal(validateResult({role,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,spawned:game.spawnIndex,finishReason:game.finishReason},{role,ruleset:shiftRuleset(role),started_at:START},START+Math.ceil(game.elapsed*1000)),null);
   }
 });
 
@@ -370,4 +370,19 @@ test('retired Mixed Orders rejects old in-flight run submissions without deletin
   assert.equal(response.status,400);assert.match((await response.json()).error,/new shift/);
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,0);
   assert.equal(f.sqlite.prepare('SELECT role FROM runs WHERE id=?').get(id).role,1);
+});
+
+
+test('the unified board retains first-edition Last Light stars and accepts revised runs',async t=>{
+  const f=fixture(t);
+  f.sqlite.prepare('INSERT INTO scores(id,role,ruleset,name,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('old-light',6,RULESET,'Old Light',2000,2000,4,0,0,0,START);
+  const run=await f.start(6);
+  const posted=await f.post(run,{shipped:6,score:2500},{now:START+220000});
+  assert.equal(posted.status,200);
+  assert.equal(f.sqlite.prepare('SELECT ruleset FROM scores WHERE id=?').get(run.id).ruleset,shiftRuleset(6));
+  const {entries}=await (await f.send('/api/leaderboard')).json();
+  assert.equal(entries.find(row=>row.name==='Old Light').shiftName,'Last Light (first edition)');
+  assert.equal(entries.find(row=>row.name==='Old Light').stars,1);
+  assert.equal(entries.find(row=>row.score===2500).stars,1);
+  assert.equal((await f.send('/api/runs',{method:'POST',data:{role:6,ruleset:RULESET}})).status,400);
 });

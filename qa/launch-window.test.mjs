@@ -1,3 +1,4 @@
+import {versionLevelRecords} from '../dist/records.js';
 // Launch Window is the sixth level. These checks cover its catalog entry, the
 // kit and assembly-cell rules, the hangar map, save/score compatibility, the
 // layered score, the standalone bundle, and reproducible balance bounds.
@@ -357,7 +358,7 @@ test('Launch Window opens with the rest once First Shift has been played', async
   const migration = main.slice(main.indexOf('const SAVE_KEY='), main.indexOf('const STATION_LAYOUT='));
   const load = save => {
     const data = new Map([['chip-rush-roles-v8', JSON.stringify(save)]]);
-    const context = vm.createContext({ SHIFTS, nextShiftIndex, RUN_LENGTHS:[0,3,5,7], localStorage:{ getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v) } });
+    const context = vm.createContext({versionLevelRecords, SHIFTS, nextShiftIndex, RUN_LENGTHS:[0,3,5,7], localStorage:{ getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v) } });
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,bests,grades};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };
@@ -386,7 +387,7 @@ test('the countdown score is three looped stems of one length, layered by the co
     createBufferSource(){ const n={ ...node(), start(...args){ this.started=args; }, stop(){ this.stopped=true; } }; sources.push(n); return n; }
     createOscillator(){ return { ...node(), frequency:param(), start(){}, stop(){} }; }
   }
-  const context = vm.createContext({ window:{ AudioContext:Context }, AbortSignal, fetch:async url => { urls.push(url); return { ok:true, arrayBuffer:async () => new ArrayBuffer(0) }; } });
+  const context = vm.createContext({versionLevelRecords, window:{ AudioContext:Context }, AbortSignal, fetch:async url => { urls.push(url); return { ok:true, arrayBuffer:async () => new ArrayBuffer(0) }; } });
   vm.runInContext(code, context);
   const audio = new context.ShopAudio();
   audio.init(); audio.setTrack('launch'); audio.update(true);

@@ -23,7 +23,7 @@ assisted with (1) retirement/compatibility and legal movement/balance evidence,
 independent engine unit cases, delegated by the QA agent. Those are material
 contributions, not exclusive unaided authorship. No other model was used.
 
-## Creative direction
+## First edition: creative direction
 
 After the launch, look back toward the people who are still waiting to get
 home. A little machine shop can build a rocket's hardware; it can also make
@@ -59,7 +59,7 @@ for the implemented timings and rules.
    and skippable ending. Browser review caught a startup initialization-order
    bug and an inverted lighthouse roof; both were corrected before acceptance.
 
-## Evidence and limitations
+## First edition: evidence and limitations
 
 The full suite passes 387 tests. Eighteen engine cases cover normal shipping
 versus arrival, carried-part preservation, pause, expiration, three-slot
@@ -104,7 +104,79 @@ unverified. The standalone (including browser startup) and hosted builds, Worker
 balance assertion and whitespace checks passed. Harbor audio has numerical
 headroom/seam/transition checks; a listening judgment remains for the creator.
 
-Creator feedback on Last Light itself is pending. No human success-rate or
+The creator subsequently played this edition; see the revision below. No human success-rate or
 listening claim is made. No public score, production migration, deployment or
 merge was performed for this submission. PR #31 still includes migration 0003
 for shared clear/end timing; this level needs no further schema change.
+
+
+## Second edition: crossing windows
+
+The creator's first playthrough found the camera too distant, flickering boats
+with little payoff, an initially unclear lighthouse objective, and an extremely
+easy run. The calm music was noticed. The creator supplied no prescribed fix,
+but gave Sol another chance to reconsider its contribution. This revision was
+made by the primary GPT-6.1 Sol agent without additional subagents.
+
+The shop now fills the play camera. Offshore objects cannot expand its frame,
+and the ending keeps its scale. Boat hulls and decks have separated surfaces;
+boat meshes no longer receive the self-shadows that can shimmer on their small
+facets. Each installed part sends a fishing boat along the quay during play.
+The lighthouse begins glowing with the first delivery; six large progress
+lamps inside the shop make its objective visible where the player works.
+
+Dispatch now has safe crossing windows: 12 seconds open in every 36, starting
+at 0:20. The tender still takes 12 seconds each way and carries up to three.
+Up to twelve orders arrive, with a 10-second first gap, then 12-second intervals,
+65-second deadlines and a 220-second clock. Six parts clear; nine and twelve
+are mastery targets. The intended tension is preparing a batch before the
+window closes while keeping the floor moving. The original harbor music stays.
+
+The legal collision-aware balance driver produced these reproducible results;
+these are scripted routes, not human difficulty measurements:
+
+| Strategy | Installed | Missed / unfinished | Clear | Finish |
+| --- | ---: | ---: | ---: | ---: |
+| Serial single sends, 1.5s reactions | 4 | 6 / 2 | failed | 3:40.00 |
+| Walking overlap, 0.5s reactions, batches of two | 11 | 0 / 0 | 2:23.63 | 3:32.08 |
+| Expert dash, 0.1s reactions, batches of two | 12 | 0 / 0 | 1:44.00 | 3:32.06 |
+| Expert dash, 0.1s reactions, batches of three | 12 | 0 / 0 | 2:23.10 | 3:32.16 |
+| Walking overlap with Covari | 11 + optic | 0 / 0 | 2:22.30 | 3:32.10 |
+
+All five finished snapshots pass the hosted result validator. The optional
+optic remains exactly 300 points without star credit. Normal overlap produced
+eleven eligible arrivals; expert scheduling allowed the full twelve. The
+late-arrival check now budgets both machining and the next crossing window.
+
+The edition is `last-light-v2-crossings`. New scores, challenges and clear-time
+records use that edition. Old point/star records are archived in the existing
+local save, old clear times remain stored, and old public rows keep their old
+star thresholds with a first-edition label. Database schema is unchanged by
+this revision; PR #31 still requires its additive timing migration before deploy.
+
+Human acceptance of this revision is pending. No production migration,
+deployment, public score or merge was performed.
+
+
+Second-edition integration evidence: an accelerated rendered browser run used
+normal station clicks, actual movement, machining and dispatch, with no forged
+parts or scores. It delivered eleven parts with zero misses, scored 4,258,
+cleared at 2:20.7 and finished at 3:32.1. The earned close-view ending, results,
+optional leaderboard skip and persisted edition-specific speed record were
+observed. Test records were removed selectively afterward, preserving the
+existing First Shift record and saved business. The transient controller was
+removed by reloading. Both 1280×720 and 860×540 layouts were inspected; a compact
+crossing strip avoids the lathe controls in the smaller window. Full mobile
+play and a new human playthrough remain unverified.
+
+![Second-edition close workshop after earned deliveries](last-light/04-crossings.jpg)
+
+![Second-edition earned ending without zooming out](last-light/05-close-finale.jpg)
+
+![Second-edition points and independent clear time](last-light/06-crossing-result.jpg)
+
+All 396 automated cases pass, including window boundaries, safe arrivals,
+first-edition record preservation, new-edition posting, real boat geometry and
+fleet movement. Both balance assertions, standalone and hosted builds, Worker
+dry run and whitespace checks passed. This verifies implementation and
+scripted playability; the creator judges the experience.

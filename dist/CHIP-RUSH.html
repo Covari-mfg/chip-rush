@@ -590,6 +590,10 @@ body:not(.playing):not(.paused) .overlay:not(.centered){background:linear-gradie
 @media(max-width:759px){.tender-panel{left:16px;bottom:90px;padding:9px 12px;gap:15px}.tender-panel strong{font-size:11px}.tender-panel small{font-size:9px}.tender-panel button{font-size:10px;padding:8px}.beacon-ending{bottom:4%;padding:16px 25px}.beacon-ending h2{font-size:32px}}
 @media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:150px;bottom:auto;left:18px}}
 :where(html[data-interface="mobile"]) .tender-panel{top:64px;right:16px;bottom:auto;left:auto;gap:12px;max-width:calc(100% - 220px);padding:9px 12px}
+
+.tender-panel.channel-open{border-color:#9ff0cb;box-shadow:0 0 20px #9ff0cb25}.tender-panel.channel-open strong{color:#b7f4d8}
+
+@media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:139px;padding:6px 10px;gap:12px}:where(html[data-interface="desktop"]) .tender-panel strong{font-size:10px;line-height:12px}:where(html[data-interface="desktop"]) .tender-panel small{font-size:9px;line-height:11px;margin-top:2px}:where(html[data-interface="desktop"]) .tender-panel button{font-size:10px;padding:6px 9px}}
 </style>
   <style>/* The same game link uses this layout only on the mobile interface. */
 :where(html[data-interface="mobile"]) {
@@ -2917,11 +2921,13 @@ function sign(g,text,w,h,x,y,z,color='#f2d6a0',bg='#1d4550'){
 function lantern(g,x,y,z){cyl(g,.12,.15,.07,x,y-.16,z,C.ink,12);mesh(g,new THREE.CylinderGeometry(.105,.105,.25,12),C.gold,x,y,z,glow(C.gold));cyl(g,0,.18,.12,x,y+.19,z,C.ink,12);}
 function boat(color=0xdfaa6e,small=false){
   const g=new THREE.Group(),hull=new THREE.Shape();hull.moveTo(0,-1.2);hull.quadraticCurveTo(.68,-.75,.56,.8);hull.quadraticCurveTo(0,1.12,-.56,.8);hull.quadraticCurveTo(-.68,-.75,0,-1.2);
-  const geo=new THREE.ExtrudeGeometry(hull,{depth:.36,bevelEnabled:true,bevelSize:.09,bevelThickness:.06,bevelSegments:1,steps:1,curveSegments:8});geo.rotateX(-Math.PI/2);
-  mesh(g,geo,color,0,0,0);box(g,.88,.08,1.6,0,.38,.05,C.wood);box(g,.7,.54,.58,0,.68,.35,C.cream);box(g,.76,.08,.65,0,.99,.35,C.teal);box(g,.43,.21,.015,0,.77,.047,C.navy);cyl(g,.025,.025,.9,-.35,.95,.35,C.ink,8);lantern(g,-.35,1.31,.35);ring(g,.15,.045,.45,.48,.3,C.cream);
+  const geo=new THREE.ExtrudeGeometry(hull,{depth:.29,bevelEnabled:true,bevelSize:.07,bevelThickness:.035,bevelSegments:1,steps:1,curveSegments:8});geo.rotateX(-Math.PI/2);
+  const hullMesh=mesh(g,geo,color,0,0,0);hullMesh.name='boat-hull';const deck=box(g,.88,.1,1.6,0,.43,.05,C.wood);deck.name='boat-deck';box(g,.7,.54,.58,0,.75,.35,C.cream);box(g,.76,.08,.65,0,1.06,.35,C.teal);box(g,.43,.21,.015,0,.84,.047,C.navy);cyl(g,.025,.025,.9,-.35,.95,.35,C.ink,8);lantern(g,-.35,1.31,.35);ring(g,.15,.045,.45,.48,.3,C.cream);
   const cargo=new THREE.Group();cargo.position.set(0,.48,-.45);g.add(cargo);g.userData.cargo=cargo;
   for(let i=0;i<3;i++){const crate=box(cargo,.28,.24,.28,(i-1)*.29,0,0,C.gold);crate.visible=false;}
-  if(small)g.scale.setScalar(.75);return g;
+  line(g,[[-.52,-.16,1.1],[-.24,-.16,1.65],[0,-.16,1.9],[.24,-.16,1.65],[.52,-.16,1.1]],0xc7e2de,.5);
+  g.traverse(node=>{if(node.isMesh)node.receiveShadow=false;});
+  if(small)g.scale.setScalar(.8);return g;
 }
 
 function createHarbor(){
@@ -2940,7 +2946,8 @@ function createHarbor(){
   for(const x of [-8.9,-5.5,-2,1.4,4.8]){cyl(shell,.09,.12,1,x,.5,4.85,C.teal,12);cyl(shell,.13,.13,.08,x,1.02,4.85,C.gold,12);}
   line(shell,[[-8.9,.83,4.85],[-5.5,.68,4.85],[-2,.83,4.85],[1.4,.68,4.85],[4.8,.83,4.85]],C.cream,.9);
   sign(shell,'HARBOR WORKS',4.7,.58,-3.2,2.3,-6.43);
-  sign(shell,'LAST LIGHT',2.6,.4,5.2,2.3,-6.43,'#ffda8a');
+  sign(shell,'LIGHTHOUSE · 6 PARTS',4.2,.45,4.4,2.3,-6.43,'#ffda8a');
+  const progressLamps=[];for(let i=0;i<6;i++){const lamp=mesh(shell,new THREE.SphereGeometry(.11,12,8),C.gold,2.85+i*.6,1.8,-6.38,glow(0x37545b));progressLamps.push(lamp);}
   // Catenary lamps, copper pipework, reels, float rings and dock furniture.
   const cable=[];for(let i=0;i<=30;i++){const x=-9.5+i*.6,y=3.6-.65*Math.sin(i/30*Math.PI);cable.push([x,y,-3.9]);if(i%3===1)lantern(shell,x,y-.19,-3.9);}line(shell,cable,C.ink,1);
   for(const x of [-8.8,7.4]){const hoop=ring(shell,.36,.09,x,1.32,-6.38,C.rust);hoop.rotation.x=0;for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5]){const band=box(hoop,.14,.1,.19,Math.sin(a)*.36,Math.cos(a)*.36,0,C.cream);band.rotation.z=-a;}}
@@ -2954,7 +2961,7 @@ function createHarbor(){
   const glints=new THREE.Group();g.add(glints);
   for(let i=0;i<115;i++){const x=Math.sin(i*127.1)*27+6,z=Math.cos(i*73.7)*21-6;const m=box(glints,.18+(i%8)*.18,.008,.025,x,-.55,z,i%4?0x60acaa:C.gold);m.castShadow=m.receiveShadow=false;}
   // A lighthouse on a basalt island, just across from the shop.
-  const island=new THREE.Group();island.position.set(13,-.3,-7.8);g.add(island);
+  const island=new THREE.Group();island.position.set(11,-.3,-6.2);island.scale.setScalar(.76);g.add(island);
   for(let i=0;i<11;i++){const a=i*2.4,r=1.4+(i%3)*.5;const rock=mesh(island,new THREE.DodecahedronGeometry(.8+(i%4)*.2,0),i%2?0x426573:0x355362,Math.cos(a)*r,-.1,Math.sin(a)*r);rock.scale.y=.6;}
   cyl(island,2.1,2.8,.4,0,.1,0,0x809894,32);cyl(island,1.48,1.65,.25,0,.45,0,C.cream,32);
   cyl(island,.77,1.14,5.5,0,3.25,0,C.cream,32);cyl(island,1.073,1.12,.68,0,1.5,0,C.rust,32);cyl(island,.95,1.00,.68,0,3.6,0,C.rust,32);
@@ -2965,8 +2972,8 @@ function createHarbor(){
   for(let i=0;i<8;i++){const a=i*Math.PI/4;cyl(island,.035,.035,1.25,Math.cos(a)*.79,6.72,Math.sin(a)*.79,C.ink,8);}
   cyl(island,0,1.06,.9,0,7.77,0,C.teal,16);cyl(island,.05,.05,.8,0,8.48,0,C.gold,8);
   const lens=new THREE.Group();lens.position.y=6.7;island.add(lens);
-  const panels=[];for(let i=0;i<8;i++){const a=i*Math.PI/4,material=glow(0xffdb94,.55),m=mesh(lens,new THREE.BoxGeometry(.39,.74,.04),C.gold,Math.sin(a)*.7,0,Math.cos(a)*.7,material);m.rotation.y=a;m.visible=false;panels.push(m);}
-  const ribs=[];for(let i=0;i<8;i++){const a=i*Math.PI/4,m=mesh(lens,new THREE.TorusGeometry(.49,.045,6,24,Math.PI),C.gold,Math.cos(a)*.08,0,Math.sin(a)*.08);m.rotation.y=a;m.rotation.z=Math.PI/2;m.visible=false;ribs.push(m);}
+  const panels=[];for(let i=0;i<12;i++){const a=i*Math.PI/6,material=glow(0xffdb94,.55),m=mesh(lens,new THREE.BoxGeometry(.39,.74,.04),C.gold,Math.sin(a)*.7,0,Math.cos(a)*.7,material);m.rotation.y=a;m.visible=false;panels.push(m);}
+  const ribs=[];for(let i=0;i<12;i++){const a=i*Math.PI/6,m=mesh(lens,new THREE.TorusGeometry(.49,.045,6,24,Math.PI),C.gold,Math.cos(a)*.08,0,Math.sin(a)*.08);m.rotation.y=a;m.rotation.z=Math.PI/2;m.visible=false;ribs.push(m);}
   const lamp=mesh(lens,new THREE.SphereGeometry(.29,16,12),C.gold,0,0,0,glow(0xffe4ab));lamp.visible=false;
   const beamRoot=new THREE.Group();beamRoot.position.y=6.7;island.add(beamRoot);
   const beamMaterial=new THREE.MeshBasicMaterial({color:0xffdca0,transparent:true,opacity:.055,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
@@ -2974,26 +2981,36 @@ function createHarbor(){
   const beaconLight=new THREE.PointLight(0xffd89a,0,15,2);beaconLight.position.set(0,6.7,0);island.add(beaconLight);
   const workLight=new THREE.PointLight(0xffd1a0,7,17,2);workLight.position.set(-2,4,-2.7);g.add(workLight);
   const halo=mesh(lens,new THREE.SphereGeometry(.58,16,12),C.gold,0,0,0,glow(C.gold,.14));halo.visible=false;
-  const docked={x:9.5,z:1.15},destination={x:12,z:-5.9};
+  const docked={x:9.5,z:1.15},destination={x:10.3,z:-4.3};
   const tender=boat();tender.position.set(docked.x,-.38,docked.z);tender.rotation.y=Math.PI/2;g.add(tender);
   const quayCargo=new THREE.Group();g.add(quayCargo);for(let i=0;i<3;i++)box(quayCargo,.48,.48,.5,7.9,.34,1.1+(i-1)*.64,i%2?C.teal:C.gold);
-  // Bobbing harbor boats wait for a safe light, then stream home in the finale.
-  const fleet=[];for(let i=0;i<5;i++){const b=boat([0xc17b59,0x5a9991,0xd2b76f,0x628aab,0xc5c7af][i],true);b.position.set(-10+i*5.1,-.42,-12.7-(i%2)*3);b.rotation.y=1.0;g.add(b);fleet.push({mesh:b,x:b.position.x,z:b.position.z});}
+  // Each installed part guides a fishing boat past the working quay.
+  const fleet=[];for(let i=0;i<12;i++){const b=boat([0xc17b59,0x5a9991,0xd2b76f,0x628aab,0xc5c7af][i%5],true);b.position.set(-12+(i%5)*4.5,-.38,-11.5-Math.floor(i/5)*3);b.rotation.y=1.0;g.add(b);fleet.push({mesh:b,x:b.position.x,z:b.position.z});}
   // Distant headlands and the last copper sliver of sun.
   for(let i=0;i<13;i++){const rock=mesh(g,new THREE.ConeGeometry(2.9+(i%4),1.9+(i%3),5),0x315467,-27+i*4.6,-.7,-24-(i%3));rock.rotation.y=i;rock.castShadow=false;}
   const sun=mesh(g,new THREE.SphereGeometry(1.8,24,16),0xffc78a,-12,2.7,-25,glow(0xf0ba83));sun.scale.z=.15;
   const gulls=[];for(let i=0;i<5;i++){const b=new THREE.Group();const wings=[line(b,[[-.28,0,0],[0,.08,0],[.28,0,0]],0xe7e4cd,.8)];b.position.set(-8+i*4,5+i*.2,-9-i);g.add(b);gulls.push(b);}
   g.userData.framePoints=[new THREE.Vector3(-10,0,5),new THREE.Vector3(16,0,4),new THREE.Vector3(14,8.7,-10),new THREE.Vector3(-10,3.7,-7)];
   g.userData.tender=tender;g.userData.lens=lens;g.userData.ribs=ribs;g.userData.fleet=fleet;
+  const buoys=[];for(const z of [-.7,2.5]){const buoy=new THREE.Group();buoy.position.set(9.2,-.42,z);cyl(buoy,.19,.27,.3,0,.15,0,C.ink,12);const light=mesh(buoy,new THREE.SphereGeometry(.12,10,8),C.gold,0,.55,0,glow(0xefa16d));g.add(buoy);buoys.push(light);}
   g.userData.update=(game,dt,time,finale=0)=>{
-    const installed=game?.shipped??0,lit=installed>=(game?.config?.passTarget??4);
-    ribs.forEach((m,i)=>m.visible=i<installed);panels.forEach((m,i)=>m.visible=i<installed);beaconLight.intensity=lit?8:0;beamMaterial.opacity=.03+installed*.005;sea.material.color.set(0x276e7d).lerp(duskSea,Math.min(1,(game?.elapsed??0)/240));lamp.visible=halo.visible=beamRoot.visible=lit;beamRoot.rotation.y=time*.3;lens.rotation.y=time*.08;
+    const installed=game?.shipped??0,lit=installed>=(game?.config?.passTarget??6);
+    ribs.forEach((m,i)=>m.visible=i<installed);panels.forEach((m,i)=>m.visible=i<installed);progressLamps.forEach((lamp,i)=>lamp.material.color.set(i<installed?0xffd789:0x37545b));beaconLight.intensity=installed?2+installed:0;beamMaterial.opacity=.03+installed*.005;sea.material.color.set(0x276e7d).lerp(duskSea,Math.min(1,(game?.elapsed??0)/(game?.config?.duration??220)));lamp.visible=halo.visible=beamRoot.visible=installed>0;beamRoot.rotation.y=lit?time*.3:-1.2;buoys.forEach(light=>light.material.color.set(game?.window?.open?0x9ff0cb:0xeb936b));lens.rotation.y=time*.08;
     for(let i=0;i<positions.count;i++){const x=baseline[i*3],z=baseline[i*3+2];positions.setY(i,Math.sin(x*.5+time*.55)*.09+Math.sin(z*.65-time*.42)*.055);}positions.needsUpdate=true;
     glints.children.forEach((m,i)=>{m.scale.x=.7+Math.sin(time*.7+i)*.4;m.visible=Math.sin(i+time*.35)>-.45;});
     const state=game?.tender??{phase:'docked',remaining:0,cargo:[]},f=state.phase==='outbound'?1-state.remaining/12:state.phase==='returning'?state.remaining/12:0;
-    const bend=Math.sin(f*Math.PI)*1.5;tender.position.set(THREE.MathUtils.lerp(docked.x,destination.x,f)+bend,-.37+Math.sin(time*2.1)*.035,THREE.MathUtils.lerp(docked.z,destination.z,f));tender.rotation.y=state.phase==='returning'?-2.8:.36;tender.rotation.z=Math.sin(time*1.4)*.025;
+    const bend=Math.sin(f*Math.PI)*1.5;tender.position.set(THREE.MathUtils.lerp(docked.x,destination.x,f)+bend,-.37+Math.sin(time*2.1)*.035,THREE.MathUtils.lerp(docked.z,destination.z,f));const direction=state.phase==='returning'?-1:1;tender.rotation.y=Math.atan2(-(destination.x-docked.x+Math.cos(f*Math.PI)*Math.PI*1.5)*direction,-(destination.z-docked.z)*direction);tender.rotation.z=Math.sin(time*1.4)*.025;
     tender.userData.cargo.children.forEach((m,i)=>m.visible=i<state.cargo.length);quayCargo.children.forEach((m,i)=>m.visible=i<(game?.quay?.length??0));
-    for(const [i,b] of fleet.entries()){b.mesh.position.set(b.x+(lit?Math.max(0,finale)*1.15:Math.sin(time*.04+i)*.35),-.42+Math.sin(time*1.7+i)*.045,b.z+(lit?Math.max(0,finale)*.48:0));b.mesh.rotation.z=Math.sin(time+i)*.025;}
+    for(const [i,b] of fleet.entries()){
+      const arrival=game?.installed?.[i]?.arrived,age=arrival===undefined?0:Math.max(0,(game.elapsed-arrival)+finale),lane=9.1+(i%3)*.5;
+      let x=b.x+Math.sin(time*.04+i)*.18,z=b.z,dx=0,dz=0;
+      if(arrival!==undefined){
+        if(age<10){const t=age/10;x=THREE.MathUtils.lerp(b.x,lane,t);z=THREE.MathUtils.lerp(b.z,-7,t);dx=lane-b.x;dz=-7-b.z;}
+        else if(age<28){x=lane;z=-7+(age-10)/18*13;dz=1;}
+        else{x=lane-(age-28)*1.25;z=6+(age-28)*.14;dx=-1.25;dz=.14;}
+      }
+      b.mesh.visible=age<54;b.mesh.position.set(x,-.38+Math.sin(time*1.7+i)*.03,z);if(dx||dz)b.mesh.rotation.y=Math.atan2(-dx,-dz);b.mesh.rotation.z=Math.sin(time+i)*.018;
+    }
     gulls.forEach((b,i)=>{b.position.x=-8+i*4+Math.sin(time*.07+i)*2;b.position.y=5+i*.2+Math.sin(time*.8+i)*.15;});
   };
   return g;
@@ -3145,22 +3162,23 @@ const SHIFTS = [
     terminalCount:10,
   },
   {
-    id:'last-light',mapId:'harbor-pier',engine:'beacon',name:'Last Light',author:'GPT-6.1 Sol',harness:'Codex',musicTrack:'harbor',
+    id:'last-light',mapId:'harbor-pier',engine:'beacon',ruleset:'last-light-v2-crossings',recordId:'last-light-v2-crossings',name:'Last Light',author:'GPT-6.1 Sol',harness:'Codex',musicTrack:'harbor',
     subtitle:'Make a light. Bring them home.',
-    goal:'Deliver 4 parts to relight the lighthouse.',
-    brief:'The rocket is gone. Down at the harbor, fishing boats are waiting for a light that no longer turns. Your shop has moved onto the pier. Machine and inspect lantern parts, load up to three onto the quay, then use the empty-handed quay again to send the tender. Parts count when they reach the lighthouse. Each crossing takes 12 seconds; the boat takes another 12 to return. Keep making parts while it sails.',
-    tip:'Send one part for a quick delivery, or hold for a fuller boat. Deadlines keep running on the quay and stop aboard. Covari can supply optical glass that this workshop cannot make.',
-    retryTip:'Keep both machines working while the tender is away. Leave 12 seconds for the last crossing.',
-    duration:240,firstArrival:20,interval:23,deadline:120,maxOrders:8,
-    recipes:[0,1,2,1,0,2,1,2],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
+    goal:'Deliver 6 lantern parts. Bring the boats home.',
+    brief:'The lighthouse is broken and the fleet is coming home. Machine and inspect lantern parts, load up to three onto the quay, then use it empty-handed to sail. Swell leaves a safe crossing window for 12 seconds in every 36. Each trip takes 12 seconds out and 12 back. Parts only count on arrival. Six restore the light; every delivery brings another boat in.',
+    tip:'Watch the crossing window. A fuller tender saves trips, but parts waiting on the quay can expire. Keep cutting while it sails.',
+    retryTip:'Batch your deliveries. Prepare the next load while the tender is at sea.',
+    duration:220,firstArrival:10,interval:12,deadline:65,maxOrders:12,
+    recipes:[0,1,2,1,2,0,0,1,2,1,2,0],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:[{name:'Ground Fresnel optic',capability:'Precision optical grinding',technology:'optics',gap:'No optical grinding equipment on the pier'}],
-    calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
+    calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
   },
 ];
 
 // Retired slots remain in the catalog for historical saves and scores. Entry
 // points use these helpers; UI order never becomes a new numeric identity.
 const isPlayableShift = index => Number.isInteger(index)&&index>=0&&!!SHIFTS[index]&&!SHIFTS[index].retired;
+const shiftRuleset = index => SHIFTS[index]?.ruleset ?? RULESET;
 const nextShiftIndex = index => SHIFTS.findIndex((shift,i)=>i>index&&!shift.retired);
 
 const PROGRAM_DURATION = 6;
@@ -3774,7 +3792,7 @@ class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,clearElapsed:this.clearElapsed,finishReason:this.finishReason,score:this.score,ruleset:RULESET,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,clearElapsed:this.clearElapsed,finishReason:this.finishReason,score:this.score,ruleset:this.config.ruleset??RULESET,
       sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing,route:[...this.sourcing.route]}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),
@@ -3790,7 +3808,7 @@ class ShopGame {
   }
 }
 
-return {RULESET,scoreShipment,OPS,RECIPES,STOCK_TYPES,stockType,SOURCE_JOBS,FINISHING_SOURCE_JOBS,PRECISION_SOURCE_JOBS,LAUNCH_SOURCE_JOBS,SHIFTS,isPlayableShift,nextShiftIndex,PROGRAM_DURATION,ShopGame};})();
+return {RULESET,scoreShipment,OPS,RECIPES,STOCK_TYPES,stockType,SOURCE_JOBS,FINISHING_SOURCE_JOBS,PRECISION_SOURCE_JOBS,LAUNCH_SOURCE_JOBS,SHIFTS,isPlayableShift,shiftRuleset,nextShiftIndex,PROGRAM_DURATION,ShopGame};})();
 const Manager=(()=>{const {ShopGame,OPS,stockType}=Core;
 
 // Open for Business: the shop-manager mode. Days instead of a single shift,
@@ -5195,6 +5213,14 @@ const Beacon=(()=>{const {ShopGame,SHIFTS}=Core;
 const BEACON_LEVEL = SHIFTS.findIndex(level => level.engine === 'beacon');
 const TENDER_CAPACITY = 3;
 const CROSSING_SECONDS = 12;
+const CHANNEL_PERIOD = 36;
+const WINDOW_START = 20;
+const WINDOW_SECONDS = 12;
+function crossingWindow(elapsed) {
+  const phase=((elapsed%CHANNEL_PERIOD)+CHANNEL_PERIOD)%CHANNEL_PERIOD;
+  const open=phase>=WINDOW_START-1e-8&&phase<WINDOW_START+WINDOW_SECONDS-1e-8;
+  return {open,remaining:open?WINDOW_START+WINDOW_SECONDS-phase:phase<WINDOW_START?WINDOW_START-phase:CHANNEL_PERIOD+WINDOW_START-phase};
+}
 const BEACON_RECIPES = [
   {name:'Lantern spindle',kind:'shaft',route:['lathe','inspect'],value:160,color:0xf2c77b},
   {name:'Fresnel carrier',kind:'plate',route:['mill','inspect'],value:185,color:0x85dfd2},
@@ -5213,8 +5239,10 @@ class BeaconGame extends ShopGame {
   }
 
   requiredTime(recipe, includeWait = false) {
-    return super.requiredTime(recipe, includeWait) + CROSSING_SECONDS +
-      (includeWait && this.tender.phase !== 'docked' ? this.tender.remaining + (this.tender.phase === 'outbound' ? CROSSING_SECONDS : 0) : 0);
+    const work=super.requiredTime(recipe,includeWait);
+    const boatWait=includeWait&&this.tender.phase!=='docked'?this.tender.remaining+(this.tender.phase==='outbound'?CROSSING_SECONDS:0):0;
+    const ready=Math.max(work,boatWait),window=crossingWindow(this.elapsed+ready);
+    return ready+(window.open?0:window.remaining)+CROSSING_SECONDS;
   }
 
   spawnRecipe(timeRemaining) {
@@ -5242,6 +5270,8 @@ class BeaconGame extends ShopGame {
     if (this.mode !== 'playing') return false;
     if (this.tender.phase !== 'docked') return this.fail(`Tender returns in ${Math.ceil(this.tender.remaining+(this.tender.phase==='outbound'?CROSSING_SECONDS:0))}s. Keep machining.`);
     if (!this.quay.length) return this.fail('Load a finished part here, then use the quay again to send it.');
+    const window=crossingWindow(this.elapsed);
+    if (!window.open) return this.fail(`Swell across the channel. Next crossing window in ${Math.ceil(window.remaining)}s.`);
     if (this.time < CROSSING_SECONDS) return this.fail('Too late for another crossing. The tender needs 12 seconds.');
     this.tender.phase = 'outbound';
     this.tender.remaining = CROSSING_SECONDS;
@@ -5260,7 +5290,7 @@ class BeaconGame extends ShopGame {
       this.hand = {orderId:id};
       // Reuse the same scoring, sourcing, split-clock and event commands as
       // the shop. A cargo part's early-shipping bonus locks at departure.
-      if (super.interact('ship') && id !== 201) this.installed.push({id,color:order.color,name:order.name});
+      if (super.interact('ship') && id !== 201) this.installed.push({id,color:order.color,name:order.name,arrived:this.elapsed});
     }
     this.hand = held;
     this.tender.cargo = [];
@@ -5301,10 +5331,10 @@ class BeaconGame extends ShopGame {
   }
   canFinishEarly() { return this.tender.phase!=='outbound' && super.canFinishEarly(); }
   expire(id) { this.quay=this.quay.filter(value=>value!==id);super.expire(id); }
-  snapshot() { return {...super.snapshot(),quay:[...this.quay],tender:{...this.tender,cargo:[...this.tender.cargo]},installed:this.installed.map(part=>({...part}))}; }
+  snapshot() { return {...super.snapshot(),quay:[...this.quay],tender:{...this.tender,cargo:[...this.tender.cargo]},window:crossingWindow(this.elapsed),installed:this.installed.map(part=>({...part}))}; }
 }
 
-return {BEACON_LEVEL,TENDER_CAPACITY,CROSSING_SECONDS,BEACON_RECIPES,BeaconGame};})();
+return {BEACON_LEVEL,TENDER_CAPACITY,CROSSING_SECONDS,CHANNEL_PERIOD,WINDOW_START,WINDOW_SECONDS,crossingWindow,BEACON_RECIPES,BeaconGame};})();
 const Launch=(()=>{const {ShopGame,SHIFTS,OPS,stockType}=Core;
 const {BeaconGame}=Beacon;
 
@@ -5824,19 +5854,37 @@ function runTime(seconds) {
 function readSpeedRecords(storage, shifts) {
   try {
     const saved = JSON.parse(storage.getItem('chip-rush-speed-v1') || '{}');
-    return Object.fromEntries(shifts.filter(s => Number.isFinite(saved?.[s.id]) && saved[s.id] > 0 && saved[s.id] <= s.duration + .1).map(s => [s.id,saved[s.id]]));
+    return Object.fromEntries(shifts.filter(s => Number.isFinite(saved?.[s.recordId??s.id]) && saved[s.recordId??s.id] > 0 && saved[s.recordId??s.id] <= s.duration + .1).map(s => [s.recordId??s.id,saved[s.recordId??s.id]]));
   } catch { return {}; }
 }
 function recordClear(records, game) {
-  const time = game.clearElapsed, id = game.config.id;
+  const time = game.clearElapsed, id = game.config.recordId??game.config.id;
   if (!Number.isFinite(time) || time <= 0 || !game.passed()) return false;
   if (Number.isFinite(records[id]) && records[id] <= time) return false;
   records[id] = time;
   return true;
 }
 
-return {runTime,readSpeedRecords,recordClear};})();
-const Social=(()=>{const {RULESET,SHIFTS,isPlayableShift}=Core;
+// A changed level gets fresh records; the first edition stays in the save.
+// Other levels and their numeric slots are untouched.
+function versionLevelRecords(saved, shifts) {
+  if (!saved) return null;
+  const next={...saved,bests:[...(Array.isArray(saved.bests)?saved.bests:[])],grades:[...(Array.isArray(saved.grades)?saved.grades:[])],levelVersions:{...saved.levelVersions},levelArchives:{...saved.levelArchives}};
+  shifts.forEach((shift,index)=>{
+    if(!shift.ruleset||next.levelVersions[shift.id]===shift.ruleset)return;
+    if(next.bests[index]||next.grades[index])next.levelArchives[shift.id+'@'+(next.levelVersions[shift.id]??'first-edition')]={best:next.bests[index]??0,stars:next.grades[index]??0};
+    next.bests[index]=0;next.grades[index]=0;next.levelVersions[shift.id]=shift.ruleset;
+  });
+  return next;
+}
+function saveSpeedRecords(storage, records) {
+  let old={};
+  try {old=JSON.parse(storage.getItem('chip-rush-speed-v1')||'{}');}catch{}
+  try {storage.setItem('chip-rush-speed-v1',JSON.stringify({...old,...records}));}catch{}
+}
+
+return {runTime,readSpeedRecords,recordClear,versionLevelRecords,saveSpeedRecords};})();
+const Social=(()=>{const {RULESET,SHIFTS,isPlayableShift,shiftRuleset}=Core;
 const {createGameAnalytics}=Analytics;
 const {runTime}=Records;
 
@@ -5855,14 +5903,14 @@ function parseChallenge(search) {
   const values=['role','score','shipped'].map(k=>/^\d{1,5}$/.test(p.get(k)||'')?Number(p.get(k)):NaN);
   const [role,score,shipped]=values;
   // Keep legacy numeric role indices stable when appending campaign shifts.
-  if(p.get('rules')!==RULESET)return null;
+  if(p.get('rules')!==shiftRuleset(role))return null;
   if(!isPlayableShift(role)||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+(SHIFTS[role].sourcing&&shipped>=2?300:0)+(SHIFTS[role].calls?SHIFTS[role].callTimes.length*25:0))return null;
   return Object.freeze({role,score,shipped,stars:SHIFTS[role].stars.filter(n=>shipped>=n).length});
 }
 function challengeURL(result,base) {
   if(!isPlayableShift(result.role))throw new RangeError('This shift is retired or unavailable.');
   const url=new URL(base);url.search='';url.hash='';
-  for(const [key,value] of Object.entries({challenge:1,rules:RULESET,role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
+  for(const [key,value] of Object.entries({challenge:1,rules:shiftRuleset(result.role),role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
   return url.href;
 }
 function createSocial({onChallenge,analytics=createGameAnalytics()}) {
@@ -6000,7 +6048,7 @@ function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role,ruleset=RULESET){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role,ruleset=shiftRuleset(role)){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
     // A saved manager run picks its board run back up; it was registered when the run began.
     resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;skipped=false;},
     runId:()=>run,
@@ -6130,13 +6178,13 @@ function createTapNavigation({interval = 350, radius = 24} = {}) {
 
 return {createTapNavigation};})();
 const {createWorkshop,createMachine,createCharacter,createPart,createWorker,createAnnex,createHall,createStormRig,createHangar,createLaunchComplex,createAssembly,LAUNCH_SITE}=Models;
-const {ShopGame,SHIFTS,OPS,PROGRAM_DURATION,stockType,isPlayableShift,nextShiftIndex}=Core;
+const {ShopGame,SHIFTS,OPS,shiftRuleset,PROGRAM_DURATION,stockType,isPlayableShift,nextShiftIndex}=Core;
 const {ShopAudio}=Audio;
 const {LaunchGame,launchOp}=Launch;
-const {BeaconGame}=Beacon;
+const {crossingWindow,BeaconGame}=Beacon;
 const {createHarbor}=Harbor;
 const {createSocial}=Social;
-const {runTime,readSpeedRecords,recordClear}=Records;
+const {runTime,readSpeedRecords,recordClear,versionLevelRecords,saveSpeedRecords}=Records;
 const {technologyBadges,technologyIcon}=Technology;
 const {orderWorkflow,stockIcon}=Workflow;
 const {ManagerGame,MANAGER_ROLE,MANAGER_MODE,MACHINES,BAYS,BAY_SIZES,UPGRADES,WING,STAFF,RUN_LENGTHS,DAY_SECONDS,COVARI_SLOTS,QUOTE_WINDOW,AD,START_CASH,RESALE,BIDS,SALES_DELAY,BREAK_FROM,SERVICE_FROM,HALLS,HALL_RENT,hallAdjacent,INSTALL_SECONDS,rentFor,opInfo,boardId,POLICY_STEPS}=Manager;
@@ -6189,13 +6237,15 @@ function unlockForSave(level,bests,stars){return playedFirstShift(bests,stars)?S
 // A new run is always limitless (length 0). A saved 3-, 5-, or 7-day run can still finish.
 let managerRecord={bests:{},days:0,length:0};
 function readManagerRecord(value){if(!value||typeof value!=='object'||Array.isArray(value))value={};const record={bests:{},days:Math.max(0,Math.trunc(Number(value?.days))||0),length:RUN_LENGTHS.includes(value?.length)?value.length:0};for(const length of RUN_LENGTHS){const best=Math.trunc(Number(value?.bests?.[length]));if(best>0)record.bests[length]=best;}return record;}
-const roleSave=readRoleSave(SAVE_KEY);
+const rawRoleSave=readRoleSave(SAVE_KEY),roleSave=versionLevelRecords(rawRoleSave,SHIFTS);
+const levelVersions=roleSave?.levelVersions??Object.fromEntries(SHIFTS.filter(s=>s.ruleset).map(s=>[s.id,s.ruleset])),levelArchives=roleSave?.levelArchives??{};
 if(roleSave){
   unlocked=readUnlocked(roleSave.unlocked);
   bests=bests.map((_,i)=>Math.max(0,Number(roleSave.bests?.[i])||0));
   grades=grades.map((_,i)=>Math.max(0,Math.min(3,Math.trunc(Number(roleSave.grades?.[i]))||0)));
   unlocked=unlockForSave(unlocked,bests,grades);
   managerRecord=readManagerRecord(roleSave.manager);
+  if(JSON.stringify(rawRoleSave.levelVersions)!==JSON.stringify(levelVersions))save();
 }else{
   const previousRoles=['v7','v6','v5','v4','v3','v2'].map(version=>readRoleSave('chip-rush-roles-'+version)).find(Boolean);
   if(previousRoles){
@@ -6313,7 +6363,7 @@ function hallObstacles(mapId){
 }
 activateMap('first-shop');
 
-function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades,manager:managerRecord}));}catch{}}
+function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades,manager:managerRecord,levelVersions,levelArchives}));}catch{}}
 function toast(message,duration=2.6){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+duration*1000;}
 function safeSpot(x,z){return x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ&&!obstacles.some(o=>{if(o.bay&&(typeof game!=='undefined'&&game?.manager)&&!game.stations[o.id])return false;return x>o.minX&&x<o.maxX&&z>o.minZ&&z<o.maxZ;});}
 function movePosition(position,dx,dz){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.12));for(let i=0;i<steps;i++){if(safeSpot(position.x+dx/steps,position.z))position.x+=dx/steps;if(safeSpot(position.x,position.z+dz/steps))position.z+=dz/steps;}}
@@ -6584,7 +6634,7 @@ function measureShopFrame(){
   // A plot for sale peeks in at the edge of the fitted view, but only where it touches floor already open.
   for(const h of HALL_PLOTS)if(!openHalls.has(h.id)&&game.manager&&!menuMode&&game.hallBuyable?.(h.id)&&(h.row===1||HALL_PLOTS.some(o=>openHalls.has(o.id)&&hallAdjacent(o,h))))include(new THREE.Vector3(h.cx,0,h.z0+2));
   if(launchSite?.visible)for(const point of launchSite.userData.framePoints)include(point);
-  if(harbor?.visible)for(const point of harbor.userData.framePoints)include(point);
+  // The player works in the shop. Offshore scenery never widens its play camera.
   for(const shellObject of [...(harbor?.visible?[]:hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
     const shell=new THREE.Box3().setFromObject(shellObject);
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
@@ -6644,7 +6694,7 @@ function updateCamera(dt,instant=false){
   if(playFrame&&!menuMode){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
   if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
-  if(beaconing()&&(beaconEnding||game.mode==='results')){const t=Math.min(1,beaconFinaleTime/4),blend=t*t*(3-2*t);halfHeight=THREE.MathUtils.lerp(halfHeight,8.5,blend);look.lerp(new THREE.Vector3(6,1,-5),blend);}
+  if(beaconing()&&(beaconEnding||game.mode==='results')){const t=Math.min(1,beaconFinaleTime/4),blend=t*t*(3-2*t);look.lerp(new THREE.Vector3(4.5,.5,-3),blend);}
   camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
   camera.position.copy(look).add(cameraOffset);camera.lookAt(look);
   if(shake>0&&!reduced){camera.position.x+=(Math.random()-.5)*shake*.07;camera.position.y+=(Math.random()-.5)*shake*.04;}
@@ -6712,7 +6762,7 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else showResults();}
   if(ev.type==='quayLoaded')floatText(`${ev.count} / 3 ON QUAY`,'ship',true);
   if(ev.type==='tenderDeparted')toast(`Tender away · ${ev.count} part${ev.count===1?'':'s'} · 12s crossing`,2.5);
-  if(ev.type==='beaconLit'&&ev.lit)toast('The light is turning. Keep the boats coming.',3);
+  if(ev.type==='beaconLit'){floatText(`${ev.installed} / ${game.config.passTarget} LANTERN PARTS`,'ship',true);toast(ev.lit?'Beacon restored. The fleet is coming home.':`Lighthouse restored: ${ev.installed} / ${game.config.passTarget}`,2.4);}
   if(ev.type==='load'){const s=stations[ev.station];spawnParticles(s.def.x,1.15,s.def.z,0x7ff0e0,4);}
 }}
 function partSignature(o){return `${o.id}:${o.index}:${o.location}`;}
@@ -6856,7 +6906,7 @@ function updateTickets(force){
   for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=beaconing()&&o.location==='tender'?`${Math.ceil(game.tender.remaining)}s TO LIGHT`:Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=beaconing()&&o.location==='quay'?'ON QUAY · READY TO SAIL':beaconing()&&o.location==='tender'?'ON TENDER · CROSSING':ticketState(o);el.querySelector('.ticket-status').classList.toggle('sr-only',!beaconing()||!['quay','tender'].includes(o.location));el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
 }
 function nextTarget(){if(game.manager)return managerNextTarget();if(onPhone())return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const ready=Object.entries(game.stations).find(([id,s])=>s.ready);if(ready)return ready[0];if(game.nextCAD?.())return 'office';const candidates=['round','plate','block'].map(type=>game.nextMaterial?.(type)).filter(Boolean);const next=candidates.sort((a,b)=>a.remaining-b.remaining)[0];if(next)return `material-${stockType(next)}`;if(beaconing()&&game.quay.length&&game.tender.phase==='docked')return 'ship';const o=game.selected;return o?.location==='material'?`material-${stockType(o)}`:o?.location==='hands'?o.route[o.index]:o?.location||null;}
-function stationAction(id){if(beaconing()&&id==='ship')return game.heldOrder?'Load finished part onto quay':game.tender.phase==='docked'?(game.quay.length?`Send ${game.quay.length} parts to lighthouse`:'Load a finished part, then use again to sail'):`Tender returns in ${Math.ceil(game.tender.remaining+(game.tender.phase==='outbound'?12:0))}s`;if(id==='assemble'&&launching())return cellAction();if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
+function stationAction(id){if(beaconing()&&id==='ship')return game.heldOrder?'Load finished part onto quay':game.tender.phase==='docked'?(game.quay.length?(crossingWindow(game.elapsed).open?`Send ${game.quay.length} parts to lighthouse`:`Swell · crossing opens in ${Math.ceil(crossingWindow(game.elapsed).remaining)}s`):'Load a finished part, then use again to sail'):`Tender returns in ${Math.ceil(game.tender.remaining+(game.tender.phase==='outbound'?12:0))}s`;if(id==='assemble'&&launching())return cellAction();if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
   if(game.manager){const action=managerStationAction(id);if(action)return action;}if(id.startsWith('material-')){const type=id.slice(9);const next=game.nextMaterial(type);return o?.id===201?'Inspect and ship this customer part':game.hand?`Recycle #${o.id} · restart route`:next?`Collect ${type} stock · #${next.id}`:game.orders.some(job=>stockType(job)===type&&!job.programmed)?'Complete CAD at the office first':`No ${type} job ready`;}if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${opInfo(id).name.toLowerCase()}`:`${opInfo(id)?.name||id} station`;}
 function updateUI(force=false){
   updateTenderPanel();
@@ -6941,6 +6991,7 @@ function positionLabels(){
   s.label.querySelector('.station-name').textContent=surgeOffice&&!menuMode?'SURGE CONSOLE':s.def.name;
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':surgeOffice?(game.surgeRemaining>0?`⚡ 2× ${Math.ceil(game.surgeRemaining)}s`:game.surgeCooldown>0?`${Math.ceil(game.surgeCooldown)}s`:'⚡ BOOST 2×'):id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
   s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:surgeOffice&&game.surgeRemaining>0?`${100*(game.surgeRemaining/16)}%`:busy?`${100*(1-st.remaining/(st.duration||(opInfo(id)??launchOp(id)).duration))}%`:'0';
+  if(beaconing()&&id==='ship'&&!menuMode){const w=crossingWindow(game.elapsed);s.label.querySelector('.station-time').textContent=game.tender.phase==='docked'?`${w.open?'CLEAR':'SWELL'} ${Math.ceil(w.remaining)}s`:game.tender.phase==='outbound'?'CROSSING':'RETURNING';}
   if(id==='assemble'&&!menuMode&&!busy&&!ready){const kitted=game.orders.filter(o=>o.parentId&&o.location==='kit').length;if(kitted)s.label.querySelector('.station-time').textContent=`${kitted} IN KIT`;}s.label.style.opacity=menuMode?'.72':'';
 }
   const sign=$('wing-sign');sign.hidden=!managing||game.expanded||game.mode!=='evening';
@@ -6992,7 +7043,7 @@ function buildShiftPicker(){
     b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):`${Math.round(s.duration/60*10)/10} min`}</span>`;
     b.onclick=()=>{selectedShift=i;buildShiftPicker();showHomeView('challenges');};holder.appendChild(b);
   });
-  const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].id])}`:''].filter(Boolean);
+  const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id])}`:''].filter(Boolean);
   $('selection-record').textContent=records.join(' · ');$('selection-record').hidden=!records.length;
 }
 function showHomeView(view='challenges'){
@@ -7021,7 +7072,7 @@ function applyHomeRoute(){
 
 function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
-function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -7117,9 +7168,9 @@ function showResults(){
   if(beaconing()){$('result-title').textContent=passed?'A way home.':'The harbor is still waiting.';}
   if(game===launchGame){$('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'FULL STACK':passed?'LIFTOFF':'SCRUBBED'}`;$('result-title').textContent=shiftMastery?'Full stack. Clean flight.':passed?'Liftoff!':'Launch scrubbed.';}
   $('result-message').textContent=game===launchGame?`${game.shipped} sections stacked. ${passed?'The shop built that rocket.':game.config.retryTip}`:`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.finishReason==='work-complete'?'No work remaining.':`${game.unfinished} unfinished at closing.`}`;
-  const faster=recordClear(speedRecords,game);try{localStorage.setItem('chip-rush-speed-v1',JSON.stringify(speedRecords));}catch{}
+  const faster=recordClear(speedRecords,game);saveSpeedRecords(localStorage,speedRecords);
   $('result-speed').hidden=false;$('result-clear-time').textContent=runTime(game.clearElapsed);
-  $('result-speed-record').textContent=passed?`${faster?'NEW BEST · ':''}PB ${runTime(speedRecords[game.config.id])} · End ${runTime(game.elapsed)}`:`Not cleared · End ${runTime(game.elapsed)}`;
+  $('result-speed-record').textContent=passed?`${faster?'NEW BEST · ':''}PB ${runTime(speedRecords[game.config.recordId??game.config.id])} · End ${runTime(game.elapsed)}`:`Not cleared · End ${runTime(game.elapsed)}`;
 
   const nextStar=game.config.stars.findIndex(target=>game.shipped<target);
   $('result-progress').textContent=nextStar<0?(shiftMastery?'Three stars. Exceptional precision under pressure.':'All three stars earned.'):`${game.config.stars[nextStar]-game.shipped} more shipped order${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;
@@ -7955,15 +8006,16 @@ function endBeaconEnding(){if(beaconEnding&&game===beaconGame&&game.mode==='term
 function updateHarbor(dt){
   if(!harbor?.visible)return;
   if(beaconEnding){beaconEnding.t+=phonePortrait()?0:dt;beaconFinaleTime=beaconEnding.t;if(beaconEnding.t>=10){endBeaconEnding();showResults();}}
-  harbor.userData.update(beaconGame,dt,clockTime,beaconFinaleTime);
+  harbor.userData.update({...beaconGame,window:crossingWindow(beaconGame.elapsed)},dt,clockTime,beaconFinaleTime);
 }
 function updateTenderPanel(){
   const visible=beaconing()&&game.mode==='playing';$('tender-panel').hidden=!visible;if(!visible)return;
-  const boat=game.tender,away=boat.phase!=='docked';
-  $('tender-status').textContent=away?`${boat.phase==='outbound'?'Crossing':'Returning'} · ${Math.ceil(boat.remaining)}s`:'Tender at the quay';
-  $('tender-cargo').textContent=`${game.quay.length} / 3 on quay · ${game.shipped} / ${game.config.passTarget} installed`;
+  const boat=game.tender,away=boat.phase!=='docked',window=crossingWindow(game.elapsed);
+  $('tender-status').textContent=away?`${boat.phase==='outbound'?'Crossing':'Returning'} · ${Math.ceil(boat.remaining)}s`:window.open?`Channel clear · ${Math.ceil(window.remaining)}s`:`Swell · window in ${Math.ceil(window.remaining)}s`;
+  $('tender-panel').classList.toggle('channel-open',window.open&&!away);
+  $('tender-cargo').textContent=`${game.quay.length} / 3 on quay · ${game.shipped>=game.config.passTarget?`${game.shipped} installed · beacon lit`:`${game.shipped} / ${game.config.passTarget} lantern parts`}`;
   $('tender-send').textContent=away?'Tender away':game.quay.length?`Sail with ${game.quay.length} ↗`:'Load at quay ↗';
-  $('tender-send').disabled=away||!!game.hand||!game.quay.length||game.time<12;
+  $('tender-send').disabled=away||!window.open||!!game.hand||!game.quay.length||game.time<12;
 }
 
 })();</script>

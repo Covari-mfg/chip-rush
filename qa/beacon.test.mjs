@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ShopGame, SHIFTS, OPS, scoreShipment, stockType } from '../dist/core.js';
-import { BeaconGame, BEACON_LEVEL, BEACON_RECIPES, CROSSING_SECONDS, TENDER_CAPACITY } from '../dist/beacon.js';
+import { BeaconGame, BEACON_LEVEL, BEACON_RECIPES, CROSSING_SECONDS, TENDER_CAPACITY,crossingWindow } from '../dist/beacon.js';
 import { LaunchGame, shiftGame } from '../dist/launch.js';
 import { TECHNOLOGIES, technologyBadges } from '../dist/technology.js';
 import { simulateBeacon, assertBeaconBalance } from './beacon-balance.mjs';
@@ -21,6 +21,7 @@ function advance(game, seconds) {
 function fresh() {
   const game = shiftGame(LEVEL);
   game.nextArrival = Infinity;
+  advance(game,20);
   game.drain();
   return game;
 }
@@ -85,7 +86,7 @@ test('Last Light appends legacy index 6 with a distinct stable identity and harb
     ['last-light', 'Last Light', 'beacon', 'harbor-pier', 'harbor']);
   assert.deepEqual([config.author, config.harness], ['GPT-6.1 Sol', 'Codex']);
   assert.deepEqual({ duration:config.duration, maxOrders:config.maxOrders, passTarget:config.passTarget, stars:config.stars },
-    { duration:240, maxOrders:8, passTarget:4, stars:[4, 6, 8] });
+    { duration:220, maxOrders:12, passTarget:6, stars:[6, 9, 12] });
   assert.equal(config.programming, false);
   assert.equal(config.calls, false);
   assert.deepEqual(config.unlocks, ['lathe', 'mill', 'inspect']);
@@ -139,6 +140,7 @@ test('machining and QC load the quay; an explicit second action sends a partial 
   advance(game, .2);
   near(order.remaining, stagedDeadline - .2, 'The quay still consumes the customer deadline');
   assert.equal(game.tender.phase, 'docked', 'Waiting never sends the boat automatically');
+  if(!crossingWindow(game.elapsed).open)advance(game,crossingWindow(game.elapsed).remaining);
   const departureDeadline = order.remaining;
   use(game, 'ship');
   assert.deepEqual(game.quay, []);
@@ -197,6 +199,8 @@ test('work can stage while the tender is away, but the next batch waits for its 
   refused(game, 'ship', /Tender returns/);
   advance(game, 12);
   assert.equal(game.tender.phase, 'docked');
+  refused(game,'ship',/Next crossing window/);
+  advance(game,crossingWindow(game.elapsed).remaining);
   use(game, 'ship');
   assert.deepEqual(game.tender.cargo, [second.id]);
   assert.equal(game.shipped, 1);
@@ -393,7 +397,7 @@ test('the sourced optic needs QC and a tender crossing for exactly 300 points an
   assert.equal(game.installed.some(part => part.id === 201), false);
   assert.equal(game.drain().filter(event => event.type === 'sourceFulfilled').length, 1);
   advance(game, 12);
-  refused(game, 'ship', /Load a finished part/);
+  assert.equal(game.interact('ship'),false);
   assert.equal(game.sourcePoints, 300, 'A source crate cannot pay twice');
 });
 
@@ -435,23 +439,47 @@ test('safe arrivals budget a lighthouse crossing as well as machining and handli
     candidate.route.reduce((total, station) => total + OPS[station].duration, 0));
 });
 
-test('legal collision-aware simulations clear slowly, install all eight, and repeat deterministically', () => {
+test('legal collision-aware simulations punish serial dispatch, install all twelve, and repeat deterministically', () => {
   // These are scripted legal runs with walking/dash delays, not player data.
   // The driver also checks production collision paths and hosted score acceptance.
-  const serial = simulateBeacon({ strategy:'serial', reaction:1.5 });
+  const serial = simulateBeacon({ strategy:'serial', reaction:1.5,batch:1 });
   const normalSource = simulateBeacon({ reaction:.5, covari:'accept' });
   const expert = simulateBeacon({ reaction:.1, dash:true, batch:3 });
   assertBeaconBalance([serial, normalSource, expert]);
-  assert.ok(serial.shipped >= config.passTarget);
+  assert.ok(serial.shipped < config.passTarget,'The former serial single-send strategy no longer clears');
   assert.equal(expert.shipped, config.maxOrders);
   assert.equal(expert.stars, 3);
   assert.equal(expert.missed, 0);
   assert.ok(expert.crossings.some(trip => trip.count === TENDER_CAPACITY), 'The legal route exercises full batches');
   assert.equal(normalSource.sourced, 1);
   assert.equal(normalSource.sourcePoints, 300);
-  for (const row of [serial, normalSource, expert]) {
+  assert.equal(serial.clearElapsed,null);
+  for (const row of [normalSource, expert]) {
     assert.ok(row.checkedSegments > 0);
     assert.ok(row.clearElapsed > 0 && row.clearElapsed <= row.elapsed);
   }
   assert.deepEqual(simulateBeacon({ reaction:.1, dash:true, batch:3 }), expert);
+});
+
+
+test('crossing windows repeat, close exactly, and reject a loaded departure during swell',()=>{
+  for(const base of [0,36,180]){
+    assert.equal(crossingWindow(base+19.9).open,false);
+    assert.deepEqual(crossingWindow(base+20),{open:true,remaining:12});
+    assert.equal(crossingWindow(base+31.9).open,true);
+    assert.deepEqual(crossingWindow(base+32),{open:false,remaining:24});
+  }
+  const game=fresh();spawn(game);stage(game,game.orders[0]);advance(game,12);
+  refused(game,'ship',/Next crossing window/);
+  assert.equal(game.quay.length,1);assert.equal(game.tender.phase,'docked');
+  advance(game,24);use(game,'ship');assert.equal(game.tender.phase,'outbound');
+});
+
+test('safe-arrival budget includes the next available crossing after the part is ready',()=>{
+  const game=fresh(),recipe=BEACON_RECIPES[0];
+  const required=game.requiredTime(recipe,true);
+  const departure=game.elapsed+required-CROSSING_SECONDS;
+  assert.equal(crossingWindow(departure).open,true);
+  game.tender={phase:'outbound',remaining:12,cargo:[],trips:1};
+  assert.ok(game.requiredTime(recipe,true)>=24+CROSSING_SECONDS);
 });

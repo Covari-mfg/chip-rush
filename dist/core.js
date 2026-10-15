@@ -142,22 +142,23 @@ export const SHIFTS = [
     terminalCount:10,
   },
   {
-    id:'last-light',mapId:'harbor-pier',engine:'beacon',name:'Last Light',author:'GPT-6.1 Sol',harness:'Codex',musicTrack:'harbor',
+    id:'last-light',mapId:'harbor-pier',engine:'beacon',ruleset:'last-light-v2-crossings',recordId:'last-light-v2-crossings',name:'Last Light',author:'GPT-6.1 Sol',harness:'Codex',musicTrack:'harbor',
     subtitle:'Make a light. Bring them home.',
-    goal:'Deliver 4 parts to relight the lighthouse.',
-    brief:'The rocket is gone. Down at the harbor, fishing boats are waiting for a light that no longer turns. Your shop has moved onto the pier. Machine and inspect lantern parts, load up to three onto the quay, then use the empty-handed quay again to send the tender. Parts count when they reach the lighthouse. Each crossing takes 12 seconds; the boat takes another 12 to return. Keep making parts while it sails.',
-    tip:'Send one part for a quick delivery, or hold for a fuller boat. Deadlines keep running on the quay and stop aboard. Covari can supply optical glass that this workshop cannot make.',
-    retryTip:'Keep both machines working while the tender is away. Leave 12 seconds for the last crossing.',
-    duration:240,firstArrival:20,interval:23,deadline:120,maxOrders:8,
-    recipes:[0,1,2,1,0,2,1,2],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
+    goal:'Deliver 6 lantern parts. Bring the boats home.',
+    brief:'The lighthouse is broken and the fleet is coming home. Machine and inspect lantern parts, load up to three onto the quay, then use it empty-handed to sail. Swell leaves a safe crossing window for 12 seconds in every 36. Each trip takes 12 seconds out and 12 back. Parts only count on arrival. Six restore the light; every delivery brings another boat in.',
+    tip:'Watch the crossing window. A fuller tender saves trips, but parts waiting on the quay can expire. Keep cutting while it sails.',
+    retryTip:'Batch your deliveries. Prepare the next load while the tender is at sea.',
+    duration:220,firstArrival:10,interval:12,deadline:65,maxOrders:12,
+    recipes:[0,1,2,1,2,0,0,1,2,1,2,0],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:[{name:'Ground Fresnel optic',capability:'Precision optical grinding',technology:'optics',gap:'No optical grinding equipment on the pier'}],
-    calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
+    calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
   },
 ];
 
 // Retired slots remain in the catalog for historical saves and scores. Entry
 // points use these helpers; UI order never becomes a new numeric identity.
 export const isPlayableShift = index => Number.isInteger(index)&&index>=0&&!!SHIFTS[index]&&!SHIFTS[index].retired;
+export const shiftRuleset = index => SHIFTS[index]?.ruleset ?? RULESET;
 export const nextShiftIndex = index => SHIFTS.findIndex((shift,i)=>i>index&&!shift.retired);
 
 export const PROGRAM_DURATION = 6;
@@ -771,7 +772,7 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,clearElapsed:this.clearElapsed,finishReason:this.finishReason,score:this.score,ruleset:RULESET,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,clearElapsed:this.clearElapsed,finishReason:this.finishReason,score:this.score,ruleset:this.config.ruleset??RULESET,
       sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing,route:[...this.sourcing.route]}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),

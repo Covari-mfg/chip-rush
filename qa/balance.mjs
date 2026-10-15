@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { ShopGame, SHIFTS, stockType } from '../dist/core.js';
 import { HALLS } from '../dist/manager.js';
 import { shiftGame } from '../dist/launch.js';
+import { crossingWindow } from '../dist/beacon.js';
 
 const source = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
 const section = (from, to) => {
@@ -198,7 +199,7 @@ export class Driver {
     while(this.game.mode==='playing'&&guard++<20000) {
       if(this.calls()) continue;
       // Last Light delivers only after an explicit empty-handed quay visit.
-      if(this.game.tender?.phase==='docked'&&this.game.quay.length&&!this.game.hand){this.interact('ship');continue;}
+      if(this.game.tender?.phase==='docked'&&this.game.quay.length&&(this.game.quay.length>=2||crossingWindow(this.game.elapsed).remaining<=this.distanceTo('ship')/4.4+this.actionDelay+2.5)&&!this.game.hand&&crossingWindow(this.game.elapsed).open){this.interact('ship');continue;}
       // Choosing the Covari card is instant; Decline (the default) lets the offer lapse.
       if(this.covari==='accept'&&this.game.sourcing?.state==='offer'&&this.game.requestSource()){this.event('source-accept');this.tick(Math.max(DT,this.actionDelay));continue;}
       const held=this.game.heldOrder;
