@@ -1677,7 +1677,8 @@ function updateTerminalCount(dt){
 function finishTerminalCount(){
   if(game.mode==='terminal')game.mode='results';$('launch-overlay').hidden=true;document.body.classList.remove('terminal-count');
   const u=launchSite.userData;if(pad.cinematic?.go){u.rocket.visible=false;u.flame.visible=false;u.glowLight.intensity=0;}
-  showResults();
+  // Results keep rendering. Drop the cinematic or the camera keeps climbing.
+  pad.cinematic=null;pad.follow=0;showResults();
 }
 function skipTerminalCount(){
   const c=pad.cinematic;if(!c||c.done)return;c.done=true;

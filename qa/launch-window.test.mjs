@@ -405,6 +405,78 @@ test('the countdown score is three looped stems of one length, layered by the co
   assert.ok(stems.every(stem => stem.source.stopped));
 });
 
+test('a completed liftoff stops the camera climb and pinned shake during score review', async () => {
+  const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
+  const from = main.indexOf('function updateTerminalCount(');
+  const to = main.indexOf('\n// Kit tickets:', from);
+  assert.ok(from >= 0 && to > from);
+  assert.match(main, /if\(c\)updateTerminalCount\(dt\)/);
+  const rocket = { visible:true, position:{ y:.48 } };
+  const flame = { visible:false, scale:{ set(){} } };
+  const glowLight = { intensity:4, position:{ y:1.2 } };
+  const site = { userData:{
+    arms:[{ rotation:{ y:0 } }, { rotation:{ y:0 } }],
+    jib:{ rotation:{ y:0 } }, trolley:{ position:{ x:0 } },
+    shock:{ visible:false, scale:{ setScalar(){} }, material:{ opacity:1 } },
+    flame, glowLight, rocket,
+  } };
+  const elements = {};
+  const element = () => ({ hidden:false, textContent:'', offsetWidth:8, classList:{ add(){}, remove(){}, toggle(){} } });
+  const shown = [];
+  const context = vm.createContext({
+    pad:{ cinematic:null, follow:0 },
+    launchSite:site,
+    LAUNCH_SITE:{ rocket:{ x:11, z:-2.3 }, tower:{ x:12.75 }, padTop:.48 },
+    game:{ mode:'terminal', config:{ terminalCount:10, passTarget:4 }, stack:[1,2,3,4], shipped:4, stars:() => 2 },
+    $:id => elements[id] ??= element(),
+    document:{ body:{ classList:{ remove(){} } } },
+    audio:{ event(){} },
+    THREE:{ MathUtils:{ lerp:(a, b, t) => a + (b - a) * t } },
+    reduced:true,
+    shake:0,
+    puff(){ throw new Error('reduced motion skips exhaust'); },
+    showResults(){ shown.push(context.game.mode); },
+  });
+  vm.runInContext(`const ease=t=>t<0?0:t>1?1:t*t*(3-2*t);\n${main.slice(from, to)}`, context);
+  // The render loop keeps calling this while the pad cinematic exists. Results
+  // are not paused, so a leftover cinematic climbs the camera and re-pins shake.
+  function reviewFrame(dt) {
+    const cinematic = context.pad.cinematic;
+    if (cinematic) context.updateTerminalCount(dt);
+    const climbed = context.pad.follow > 0 ? context.pad.follow : 0;
+    context.shake = Math.max(0, context.shake - dt * 2);
+    return climbed;
+  }
+  context.pad.cinematic = { t:16.15, go:true, beat:0, ignited:true, liftoff:true, done:false };
+  context.pad.follow = 4;
+  context.shake = 1.1;
+  reviewFrame(.1);
+  assert.equal(context.game.mode, 'results');
+  assert.equal(shown.length, 1);
+  assert.equal(context.pad.cinematic, null);
+  assert.equal(context.pad.follow, 0);
+  assert.equal(rocket.visible, false);
+  assert.equal(flame.visible, false);
+  assert.equal(glowLight.intensity, 0);
+  assert.equal(elements['launch-overlay'].hidden, true);
+  let climbed = 0;
+  for (let frame = 0; frame < 30; frame++) climbed += reviewFrame(.05);
+  assert.equal(climbed, 0, 'Score review no longer follows the rocket');
+  assert.equal(context.pad.cinematic, null);
+  assert.equal(context.pad.follow, 0);
+  assert.equal(context.shake, 0, 'Ignition shake decays once the liftoff update stops');
+  // Skip uses the same completion, including a scrub that never lit the engine.
+  rocket.visible = true; flame.visible = true; glowLight.intensity = 4;
+  context.game.mode = 'terminal';
+  context.pad.follow = 2;
+  context.pad.cinematic = { t:1.2, go:false, beat:-1, ignited:false, liftoff:false, done:false };
+  context.skipTerminalCount();
+  assert.equal(context.pad.cinematic, null);
+  assert.equal(context.pad.follow, 0);
+  assert.equal(rocket.visible, true, 'A scrubbed skip leaves the unflown rocket in place');
+  assert.equal(reviewFrame(.05), 0);
+});
+
 test('the standalone bundle binds every import, including Launch Window and the halls', async () => {
   const html = await readFile(new URL('../dist/CHIP-RUSH.html', import.meta.url), 'utf8');
   const bundle = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
