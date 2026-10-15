@@ -15,6 +15,8 @@ import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { ShopGame, SHIFTS, stockType } from '../dist/core.js';
 import { HALLS } from '../dist/manager.js';
+import { shiftGame } from '../dist/launch.js';
+import { crossingWindow } from '../dist/beacon.js';
 
 const source = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
 const section = (from, to) => {
@@ -68,8 +70,7 @@ export class Driver {
     this.covari = covari;
     this.dashCooldown = 0;
     this.dashes = 0;
-    this.game = new ShopGame();
-    this.game.reset(shift);
+    this.game = shiftGame(shift);
     this.strategy = strategy;
     this.phonePolicy = phonePolicy;
     this.position = { ...navigation.spawn };
@@ -99,6 +100,7 @@ export class Driver {
     }
   }
   pathTo(id) {
+    // Where the station stands on this level's map, after its placement overrides.
     const access = navigation.accessesFor(this.game.config.mapId)[id] ?? accesses[id];
     assert.ok(access, 'Known destination ' + id);
     nav.activateMap(this.game.config.mapId);
@@ -196,18 +198,34 @@ export class Driver {
     let guard=0;
     while(this.game.mode==='playing'&&guard++<20000) {
       if(this.calls()) continue;
+      // Last Light delivers only after an explicit empty-handed quay visit.
+      if(this.game.tender?.phase==='docked'&&this.game.quay.length&&(this.game.quay.length>=2||crossingWindow(this.game.elapsed).remaining<=this.distanceTo('ship')/4.4+this.actionDelay+2.5)&&!this.game.hand&&crossingWindow(this.game.elapsed).open){this.interact('ship');continue;}
       // Choosing the Covari card is instant; Decline (the default) lets the offer lapse.
       if(this.covari==='accept'&&this.game.sourcing?.state==='offer'&&this.game.requestSource()){this.event('source-accept');this.tick(Math.max(DT,this.actionDelay));continue;}
       const held=this.game.heldOrder;
       if(held) {
         if(!held.programmed) {this.program(held);continue;}
         const next=held.route[held.index];
-        if(next==='ship'||!this.game.stations[next]?.part) {this.interact(next);continue;}
+        // The assembly cell takes kit parts at any time; other stations must be free.
+        // Launch Window drivers also swap a held part for a machine's finished one.
+        if(next==='ship'||next==='assemble'||!this.game.stations[next]?.part||(this.game.kits&&this.game.stations[next].ready)) {this.interact(next);continue;}
         this.tick(.2);continue;
+      }
+      // Launch Window: serial play finishes one kit (its parts in parallel) before the next.
+      if(this.strategy==='serial'&&this.game.kits) {
+        let kit=this.game.order(this.activeId);
+        if(!kit?.kit) {kit=this.game.kits()[0];this.activeId=kit?.id;}
+        if(!kit) {this.tick(.2);continue;}
+        if(kit.started) {if(this.game.stations[kit.location]?.ready) this.interact(kit.location); else this.tick(.2);continue;}
+        const parts=this.game.partsOf(kit),done=parts.find(part=>this.game.stations[part.location]?.ready),waiting=parts.find(part=>!part.started&&!this.game.stations[part.route[0]]?.part);
+        if(done) this.interact(done.location);
+        else if(waiting) this.interact('material-'+stockType(waiting));
+        else this.tick(.2);
+        continue;
       }
       if(this.strategy==='serial') {
         let order=this.game.order(this.activeId);
-        if(!order) {order=this.game.orders[0];this.activeId=order?.id;}
+        if(!order||['quay','tender'].includes(order.location)) {order=this.game.orders.find(candidate=>!['quay','tender'].includes(candidate.location));this.activeId=order?.id;}
         if(!order) {this.tick(.2);continue;}
         if(!order.programmed) {
           if (this.game.call?.state==='ringing') { this.tick(.2); continue; }
@@ -224,15 +242,16 @@ export class Driver {
       }
       const priority=order=>this.game.call?.state==='active'&&this.game.call.orderId===order.id ? -1000 : order.remaining;
       const ready=Object.entries(this.game.stations).filter(([,s])=>s.ready).map(([station,s])=>({station,order:this.game.order(s.part.orderId)})).filter(({order})=>{
-        const next=order.route[order.index];return next==='ship'||!this.game.stations[next]?.part;
+        const next=order.route[order.index];return next==='ship'||next==='assemble'||!this.game.stations[next]?.part||(this.game.kits&&this.game.stations[next].ready);
       });
       // Finish downstream work first, then favor urgent orders and short trips.
       ready.sort((a,b)=>((a.order.route.length-a.order.index)*4+priority(a.order)*.08+this.distanceTo(a.station)*.3)-((b.order.route.length-b.order.index)*4+priority(b.order)*.08+this.distanceTo(b.station)*.3));
       if(ready.length) {this.interact(ready[0].station);continue;}
       if(this.game.receiving&&this.game.sourcing?.state==='delivered') {this.interact('receiving');continue;}
-      const fresh=this.game.orders.filter(o=>!o.started&&!this.game.stations[o.route[0]]?.part &&
+      const fresh=this.game.orders.filter(o=>!o.kit&&!o.started&&!this.game.stations[o.route[0]]?.part &&
         (o.programmed || this.game.call?.state!=='ringing'));
-      fresh.sort((a,b)=>priority(a)-priority(b));
+      // Kit parts share their kit's deadline: start the longest route first.
+      fresh.sort((a,b)=>priority(a)-priority(b)||(a.parentId&&b.parentId?b.route.length-a.route.length:0));
       if(fresh.length) {
         const order=fresh[0];
         if(!order.programmed) this.program(order);else this.interact('material-'+stockType(order));

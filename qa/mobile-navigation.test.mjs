@@ -1,7 +1,9 @@
+import {versionLevelRecords} from '../dist/records.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
+import {isPlayableShift} from '../dist/core.js';
 import {createTapNavigation} from '../dist/tap-navigation.js';
 
 const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
@@ -36,7 +38,7 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
   const player = {x:0,z:0,angle:0};
   const game = {mode:'playing',call:null,config:{sourcing:true},
     reset(){events.push('reset');throw new Error('An allowed start needs the full game fixture');}};
-  const context = vm.createContext({Math,Number,performance:{now:()=>time},$,game,player,
+  const context = vm.createContext({versionLevelRecords,Math,Number,isPlayableShift,performance:{now:()=>time},$,game,player,
     interfaceMode,phoneDevice,innerWidth:portrait?390:844,innerHeight:portrait?844:390,
     mobileTaps:createTapNavigation(),keys:new Set(),path:[],pathStation:null,
     dashTime:0,dashCooldown:0,last:0,helpReturn:null,
@@ -48,7 +50,7 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
     audio:{event:name=>events.push(name),update:value=>events.push(`audio:${value}`),init:()=>events.push('audio:init')},
     hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;},
     // Open for Business hooks that pause() calls; none matter for phone navigation.
-    closeStore(){},closePopover(){},cancelMove(){},saveRun(){},
+    closeStore(){},closePopover(){},cancelMove(){},saveRun(){},endBeaconEnding(){},
     document:{body:{classList:classes()}},
   });
   vm.runInContext(behavior,context);

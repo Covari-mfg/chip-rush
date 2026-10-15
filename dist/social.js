@@ -1,5 +1,6 @@
-import { RULESET, SHIFTS } from './core.js';
+import { RULESET, SHIFTS, isPlayableShift, shiftRuleset } from './core.js';
 import { createGameAnalytics } from './analytics.js';
+import { runTime } from './records.js';
 
 // One Open for Business board, beside the shift board and never mixed with it.
 // Older day-length ids still count as this board so a run already in progress
@@ -14,13 +15,14 @@ export function parseChallenge(search) {
   const values=['role','score','shipped'].map(k=>/^\d{1,5}$/.test(p.get(k)||'')?Number(p.get(k)):NaN);
   const [role,score,shipped]=values;
   // Keep legacy numeric role indices stable when appending campaign shifts.
-  if(p.get('rules')!==RULESET)return null;
-  if(!Number.isInteger(role)||role>=SHIFTS.length||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+(SHIFTS[role].sourcing&&shipped>=2?300:0)+(SHIFTS[role].calls?SHIFTS[role].callTimes.length*25:0))return null;
+  if(p.get('rules')!==shiftRuleset(role))return null;
+  if(!isPlayableShift(role)||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+(SHIFTS[role].sourcing&&shipped>=2?300:0)+(SHIFTS[role].calls?SHIFTS[role].callTimes.length*25:0))return null;
   return Object.freeze({role,score,shipped,stars:SHIFTS[role].stars.filter(n=>shipped>=n).length});
 }
 export function challengeURL(result,base) {
+  if(!isPlayableShift(result.role))throw new RangeError('This shift is retired or unavailable.');
   const url=new URL(base);url.search='';url.hash='';
-  for(const [key,value] of Object.entries({challenge:1,rules:RULESET,role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
+  for(const [key,value] of Object.entries({challenge:1,rules:shiftRuleset(result.role),role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
   return url.href;
 }
 export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
@@ -29,7 +31,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
-  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,skipped=false,board='';
+  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,skipped=false,board=MANAGER_BOARD,homeBoard=MANAGER_BOARD,homeGeneration=0;
   const BOARD_KEY='chip-rush-board';
   function readBoardName(){
     try{
@@ -48,7 +50,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     if(!response.ok)throw new Error(value.error||'The board is unavailable. Try again.');return value;
   };
   const money=value=>`$${value.toLocaleString()}`;
-  const summary=value=>value.board?`${value.days} day${value.days===1?'':'s'} · ${value.shipped} shipped · ${money(value.score)} net worth`:`${value.stars} ★ · ${value.shipped} shipped · ${value.score.toLocaleString()} points`;
+  const summary=value=>value.board?`${value.days} day${value.days===1?'':'s'} · ${value.shipped} shipped · ${money(value.score)} net worth`:`${value.stars} ★ · ${value.shipped} shipped · ${value.score.toLocaleString()} points${Number.isFinite(value.clearElapsed)?` · Clear ${runTime(value.clearElapsed)}`:''}`;
   if(challenge){$('friend-challenge').hidden=false;$('friend-target').textContent=summary(challenge);$('accept-challenge').onclick=()=>onChallenge(challenge.role);}
   function renderScores(id,entries){
     const list=$(id);list.replaceChildren();
@@ -56,27 +58,40 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
       const li=document.createElement('li'),rank=document.createElement('span'),identity=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small'),score=document.createElement('b');
       rank.className='score-rank';rank.textContent=String(index+1).padStart(2,'0');
       const manager=row.days!==undefined;
-      name.textContent=row.name;detail.textContent=manager?`${row.days} day${row.days===1?'':'s'} · ${row.shipped} shipped`:`${row.shipped} shipped · ${row.stars} ★`;identity.append(name,detail);
+      name.textContent=row.name;detail.textContent=manager?`${row.days} day${row.days===1?'':'s'} · ${row.shipped} shipped`:`${row.shiftName??'Shift'} · ${row.shipped} shipped · ${row.stars} ★${Number.isFinite(row.clearTime)?` · Clear ${runTime(row.clearTime)}`:''}${Number.isFinite(row.elapsed)?` · End ${runTime(row.elapsed)}`:''}`;identity.append(name,detail);
       score.className='score-points';score.textContent=manager?money(row.score):row.score.toLocaleString();li.append(rank,identity,score);list.append(li);
     }
   }
-  function renderTabs(){
-    const tabs=$('board-tabs');if(!tabs)return;tabs.replaceChildren();
-    for(const [id,label] of [['','Shifts'],[MANAGER_BOARD,'Open for Business']]){
-      const b=document.createElement('button');b.type='button';b.role='tab';b.ariaSelected=String(id===board);b.textContent=label;
-      b.onclick=()=>{if(board===id)return;board=id;renderTabs();loadBoard();};tabs.append(b);
+  function tabSet(id,selected,onSelect){
+    const tabs=$(id);if(!tabs)return;tabs.replaceChildren();
+    for(const [value,label] of [[MANAGER_BOARD,'Open for Business'],['','Shift Records']]){
+      const button=document.createElement('button');button.type='button';button.role='tab';button.ariaSelected=String(value===selected);button.textContent=id==='home-board-tabs'?(value?'Business':'Shifts'):label;
+      button.onclick=()=>onSelect(value);tabs.append(button);
     }
+  }
+  function renderTabs(){
+    tabSet('board-tabs',board,value=>{if(board===value)return;board=value;renderTabs();loadBoard();});
     const manager=isManagerBoard(board);
-    $('board-note').textContent=manager?'Open for Business. One board, ranked by net worth.':'One leaderboard for every shift. More complex work. Faster shipping. Higher scores.';
-    $('board-scoring').textContent=manager?'Net worth at closing: cash plus equipment at resale.':'Part complexity + early shipping + streaks. CAD, customer calls and rush deliveries earn extra. Missed accepted rushes deduct points.';
+    $('board-note').textContent=manager?'Open for Business · Net worth':'All shifts · Points';
+    $('board-scoring').textContent=manager?'Cash + equipment resale value.':'Clear: shipment target. End: full shift.';
+  }
+  function renderHomeTabs(){
+    tabSet('home-board-tabs',homeBoard,value=>{if(homeBoard===value)return;homeBoard=value;renderHomeTabs();loadHomeBoard();});
+  }
+  async function loadHomeBoard(){
+    const token=++homeGeneration,shown=homeBoard;$('home-board-status').textContent='Loading…';$('home-board-list').replaceChildren();
+    try{
+      const data=await api('leaderboard'+(shown?`?board=${encodeURIComponent(shown)}`:''));if(token!==homeGeneration)return;
+      $('home-board-status').textContent=data.entries.length?(shown?'Net worth':'Points'):(shown?'No records yet.':'No records yet.');renderScores('home-board-list',data.entries.slice(0,5));
+    }catch(error){if(token!==homeGeneration)return;$('home-board-status').textContent=online?'Scores unavailable.':'Play online to see community records.';}
   }
   async function loadBoard(showFull=true){
-    const token=++boardGeneration,shown=showFull?board:'';
-    if(showFull){$('board-list').replaceChildren();$('board-status').textContent='Loading scores…';}
+    if(!showFull)return loadHomeBoard();
+    const token=++boardGeneration,shown=board;
+    $('board-list').replaceChildren();$('board-status').textContent='Loading scores…';
     try{const data=await api('leaderboard'+(shown?`?board=${encodeURIComponent(shown)}`:''));if(token!==boardGeneration)return;
-      if(showFull||!board){$('board-status').textContent=data.entries.length?(shown?'Top 30 · Open for Business':'Top 30 · all shifts · points'):'No scores yet. Set the first one.';renderScores('board-list',data.entries);}
-      if(!shown){$('home-board-status').textContent=data.entries.length?'All shifts. One leaderboard.':'No scores yet. Your shift could be first.';renderScores('home-board-list',data.entries.slice(0,10));}
-    }catch(error){if(token!==boardGeneration)return;if(showFull)$('board-status').textContent=error.message;if(!shown)$('home-board-status').textContent=online?'Scores unavailable. Try again from the full board.':'Play online to see the community scores.';}
+      $('board-status').textContent=data.entries.length?(shown?'Top 30 · Open for Business':'Top 30 · all shifts · points'):'No scores yet. Set the first one.';renderScores('board-list',data.entries);
+    }catch(error){if(token!==boardGeneration)return;$('board-status').textContent=error.message;}
   }
   function syncPostControls(){
     if(posting&&posting.token===generation)return;
@@ -130,12 +145,12 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   if(savedName)$('player-name').value=savedName;
   $('player-name').oninput=()=>writeBoardName($('player-name').value.trim());
   $('skip-leaderboard').onclick=skipLeaderboard;
-  $('board-open').onclick=()=>openBoard();$('result-board').onclick=()=>openBoard(true);
+  renderHomeTabs();$('board-open').onclick=()=>{board=homeBoard;openBoard();};$('result-board').onclick=()=>openBoard(true);
   $('board-close').onclick=()=>$('leaderboard-dialog').close();
   $('post-form').onsubmit=event=>{event.preventDefault();return postScore();};
   $('copy-challenge').onclick=async()=>{try{await navigator.clipboard.writeText($('share-link').value);$('share-status').textContent=shareStatus(localLink?'Local challenge link copied.':'Challenge link copied. Paste it to a friend.');}catch{$('share-link').select();$('share-status').textContent=shareStatus('Select and copy the challenge link below.');}};
   $('challenge-friend').onclick=async()=>{
-    if(!result)return;
+    if(!result||!isPlayableShift(result.role))return;
     const url=challengeURL(result,location.href),text=`My CHIP RUSH shift: ${summary(result)}.`+(localLink?' '+shareNotice:' Can you beat it?');
     $('share-link').value=url;$('share-link').hidden=false;$('copy-challenge').hidden=false;$('share-status').textContent=shareStatus(localLink?'Copy this local challenge link.':'Share your score with a friend, or copy the link below.');
     if(navigator.share&&!localLink){try{await navigator.share({title:'CHIP RUSH · Your shift starts here',text,url});return;}catch(error){if(error.name==='AbortError')return;}}
@@ -145,11 +160,12 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role,ruleset=RULESET){const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role,ruleset=shiftRuleset(role)){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
     // A saved manager run picks its board run back up; it was registered when the run began.
     resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;skipped=false;},
     runId:()=>run,
     finish(value){
+      if(!value.board&&!isPlayableShift(value.role))return;
       if(generation>0&&finishedGeneration===generation)return;
       finishedGeneration=generation;
       // Manager runs carry their own stars (days survived); shift stars come from the level.

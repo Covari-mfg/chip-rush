@@ -61,6 +61,13 @@ export const PRECISION_SOURCE_JOBS = [
   {name:'Case-hardened gear',capability:'Heat treatment',technology:'ht',gap:'No furnace on this floor'},
   {name:'Serialized optic mount',capability:'Laser marking',technology:'lm',gap:'No laser on this floor'},
 ];
+// Flight hardware the launch-site shop cannot make: it has a lathe, a mill and
+// an assembly cell, but no metal printer, composite cell or friction-stir welder.
+export const LAUNCH_SOURCE_JOBS = [
+  {name:'Printed injector',capability:'Metal 3D printing',technology:'am',gap:'No metal printer at the pad'},
+  {name:'Carbon fairing panel',capability:'Carbon fiber layup',technology:'cf',gap:'No composite cell at the pad'},
+  {name:'Welded tank dome',capability:'Friction stir welding',technology:'fsw',gap:'No stir welder at the pad'},
+];
 // New-level creative brief: docs/model-experiment.md. Current scenario details:
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
 // Future levels may evolve mechanics; preserve earlier scenarios and their data.
@@ -78,7 +85,7 @@ export const SHIFTS = [
     programming:false,sourcing:false,calls:false,callTimes:[],passTarget:3,stars:[3,4,5],
   },
   {
-    id:'mixed-orders',mapId:'first-shop',name:'Mixed Orders',author:'GPT-6 Astra',harness:'Codex',
+    id:'mixed-orders',retired:true,mapId:'first-shop',name:'Mixed Orders',author:'GPT-6 Astra',harness:'Codex',
     subtitle:'Prepare CAD. Keep both machines busy.',
     brief:'Prepare CAD at the office, then collect stock. Some parts need both the lathe and mill.',
     tip:'CAD takes 6 seconds. Prepare the next job while machines run. Covari can handle an outside-capability order.',
@@ -90,7 +97,7 @@ export const SHIFTS = [
   {
     id:'rush-hour',mapId:'first-shop',name:'Rush Hour',author:'GPT-6 Astra',harness:'Codex',
     subtitle:'More orders. Calls. Competing promises.',
-    brief:'Keep mixed orders moving while customers call. Take a rush or keep the original promise.',
+    brief:'Prepare CAD at the office, collect the right stock, and keep both machines cutting. Customers may call with optional rush requests. Take a rush or keep the original promise.',
     tip:'Calls pause CAD; answer first at the office. Floor work continues while it rings. Rushes: +100 on time, −25 if missed.',
     retryTip:'Keep both machines cutting. Clear inspection before collecting another part.',
     duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,
@@ -118,7 +125,41 @@ export const SHIFTS = [
     recipes:[7,8,5,9,10,7,8,9],unlocks:['lathe','mill','deburr','anodize','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:PRECISION_SOURCE_JOBS,calls:false,callTimes:[],passTarget:5,stars:[5,6,8],
   },
+  // Launch Window runs on LaunchGame (dist/launch.js): every order is a kit of
+  // parts machined separately and joined in the assembly cell. kits indexes
+  // KITS there; use shiftGame() rather than ShopGame for this level.
+  {
+    id:'launch-window',mapId:'launch-pad',engine:'launch',name:'Launch Window',author:'Claude Opus 5.5',harness:'Claude Code',
+    musicTrack:'launch',
+    subtitle:'Build the rocket’s flight hardware. Beat the count.',
+    goal:'Ship 4 assemblies to the pad before terminal count.',
+    brief:'The storm that blacked out the shop also scrubbed a launch down the coast. The sky has cleared for the next dawn window, and the launch team is short of flight hardware, so the shop is working from the hangar beside the pad. Every order is a kit: machine each part, drop the parts at the assembly cell, then inspect the assembly and send it to the pad. Each one is stacked onto the rocket. At T−10 the count goes terminal: four or more and it flies. Fewer and the launch scrubs.',
+    tip:'Drop each finished part at the assembly cell. It builds a kit on its own as soon as the last part arrives, so start the longest part first.',
+    retryTip:'Cut parts from two different kits at once. The assembly cell and Inspection can run while you walk.',
+    duration:210,firstArrival:16,interval:23,deadline:115,maxOrders:7,
+    kits:[0,1,2,0,3,1,4],unlocks:['lathe','mill','assemble','inspect'],stock:['round','plate','block'],
+    programming:false,sourcing:true,sourceJobs:LAUNCH_SOURCE_JOBS,calls:false,callTimes:[],passTarget:4,stars:[4,5,7],
+    terminalCount:10,
+  },
+  {
+    id:'last-light',mapId:'harbor-pier',engine:'beacon',ruleset:'last-light-v2-crossings',recordId:'last-light-v2-crossings',name:'Last Light',author:'GPT-6.1 Sol',harness:'Codex',musicTrack:'harbor',
+    subtitle:'Make a light. Bring them home.',
+    goal:'Deliver 6 lantern parts. Bring the boats home.',
+    brief:'The lighthouse is broken and the fleet is coming home. Machine and inspect lantern parts, load up to three onto the quay, then use it empty-handed to sail. Swell leaves a safe crossing window for 12 seconds in every 36. Each trip takes 12 seconds out and 12 back. Parts only count on arrival. Six restore the light; every delivery brings another boat in.',
+    tip:'Watch the crossing window. A fuller tender saves trips, but parts waiting on the quay can expire. Keep cutting while it sails.',
+    retryTip:'Batch your deliveries. Prepare the next load while the tender is at sea.',
+    duration:220,firstArrival:10,interval:12,deadline:65,maxOrders:12,
+    recipes:[0,1,2,1,2,0,0,1,2,1,2,0],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
+    programming:false,sourcing:true,sourceJobs:[{name:'Ground Fresnel optic',capability:'Precision optical grinding',technology:'optics',gap:'No optical grinding equipment on the pier'}],
+    calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
+  },
 ];
+
+// Retired slots remain in the catalog for historical saves and scores. Entry
+// points use these helpers; UI order never becomes a new numeric identity.
+export const isPlayableShift = index => Number.isInteger(index)&&index>=0&&!!SHIFTS[index]&&!SHIFTS[index].retired;
+export const shiftRuleset = index => SHIFTS[index]?.ruleset ?? RULESET;
+export const nextShiftIndex = index => SHIFTS.findIndex((shift,i)=>i>index&&!shift.retired);
 
 export const PROGRAM_DURATION = 6;
 const CALL_INVITATION_DURATION = 22;
@@ -140,6 +181,7 @@ export class ShopGame {
     this.config = SHIFTS[shift];
     this.time = this.config.duration;
     this.elapsed = 0;
+    this.clearElapsed = null;
     this.orders = [];
     this.selectedId = null;
     this.hand = null;
@@ -670,6 +712,7 @@ export class ShopGame {
       for(const key of ['base','program','speed','streak','rush'])this.scoreDetails[key]+=breakdown[key];
       this.score += points;
       this.shipped++;
+      if (this.clearElapsed === null && this.shipped >= this.config.passTarget) this.clearElapsed = this.elapsed;
       if (rushBonus) {
         this.rushesWon++;
         this.emit('rushWon', {orderId:order.id,bonus:rushBonus});
@@ -729,7 +772,7 @@ export class ShopGame {
   stars() { return this.config.stars.filter(target => this.shipped >= target).length; }
   snapshot() {
     return {
-      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,finishReason:this.finishReason,score:this.score,ruleset:RULESET,
+      mode:this.mode,shift:this.shiftIndex,time:this.time,elapsed:this.elapsed,clearElapsed:this.clearElapsed,finishReason:this.finishReason,score:this.score,ruleset:this.config.ruleset??RULESET,
       sourced:this.sourced,sourcePoints:this.sourcePoints,sourcing:this.sourcing?{...this.sourcing,route:[...this.sourcing.route]}:null,
       shipped:this.shipped,missed:this.missed,unfinished:this.unfinished,
       combo:this.combo,selectedId:this.selectedId,passed:this.passed(),

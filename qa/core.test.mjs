@@ -72,8 +72,8 @@ test('menu rejects interactions and leaves all clocks untouched',()=>{
 });
 
 test('roles share intuitive routes and introduce CAD before optional rush calls',()=>{
-  assert.equal(SHIFTS.length,5);
-  assert.deepEqual(SHIFTS.map(shift=>shift.id),['first-shift','mixed-orders','rush-hour','night-shift','dawn-shift'],'Stable level IDs keep their legacy positions');
+  assert.equal(SHIFTS.length,7);
+  assert.deepEqual(SHIFTS.map(shift=>shift.id),['first-shift','mixed-orders','rush-hour','night-shift','dawn-shift','launch-window','last-light'],'Stable level IDs keep their legacy positions; new levels append');
   for(const shift of SHIFTS.slice(0,3))for(const index of shift.recipes){assert.ok([0,1,6].includes(index));assert.ok(RECIPES[index].route.every(key=>['lathe','mill','inspect'].includes(key)));}
   const operator=fresh(0),manager=fresh(1),owner=fresh(2);
   assert.equal(operator.selected.programmed,true);assert.equal(operator.selected.programRemaining,0);
@@ -81,7 +81,7 @@ test('roles share intuitive routes and introduce CAD before optional rush calls'
   assert.equal(owner.selected.programmed,false);assert.equal(owner.selected.programRemaining,6);
 });
 
-for(let shift=0;shift<SHIFTS.length;shift++)for(const recipeIndex of new Set(SHIFTS[shift].recipes)){
+for(let shift=0;shift<SHIFTS.length;shift++)if(!SHIFTS[shift].engine)for(const recipeIndex of new Set(SHIFTS[shift].recipes)){
   const recipe=RECIPES[recipeIndex];
   test('role '+(shift+1)+': complete '+recipe.name+' through dispatch exactly once',()=>{
     const game=fixtureForRecipe(shift,recipeIndex),id=game.selected.id;

@@ -8,29 +8,39 @@ future levels.
 ## Chapter: The First Shop
 
 The current game is the beginning of an expandable journey through one small
-shop. The first three levels are scenarios that teach a growing set of
-decisions; they are not a fixed job hierarchy. They share one map, one machine
-set, and one ruleset. Night Shift, the fourth level, keeps the same room and adds
-a second map variant (see below). No further chapters, maps, or challenges
-are defined here.
+shop. First Shift introduces the physical loop and remains exempt from the
+one-main-level-per-model limit. Rush Hour is Astra’s retained main entry: CAD,
+overlapping orders, and optional customer calls on the same map. Mixed Orders
+is retired from the playable collection. Night Shift is now the third playable
+level and adds a second map variant (see below).
+
+Every playable shift is available immediately. First Shift is the recommended learning
+route; later shifts are independent model-created challenges. Legacy unlock
+values remain in saves for compatibility but no longer gate entry.
 
 Stable level IDs identify scenarios permanently; display names can evolve. Legacy numeric role indices remain
 compatible with saves, leaderboard records, and challenge links unless a
 deliberate migration is announced. New levels append stable IDs and never
-reorder the legacy indices.
+reorder the legacy indices. Mixed Orders keeps index 1 and its full historical
+configuration, but the picker, briefings, direct starts, friend links, and new
+server runs reject retired entries. Existing scores remain visible as
+“Mixed Orders (retired)”; save arrays retain the slot. Display sequence numbers
+count playable entries independently of these legacy identities.
 
 | Legacy index | Stable ID | Level | Duration | Clear | Stars | Capability introduced |
 | --- | --- | --- | ---: | ---: | --- | --- |
 | 0 | `first-shift` | First Shift | 150s | 3 shipments | 3 / 4 / 5 | Stock, one machine route, inspection, shipping |
-| 1 | `mixed-orders` | Mixed Orders | 180s | 4 shipments | 4 / 5 / 6 | Six seconds of attended CAD, overlapping orders, and optional outsourcing |
+| 1 | `mixed-orders` | Mixed Orders (retired) | 180s | 4 shipments | 4 / 5 / 6 | Six seconds of attended CAD, overlapping orders, and optional outsourcing |
 | 2 | `rush-hour` | Rush Hour | 180s | 5 shipments | 5 / 6 / 8 | Customer calls, optional rush promises |
 | 3 | `night-shift` | Night Shift | 210s | 4 shipments | 4 / 5 / 6 | Deburr and Anodize finishing stations on the `night-shop` map; Covari offers a finishing process the floor lacks; no calls |
 | 4 | `dawn-shift` | Blackout Shift | 180s | 5 shipments | 5 / 6 / 8 | Cellular `dawn-shop` floor around a central QC hub and 3D Backup Generator; zero CAD delay; 1.5× Harmonic Overdrive (2+ machines); 2.0× Office/Lightning Surges; 128 BPM storm-synth music; precision Covari capability gap |
+| 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
+| 6 | `last-light` | Last Light | 220s | 6 deliveries | 6 / 9 / 12 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
 
-The first three scenarios use the `first-shop` map and the available Lathe, Mill,
+First Shift and Rush Hour use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
 the scenario permits them. Deburring and Anodizing exist in the machine model
-but are not available in those three scenarios. Night Shift is the first to use
+but are not available in those two playable scenarios. Night Shift is the first to use
 them on the `night-shop` map; Blackout Shift (`dawn-shift`) reconfigures those
 same five stations into West and East cells around a central Inspection hub and
 a 3D Backup Generator on the `dawn-shop` map.
@@ -55,7 +65,10 @@ Clear means three shipments before the 150s timer ends. The three star levels
 are 3, 4, and 5 shipments. Clearing is completion; mastery is the higher star
 target. The timer is a maximum: the shift ends early when no work or eligible arrivals remain.
 
-### Mixed Orders (`mixed-orders`)
+### Mixed Orders (`mixed-orders`, retired)
+
+Historical configuration retained for saved records and regression checks; this
+scenario is unavailable for new play, friend challenges, or score runs.
 
 The player adds attended CAD and learns to overlap office work with machines.
 Every order requires six attended seconds of CAD before stock pickup. The scheduled
@@ -73,7 +86,7 @@ only after the remaining workload is resolved, not merely on reaching a star.
 
 ### Rush Hour (`rush-hour`)
 
-The player manages the Mixed Orders workload while customer calls and optional
+The player manages mixed machining orders while customer calls and optional
 outside capability compete for attention. The scheduled eight-order sequence is
 Pocket spacer, Mounting plate, Bearing housing, Pocket spacer, Bearing housing,
 Mounting plate, Bearing housing, Mounting plate. The opening order is available
@@ -95,9 +108,9 @@ Molded cover (Injection molding), Wire EDM insert, and Sheet-metal bracket.
 Accepting starts a 22s delivery to Receiving; the delivered part follows
 `inspect → ship` and earns 300 points without using a normal order slot or
 shipment/star/streak credit. Declining has no penalty. This capability is
-explicitly enabled only for Mixed Orders, Rush Hour and Night Shift. Night Shift
-uses its own pool of finishing capabilities (see below); the other two use the
-rotation above.
+enabled for Rush Hour and Night Shift in this part of the collection. Night Shift
+uses its own pool of finishing capabilities (see below); Rush Hour uses the
+rotation above. Retired Mixed Orders retains its historical offer configuration.
 
 Clear means five shipments before the 180s timer ends. The three star levels
 are 5, 6, and 8 shipments. Rush acceptance and outsourcing are optional paths;
@@ -107,7 +120,7 @@ neither is required for clearing or the configured star target.
 
 The phones are off and the shop is quiet. The player has run Rush Hour; now the
 shop takes finishing work. Deburr (4s) and the Anodize color bath (8s) join the
-Lathe (8s), Mill (10s) and Inspect (4s). CAD works as in Mixed Orders. There are
+Lathe (8s), Mill (10s) and Inspect (4s). CAD uses the same six-second attended step as Rush Hour. There are
 no customer calls, so the level is a calmer, craft-focused chapter rather than a
 harder one. Covari stays: the floor still has no furnace, coating booth or laser.
 
@@ -186,6 +199,33 @@ Case-hardened gear (`Heat treatment`, `"No furnace on this floor"`), or
 Serialized optic mount (`Laser marking`, `"No laser on this floor"`). It follows
 the shared offer rules: optional, 30s decision window, 22s delivery to Receiving,
 `inspect → ship`, 300 points, and no order slot or shipment/star/streak credit.
+### Launch Window (`launch-window`)
+
+The morning after Blackout Shift: the storm that knocked out the grid also
+scrubbed a launch down the coast, and the shop builds flight hardware in the
+hangar beside the pad for the rescheduled dawn window.
+Every order is a kit of two or three parts. Each part has its own stock and a
+short lathe/mill route and ends at the robot assembly cell, which takes parts
+at any time and assembles a kit (6s) as soon as its last part arrives. The
+assembly then goes through Inspection to the pad, where a crane stacks it onto
+the rocket. Stock bins dispatch the earliest-due part of their type; a ready
+cell hands over its assembly when a part is dropped. An expired kit removes its
+parts everywhere and counts one miss. There is no CAD and there are no calls.
+
+Seven kits at most (0s, 16s, then every 23s; deadline 115s, +14 for the first).
+Clear and stars count shipped assemblies: 4 / 5 / 7. The clock shows T−minus,
+and the shift's end, early or on time, starts a ten-second terminal count: at
+the clear target the rocket lifts off, below it the launch scrubs. Covari
+offers metal 3D printing, carbon fiber layup or friction stir welding
+(`LAUNCH_SOURCE_JOBS`) on the shared rules.
+
+The rules are `LaunchGame` in `dist/launch.js` (`engine:'launch'` in the
+catalog); `shiftGame(index)` creates the right rules for any level. Kit parts
+are child orders of their kit, so ShopGame's stock, machine, Hold bench and
+recycling rules apply to them unchanged. The `launch-pad` map replaces the
+workshop shell with `createHangar()` and adds `createLaunchComplex()` east of
+it (`MAPS[...].shell`, `fixed` props and landmark framing). Full record:
+[experiments/launch-window.md](experiments/launch-window.md).
 
 ## Game mode: Open for Business (`open-for-business`)
 
@@ -339,6 +379,9 @@ starts with $1,500, a lathe, a mill and QC.
   recipe schedule, station unlocks, stock types, CAD/sourcing/call flags,
   call times, timer, clear target, and star thresholds. Read the core methods
   for shared rules such as the four-order limit and late-arrival safety check.
+- A level with its own rules sets `engine` in its catalog entry; `shiftGame()`
+  in `dist/launch.js` creates its game for the renderer, server and balance
+  driver. Launch Window is the example.
 - `dist/main.js` renders the catalog into selection, briefings, and progression.
   The “More shifts coming” row in `dist/index.html` is informational, never a
   playable entry. Keep the opening screen concise and its Play button reachable.
@@ -372,3 +415,80 @@ and remaining time and award no additional time bonus. Score posting carries
 completion metadata and validates elapsed time, outcome counts, and remaining
 arrival eligibility; it no longer requires an already-finished shift to wait
 for the full clock. Scores remain self-reported rather than replay-verified.
+
+## Shop-first entry and speed records
+
+The home keeps the 3D shop visible behind a compact shift rail, or a bottom
+strip in small windows. Shifts and Open for Business have separate tabs.
+Every existing shift is selectable immediately and displays its model/harness
+credit, with the model name highlighted in gold. Play starts directly;
+How to play opens an optional briefing. Saved business runs continue directly.
+
+Offline-compatible hash routes select the collection (`#/challenges`), a stable
+challenge briefing (`#/challenges/launch-window`) or the shop-manager choice
+(`#/open-for-business`). Home is the empty hash. Browser back/forward follows
+these entries. An in-progress manager run still saves and resumes normally.
+
+A shift's **clear time** is the first ordinary shipment reaching its existing
+`passTarget`; outsourced jobs add points but never advance that split. Paused
+time and the Launch Window cinematic do not count. The clock freezes at clear
+while the run continues for more points. Results show clear time, full shift
+end time, points, shipments and stars. The fastest clear is stored separately
+by stable level ID in `chip-rush-speed-v1`, so improving time does not require
+improving score. Previous runs have no invented timing records.
+
+High scores is one surface with Open for Business and Shift Records tabs.
+Home defaults to the business board and shows five records; the full board
+retains thirty. Shift points rank all shifts together, with shift identity,
+clear time and end time shown where known. New rows persist nullable timing
+columns through additive migration 0003; historical rows retain their scores
+and unknown times. Timing remains self-reported and bounded, not replay-verified.
+Times across different shifts are descriptive, not an overall speed ranking.
+Business ranking remains net worth from completed or retired runs; active
+shops are not auto-published. Migration 0003 must be applied before deploying the updated Worker.
+
+
+## Last Light (`last-light`)
+
+GPT-6.1 Sol / Codex's submission continues the coastal setting after the launch:
+the shop moves to a pier to repair the harbor lighthouse before dusk. Its
+`harbor-pier` map has a bespoke timber platform, corrugated workshop, catenary
+lamps, open water, a lighthouse island, an animated tender and fishing boats.
+An original 92 BPM procedural harbor piece accompanies the work.
+
+The new decision is batch dispatch. Machined and inspected parts load onto a
+three-slot quay. With empty hands, use the quay again to send all staged parts.
+Swell permits departure for 12 seconds every 36, starting at 0:20. The crossing is 12 seconds, followed by a 12-second empty return. Making the
+next batch while the tender sails keeps the shop productive. Quay deadlines
+continue; aboard the tender, they stop, fixing the early-delivery bonus at
+departure. Points, stars and clear time are awarded only at arrival. The
+player's currently carried part is preserved across autonomous deliveries.
+
+Lantern spindles use the lathe, Fresnel carriers the mill, and gimbal cradles
+both, followed by inspection. No attended CAD or calls. Up to twelve orders
+use a 10-second first gap, then 12-second arrivals, with 65-second
+deadlines (+14 for the first), the shared four-order limit, and a late-arrival
+check that reserves time for the next safe crossing after machining. Six
+deliveries clear, nine and twelve earn the higher stars. The clock is 220 seconds. The run can finish early after all eligible work
+is resolved; a closing-time arrival counts, an unfinished crossing does not.
+
+After two ordinary deliveries, the customer may need a ground Fresnel optic.
+There is no optical-grinding machine on the pier: Covari supplies it, Receiving
+and QC remain required, and it also travels on the tender. Its 300 points do
+not count toward the lighthouse's six-part target. Stable index 6 appends to
+the catalog, leaving all historical IDs and slots intact. Existing score bounds
+apply; no extra schema migration is needed beyond PR #31's timing migration.
+
+Every ordinary delivery adds a visible rib to the lantern and brings a fishing
+boat past the quay during play. Six progress lamps inside the workshop show the
+objective; at six, the full beacon turns. The camera fits the shop throughout.
+The ending briefly pans toward the light without zooming out;
+it is skippable, does not run the shift clock and cannot award extra work.
+See [the experiment record](experiments/last-light.md) for actual conditions,
+delegation, verification and release status.
+
+Last Light uses edition `last-light-v2-crossings`. First-edition points and
+stars are archived inside existing local saves; clear times use a new record
+key while retaining the old one. The shared board labels old rows as first
+edition and derives their original 4/6/8 stars. Current runs and challenge
+links require the new edition. No additional database migration is required.

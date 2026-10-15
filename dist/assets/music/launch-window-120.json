@@ -1,0 +1,132 @@
+{
+  "title": "CHIP RUSH Launch Window countdown score",
+  "bpm": 120,
+  "bars": 16,
+  "beatsPerBar": 4,
+  "sampleRate": 44100,
+  "channels": 2,
+  "loopStartSeconds": 0,
+  "loopEndSeconds": 32.0,
+  "loopEndFrameExclusive": 1411200,
+  "progression": [
+    "Dm",
+    "Bb",
+    "F",
+    "C",
+    "Dm",
+    "Bb",
+    "Gm",
+    "A",
+    "Dm",
+    "Bb",
+    "F",
+    "C",
+    "Gm",
+    "Bb",
+    "C",
+    "A"
+  ],
+  "key": "D minor",
+  "layers": {
+    "base": "pad, side-chained sub pulse, countdown clock ticks",
+    "drive": "sixteenth arpeggio with dotted-eighth echo, kick/snare/hats",
+    "climax": "lead melody with octave double, four-on-the-floor kick, tom fills"
+  },
+  "mixRmsDbfs": -21.039,
+  "files": {
+    "base": {
+      "wav": {
+        "file": "launch-base-120.wav",
+        "sha256": "302a74a8ed143f09d11c5887523080da60c318828e3dff46a63e758c23a517a7",
+        "qa": {
+          "frames": 1411200,
+          "durationSeconds": 32.0,
+          "rmsDbfs": -23.32,
+          "peakDbfs": -11.648,
+          "clippedSamples": 0,
+          "boundaryJumpAmplitude": 0.002471923828125
+        }
+      },
+      "mp3": {
+        "file": "launch-base-120.mp3",
+        "bytes": 448827,
+        "bitrate": 112000,
+        "sha256": "d7fce4e4176fe43e84ff062d1a81fa471974cb33156a6712d2ccd77030526093",
+        "decodedQa": {
+          "frames": 1411200,
+          "durationSeconds": 32.0,
+          "rmsDbfs": -23.766,
+          "peakDbfs": -12.059,
+          "clippedSamples": 0,
+          "boundaryJumpAmplitude": 0.002166748046875
+        }
+      }
+    },
+    "drive": {
+      "wav": {
+        "file": "launch-drive-120.wav",
+        "sha256": "dd478e755b82344586cf019c03b72f98b340e0d863589b062b8892ac72c55d5a",
+        "qa": {
+          "frames": 1411200,
+          "durationSeconds": 32.0,
+          "rmsDbfs": -29.803,
+          "peakDbfs": -12.751,
+          "clippedSamples": 0,
+          "boundaryJumpAmplitude": 0.000640869140625
+        }
+      },
+      "mp3": {
+        "file": "launch-drive-120.mp3",
+        "bytes": 448828,
+        "bitrate": 112000,
+        "sha256": "bac4b470eda0077ecc4f2660c36bce156225fb4f98d4f3e1bb346d411a1454e8",
+        "decodedQa": {
+          "frames": 1411200,
+          "durationSeconds": 32.0,
+          "rmsDbfs": -30.238,
+          "peakDbfs": -13.185,
+          "clippedSamples": 0,
+          "boundaryJumpAmplitude": 0.000518798828125
+        }
+      }
+    },
+    "climax": {
+      "wav": {
+        "file": "launch-climax-120.wav",
+        "sha256": "6c81ad92bcbccbf5fce07020678886c7de0f0882901443412f8b74c6b25f2699",
+        "qa": {
+          "frames": 1411200,
+          "durationSeconds": 32.0,
+          "rmsDbfs": -28.403,
+          "peakDbfs": -10.883,
+          "clippedSamples": 0,
+          "boundaryJumpAmplitude": 0.00030517578125
+        }
+      },
+      "mp3": {
+        "file": "launch-climax-120.mp3",
+        "bytes": 448829,
+        "bitrate": 112000,
+        "sha256": "82b14a4a372bee8bb4cab8a7e6fcb6623bd9dd6d12ffd154e328cb4fc8e29442",
+        "decodedQa": {
+          "frames": 1411200,
+          "durationSeconds": 32.0,
+          "rmsDbfs": -28.848,
+          "peakDbfs": -11.366,
+          "clippedSamples": 0,
+          "boundaryJumpAmplitude": 0.002227783203125
+        }
+      }
+    }
+  },
+  "browserPlayback": "Decode each stem with decodeAudioData and start all three AudioBufferSourceNodes at the same context time with loop=true, loopStart=0, loopEnd=32. Layer them with per-stem gains.",
+  "provenance": "Original procedural composition and synthesized instruments created for CHIP RUSH / Covari (Launch Window, Claude Opus 5.5 in Claude Code). No external recordings, sampled audio, downloaded music or quoted melodies.",
+  "qaBoundary": "Numerical and codec round-trip checks only; listening and browser playback are verified separately.",
+  "generator": "generate_launch_music.py",
+  "seed": 20261014,
+  "toolVersions": {
+    "python": "3.14.4",
+    "numpy": "2.4.3",
+    "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers"
+  }
+}

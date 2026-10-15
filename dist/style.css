@@ -528,3 +528,62 @@ body.manager-mode #shop-sidebar #orders{height:176px}
 html[data-interface="mobile"][data-phone="true"] .sales-strip.collapsed .sales-head{min-height:36px;align-items:center}
 html[data-interface="mobile"][data-phone="true"] .sales-strip .sales-head{flex-wrap:wrap;row-gap:2px}
 html[data-interface="mobile"][data-phone="true"] .sales-strip .sales-head strong{white-space:normal;text-align:left;flex-basis:100%;order:3}
+/* Launch Window: kit tickets, pad announcements and the terminal count. */
+.kit-ticket{border-top:4px solid var(--kit,#9fe0ff)}
+.kit-ticket .ticket-heading{display:flex;align-items:center;gap:6px}
+.kit-ticket .ticket-heading h3{margin-bottom:6px}
+.kit-swatch{width:14px;height:14px;border-radius:50%;margin:0 0 6px auto;background:var(--kit,#9fe0ff);box-shadow:inset 0 -3px 0 #0003,0 0 0 2px #19323a22}
+.kit-parts{display:flex;flex-direction:column;gap:3px;margin-bottom:5px}
+.kit-part{display:flex;align-items:center;gap:3px;flex-wrap:wrap;padding:2px 4px 2px 2px;border-radius:5px}
+.kit-part>b{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:4px;background:#19323a;color:#fff7dc;font-size:9px;font-weight:900;flex-shrink:0}
+.kit-part.kitted{background:#d5ecdc}
+.kit-part.kitted>b{background:#3a8a62}
+.kit-part.carried{box-shadow:inset 0 0 0 2px var(--orange)}
+.kit-part.done{opacity:.6}
+.kit-tail{gap:3px}
+.kit-tail .kit-label{background:transparent;color:#7a8b86;padding-left:0}
+:where(html[data-interface="desktop"]) .kit-part>b{width:13px;height:13px;font-size:8px}
+.pa-banner{position:absolute;left:50%;top:clamp(150px,22vh,230px);transform:translateX(-50%);z-index:24;pointer-events:none;display:flex;align-items:center;gap:10px;max-width:min(560px,86vw);padding:9px 16px 9px 12px;border-radius:999px;background:#0b141bde;border:1px solid #ffd36b55;color:#ffe9b0;font:700 12px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.3px;box-shadow:0 8px 24px #0006}
+.pa-banner:before{content:'PA';flex-shrink:0;padding:3px 6px;border-radius:999px;background:#ffd36b;color:#0b141b;font-size:10px;letter-spacing:1px}
+.pa-banner.pa-in{animation:pa-in .35s ease-out}
+@keyframes pa-in{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+.launch-overlay{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;text-align:center;background:radial-gradient(ellipse at 50% 45%,transparent 30%,#03080c66 100%)}
+.launch-count{font:900 clamp(72px,14vw,168px)/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#ffd36b;text-shadow:0 0 28px #ff9f3a88,0 6px 0 #00000055;letter-spacing:-4px}
+.launch-count.tick{animation:count-tick .9s ease-out}
+.launch-count.liftoff{font-size:clamp(54px,9vw,112px);color:#9dffb6;text-shadow:0 0 30px #5dffa088,0 6px 0 #00000055;letter-spacing:2px;animation:count-tick 1.2s ease-out}
+.launch-overlay.scrub .launch-count{color:#ff8a5b;text-shadow:0 0 24px #ff5a3a88,0 6px 0 #00000055;letter-spacing:4px}
+@keyframes count-tick{from{transform:scale(1.35);opacity:.2}30%{opacity:1}to{transform:scale(1);opacity:1}}
+.launch-caption{margin:0;max-width:min(560px,86vw);font-size:15px;font-weight:700;color:#f6f2df;text-shadow:0 2px 10px #000a}
+.launch-overlay .text-button{pointer-events:auto;margin-top:18px;opacity:.75}
+body.terminal-count #shop-sidebar,body.terminal-count #station-labels,body.terminal-count #pause-button{opacity:0;pointer-events:none;transition:opacity .6s}
+@media (prefers-reduced-motion:reduce){.launch-count.tick,.launch-count.liftoff,.pa-banner.pa-in{animation:none}}
+/* Kit tickets carry a row per part, so the desktop rail is taller in Launch Window. */
+@media(min-width:760px){:where(html[data-interface="desktop"]) body.launch-mode #shop-sidebar #orders{height:184px}}
+@media(max-width:759px){:where(html[data-interface="desktop"]) body.launch-mode #shop-sidebar #orders{height:196px}}
+
+/* The workshop is the menu's main visual. Controls sit beside it. */
+body:not(.playing):not(.paused) .overlay:not(.centered){background:linear-gradient(90deg,#071c28e6 0%,#071c2866 28%,transparent 47%);align-items:center}
+#welcome.welcome-panel{width:310px;margin:100px 0 32px 36px;max-height:calc(100dvh - 132px);padding:0;background:none;border:0;border-radius:0;box-shadow:none;display:flex;flex-direction:column;gap:15px;overflow:visible}
+#welcome .role-setup{min-height:0;overflow:auto;padding:0 3px;scrollbar-width:thin}
+#welcome h1{font-size:30px;line-height:1.1;letter-spacing:-1px;margin:4px 0 18px}
+.mode-switch{display:flex;gap:20px;border-bottom:1px solid #99c7c733;padding:0 3px}.mode-switch button{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 0 11px;color:#a7bfbd;font-size:13px;font-weight:700;white-space:nowrap}.mode-switch button[aria-selected="true"]{color:var(--paper);border-bottom-color:var(--teal)}
+#welcome .shift-picker{display:flex;flex-direction:column;gap:6px;margin:0}#welcome .shift-choice{width:100%;min-height:45px;padding:12px 13px;background:#17343b9c;border:1px solid #adc8c52b;border-radius:6px;align-items:center;text-align:left;gap:12px}#welcome .shift-choice:hover{background:#28504cb0;border-color:#72c4b3}#welcome .shift-choice.selected{background:#244943de;border-color:var(--teal)}#welcome .shift-choice b{font-size:14px}#welcome .shift-choice .shift-credit{margin-top:5px;font-size:9px;color:#b5cac4;line-height:1.4}#welcome .shift-choice .shift-credit b{display:inline;font-size:9px;color:#d7d6a0}#welcome .shift-choice .pick-mark{font-size:10px;color:#b7c6ad;margin-left:auto;white-space:nowrap}.selection-record{font-size:11px;line-height:1.5;color:var(--teal);margin:12px 0 0}.manager-credit{display:block;font-size:10px;margin-top:20px;color:#a7bfbd}.manager-credit a{color:#c8d8cc;text-decoration:none}
+#welcome #start-button{position:static;transform:none;width:calc(100% - 6px);margin:0 3px;padding:15px 17px;flex-shrink:0}.menu-links{display:flex;justify-content:space-between;margin:0 3px}.menu-links button{padding:0;border:0;background:none;color:#b2c7be;font-size:11px}.menu-links button:hover{color:var(--gold)}
+.home-board{position:absolute;top:auto;right:30px;bottom:26px;width:250px;padding:12px 15px;background:#0c2530b0;border:1px solid #72998e30;box-shadow:none;border-radius:7px;max-height:225px;overflow:auto;pointer-events:auto}.home-board-heading{border:0;padding:0}.home-board-heading .text-button{padding:0;font-size:12px;color:var(--gold)}.home-board .board-tabs{display:flex;gap:14px;flex-wrap:nowrap;margin:10px 0 5px}.home-board .board-tabs button{padding:0 0 4px;border:0;border-bottom:1px solid transparent;border-radius:0;background:none;color:#a7bfbd;font-size:10px}.home-board .board-tabs button[aria-selected="true"]{background:none;color:var(--paper);border-bottom-color:var(--teal)}#home-board-status{color:#a7bfbd;font-size:10px;margin:7px 0}.home-board .score-list li{padding:6px 0}.home-board .score-list strong{font-size:11px}.home-board .score-list small{display:block;font-size:9px;line-height:1.4;color:#9db8b3}.home-board .score-list .score-points{font-size:12px}
+.result-speed{margin:15px 0;padding:14px 0;border-block:1px solid var(--line)}.result-speed>div{display:flex;justify-content:space-between;align-items:center;gap:14px}.result-speed small{color:#aec9bf;font-size:10px;letter-spacing:1px}.result-speed strong{font:700 28px ui-monospace,monospace;color:var(--teal)}.result-speed p{color:var(--gold);font-size:11px;margin:8px 0 0}.score-list small{display:block;font-size:11px;line-height:1.5;color:#b9cbc6}#clear-run.cleared b{color:var(--teal)}
+@media(max-width:759px),(max-height:599px){body:not(.playing):not(.paused) .overlay:not(.centered){align-items:flex-end;background:linear-gradient(0deg,#071c28ed 0%,#071c2880 27%,transparent 49%)}#welcome.welcome-panel{width:calc(100% - 32px);margin:0 16px 18px;max-height:240px;gap:10px}#welcome h1{display:none}#welcome .role-setup{overflow:visible}#welcome .shift-picker{flex-direction:row;overflow-x:auto;gap:7px;padding:2px 0 6px;scrollbar-width:thin}#welcome .shift-choice{width:150px;min-width:150px;height:62px;min-height:0;padding:9px 10px;align-items:center}#welcome .shift-choice b{font-size:12px}#welcome .shift-choice .shift-credit{font-size:8px}#welcome .shift-choice .shift-credit b{font-size:8px}#welcome .shift-choice .pick-mark{display:none}#welcome .selection-record{margin:3px 0 0;font-size:10px}#welcome #start-button{padding:12px 15px}#welcome .manager-credit{margin-top:8px}.home-board{top:86px;right:20px;bottom:auto;padding:0;background:none;border:0;width:auto;max-height:none}.home-board .board-tabs,.home-board #home-board-status,.home-board .score-list{display:none}.home-board-heading .text-button{font-size:11px}.mode-switch{gap:24px}.mode-switch button{padding:5px 0 8px}.scoreboard{gap:10px}.scoreboard>span{gap:4px}#clear-run small{letter-spacing:0}#clear-run b{font-size:15px}}
+
+/* Model first; the tool stays secondary. */
+#welcome .shift-choice .shift-credit{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap;margin-top:5px;line-height:1.3}#welcome .shift-choice .shift-credit b{font-size:11px;font-weight:800;color:var(--gold)}#welcome .shift-choice .shift-credit span{font-size:9px;color:#a8c0ba}
+@media(max-width:759px),(max-height:599px){#welcome .shift-choice{height:72px}#welcome .shift-choice .shift-credit{gap:3px 7px}#welcome .shift-choice .shift-credit b{font-size:10px}#welcome .shift-choice .shift-credit span{font-size:8px}}
+
+/* Last Light keeps dispatch state in one small, useful harbor ticket. */
+.tender-panel{position:absolute;left:26px;bottom:105px;display:flex;align-items:center;gap:24px;padding:13px 16px;background:#102e3de8;border:1px solid #f2cc8266;border-radius:8px;pointer-events:auto;box-shadow:0 8px 30px #071b2230}.tender-panel strong{display:block;font-size:13px;color:var(--gold)}.tender-panel small{display:block;font-size:11px;color:#bad1cd;margin-top:5px}.tender-panel button{padding:10px 13px;background:#e7c783;color:#163742;border:0;border-radius:5px;font-weight:750;font-size:12px}.tender-panel button:disabled{background:#34505a;color:#a8bab6;opacity:.8}
+.beacon-ending{position:absolute;bottom:8%;left:50%;transform:translateX(-50%);text-align:center;color:#ffedc4;padding:24px 45px;min-width:300px;background:linear-gradient(0deg,#132d3fd9,#132d3f00);border-radius:8px;pointer-events:auto}.beacon-ending small{font-size:10px;letter-spacing:5px;color:var(--gold)}.beacon-ending h2{font-size:44px;line-height:1.1;letter-spacing:-1.5px;margin:10px 0}.beacon-ending p{font-size:13px;color:#d8dacf}.beacon-ending button{color:#e4d0a2;font-size:11px}body.beacon-finale #shop-sidebar,body.beacon-finale #game-footer,body.beacon-finale #station-labels,body.beacon-finale #live-hud{visibility:hidden}
+@media(max-width:759px){.tender-panel{left:16px;bottom:90px;padding:9px 12px;gap:15px}.tender-panel strong{font-size:11px}.tender-panel small{font-size:9px}.tender-panel button{font-size:10px;padding:8px}.beacon-ending{bottom:4%;padding:16px 25px}.beacon-ending h2{font-size:32px}}
+@media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:150px;bottom:auto;left:18px}}
+:where(html[data-interface="mobile"]) .tender-panel{top:64px;right:16px;bottom:auto;left:auto;gap:12px;max-width:calc(100% - 220px);padding:9px 12px}
+
+.tender-panel.channel-open{border-color:#9ff0cb;box-shadow:0 0 20px #9ff0cb25}.tender-panel.channel-open strong{color:#b7f4d8}
+
+@media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:139px;padding:6px 10px;gap:12px}:where(html[data-interface="desktop"]) .tender-panel strong{font-size:10px;line-height:12px}:where(html[data-interface="desktop"]) .tender-panel small{font-size:9px;line-height:11px;margin-top:2px}:where(html[data-interface="desktop"]) .tender-panel button{font-size:10px;padding:6px 9px}}

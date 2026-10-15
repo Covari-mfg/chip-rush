@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { ShopGame, OPS, RECIPES, SOURCE_JOBS, FINISHING_SOURCE_JOBS, stockType } from '../dist/core.js';
+import { BeaconGame } from '../dist/beacon.js';
 import { TECHNOLOGIES, technologyBadges as realBadges } from '../dist/technology.js';
 import { orderWorkflow, stockIcon } from '../dist/workflow.js';
 
@@ -16,7 +17,7 @@ function section(from,to) {
 // Execute the production rendering functions. The DOM and badge renderer are
 // small fakes so these tests verify which technology reaches each real card,
 // without duplicating or asserting the SVG drawing implementation.
-function setup() {
+function setup({beacon=false}={}) {
   const nodes=new Map(),badgeCalls=[];
   function element() {
     let id='',html='';
@@ -33,9 +34,9 @@ function setup() {
     };
   }
   const $=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
-  const game=new ShopGame();game.reset(0);
+  const game=beacon?new BeaconGame():new ShopGame();if(beacon){game.reset();for(let i=0;i<200;i++)game.tick(.1);}else game.reset(0);
   const context=vm.createContext({
-    game,OPS,stockType,stockIcon,orderWorkflow,$,sourceCard:$('source-card'),
+    game,OPS,stockType,stockIcon,orderWorkflow,$,beaconing:()=>beacon,sourceCard:$('source-card'),
     document:{activeElement:null,createElement:element},
     renderedTickets:'',renderedSelection:null,pendingSource:false,selectedByPlayer:false,
     sourceReveal:false,reduced:false,
@@ -136,4 +137,35 @@ test('source badge rendering is cached across countdowns and workflow states, th
   assert.equal(f.$('source-card').hidden,true);assert.equal(badge.innerHTMLWrites,2);
   Object.assign(f.game.sourcing,SOURCE_JOBS[2],{state:'offer'});f.context.updateSourceUI();
   assert.deepEqual(f.badgeCalls.at(-1).keys,['sm']);assert.equal(badge.innerHTMLWrites,3);
+});
+
+
+test('harbor tickets distinguish loading at the quay from crossing to the light',()=>{
+  const f=setup({beacon:true}),order=f.game.orders[0];
+  assert.equal(f.game.interact('material'),true);
+  order.index=order.route.indexOf('ship'); // Inspected-part UI fixture.
+  assert.equal(f.game.interact('ship'),true);f.context.updateTickets(true);
+  const ticket=f.$('ticket-'+order.id);
+  assert.match(ticket.innerHTML,/QUAY/);
+  assert.equal(ticket.querySelector('.ticket-status').textContent,'ON QUAY · READY TO SAIL');
+  assert.equal(f.game.shipped,0);
+  assert.equal(f.game.interact('ship'),true);f.context.updateTickets(true);
+  const crossing=f.$('ticket-'+order.id);
+  assert.equal(crossing.querySelector('.ticket-status').textContent,'ON TENDER · CROSSING');
+  assert.equal(crossing.querySelector('.due').textContent,'12s TO LIGHT');
+  assert.equal(f.game.shipped,0);
+});
+
+test('a sourced harbor optic shows the quay and crossing states with its optical badge',()=>{
+  const f=setup({beacon:true}),job=f.game.config.sourceJobs[0];
+  f.game.sourcing={id:201,...job,route:['inspect','ship'],index:1,location:'quay',state:'delivered',offerRemaining:0,remaining:0};
+  f.context.updateSourceUI();
+  assert.deepEqual(f.badgeCalls.map(call=>call.keys),[['optics']]);
+  assert.equal(f.$('source-detail').textContent,'· On quay');
+  assert.equal(f.$('source-collect').textContent,'Send tender ↗');
+  assert.equal(f.$('source-collect').disabled,false);
+  f.game.sourcing.location='tender';f.context.updateSourceUI();
+  assert.equal(f.$('source-detail').textContent,'· Crossing to the light');
+  assert.equal(f.$('source-collect').textContent,'Crossing…');
+  assert.equal(f.$('source-collect').disabled,true);
 });

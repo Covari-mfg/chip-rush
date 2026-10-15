@@ -1,3 +1,4 @@
+import {versionLevelRecords} from '../dist/records.js';
 // Open for Business: rules, floor, staff, bids, contracts, breakdowns, economy,
 // server validation, boards and saves. Balance rows come from
 // qa/manager-balance.mjs and are simulations, not player data.
@@ -6,7 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
-import { SHIFTS, OPS, RULESET, ShopGame } from '../dist/core.js';
+import { SHIFTS, OPS, RULESET, ShopGame, nextShiftIndex } from '../dist/core.js';
 import {
   ManagerGame, MANAGER_ROLE, MANAGER_MODE, MANAGER_OPS, MACHINES, BAYS, UPGRADES, WING, STAFF, JOBS, CUSTOMERS, RUN_LENGTHS, DAY_SECONDS, START_CASH,
   QUOTE_WINDOW, MAX_QUOTES, QUOTE_CUTOFF, COVARI_SLOTS, COVARI_DELIVERY, INSTALL_SECONDS, RESALE, LATE_PENALTY, AD, MAX_DAYS, BIDS,
@@ -87,7 +88,8 @@ function assertIntegrity(game) {
 
 test('Open for Business is a separate mode outside the shift catalog', () => {
   const level = MANAGER_MODE;
-  assert.equal(SHIFTS.length, 5, 'The shift catalog includes Dawn Shift');
+  assert.deepEqual(SHIFTS.slice(0, 5).map(shift => shift.id), ['first-shift', 'mixed-orders', 'rush-hour', 'night-shift', 'dawn-shift'], 'Earlier shifts keep their positions');
+  assert.equal(SHIFTS.length, 7, 'Launch Window and Last Light append after Blackout Shift');
   assert.ok(!SHIFTS.some(shift => shift.id === level.id || shift.mode), 'The mode is not a level');
   assert.ok(MANAGER_ROLE < 0, 'Its server role can never collide with a level index');
   assert.equal(new ManagerGame().start().shiftIndex, MANAGER_ROLE);
@@ -264,7 +266,7 @@ test('a contract quote with a gap shows the missing process and no Covari price'
   const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
   const cards = main.slice(main.indexOf('function routeChips('), main.indexOf('function managerTicketState('));
   const game = fresh();game.partnerCovari();
-  const context = vm.createContext({game, opInfo, stockType:() => 'round', money:n => `$${n}`, technologyBadges:() => '', stockIcon:() => '', $:() => ({src:'logo.png'})});
+  const context = vm.createContext({versionLevelRecords,game, opInfo, stockType:() => 'round', money:n => `$${n}`, technologyBadges:() => '', stockIcon:() => '', $:() => ({src:'logo.png'})});
   vm.runInContext(`${cards};this.quoteHTML=quoteHTML;`, context);
   const note = html => html.match(/<small class="quote-note[^"]*">([^<]*)<\/small>/)[1];
   const job = quoteFor(game, 'collar'), contract = quoteFor(game, 'collar', {contract:true});
@@ -318,7 +320,7 @@ test('buying or placing a station over the player leaves the player able to move
   };
   const game = fresh();
   game.cash = 30000;
-  const context = vm.createContext({Math, HALLS, game});
+  const context = vm.createContext({versionLevelRecords,Math, HALLS, game});
   vm.runInContext(`${section('const STATION_LAYOUT=', '\nlet renderer')}
     ${section('const BASE_BOUNDS=', '\nfunction save')}
     const player={x:0,z:0,angle:0};
@@ -709,17 +711,18 @@ test('shop setup offers one limitless run and one leaderboard tab', async () => 
   assert.match(main, /game\.start\(\{length:0\}\)/);
   assert.match(main, /social\.start\(MANAGER_ROLE,boardId\(0\)\)/);
   assert.doesNotMatch(main, /renderRunLengths/);
-  assert.match(main, /Play until you stop/);
+  assert.match(main, /Open shop/);
   assert.doesNotMatch(main, /3, 5 or 7 days/);
   assert.doesNotMatch(html, /How long to run the shop/);
   assert.match(social, /MANAGER_BOARD = 'manager-v1-endless'/);
   assert.match(social, /\[MANAGER_BOARD,'Open for Business'\]/);
-  assert.match(social, /One board, ranked by net worth/);
+  assert.match(social, /Open for Business · Net worth/);
   assert.doesNotMatch(social, /'3 days'|'5 days'|'7 days'|'Endless'/);
 });
 
 test('challenge links never carry manager runs', () => {
-  assert.equal(parseChallenge(new URL(challengeURL({role:MANAGER_ROLE, score:5000, shipped:5}, 'https://x.test/')).search), null);
+  assert.throws(()=>challengeURL({role:MANAGER_ROLE, score:5000, shipped:5}, 'https://x.test/'),RangeError);
+  assert.equal(parseChallenge('?'+new URLSearchParams({challenge:'1',rules:RULESET,role:String(MANAGER_ROLE),score:'5000',shipped:'5'})),null);
 });
 
 test('manager records load safely beside shift progress in the v8 save', async () => {
@@ -727,7 +730,7 @@ test('manager records load safely beside shift progress in the v8 save', async (
   const migration = main.slice(main.indexOf('const SAVE_KEY='), main.indexOf('const STATION_LAYOUT='));
   const load = initial => {
     const data = new Map(Object.entries(initial).map(([k, v]) => [k, JSON.stringify(v)]));
-    const context = vm.createContext({SHIFTS, RUN_LENGTHS, localStorage:{getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v)}});
+    const context = vm.createContext({versionLevelRecords,SHIFTS, RUN_LENGTHS, nextShiftIndex, localStorage:{getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v)}});
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,managerRecord};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };
@@ -735,8 +738,8 @@ test('manager records load safely beside shift progress in the v8 save', async (
   assert.equal(fresh.unlocked, 0, 'A new player starts at First Shift');
   assert.deepEqual(fresh.managerRecord, {bests:{}, days:0, length:0}, 'and can still open the shop: the mode needs no unlock');
   const cleared = load({'chip-rush-roles-v8':{unlocked:3, bests:[1, 2, 3, 4], grades:[3, 3, 3, 1]}});
-  assert.equal(cleared.unlocked, 4, 'Players who cleared Night Shift unlock Dawn Shift');
-  const saved = load({'chip-rush-roles-v8':{unlocked:1, bests:[0, 0, 0, 0], grades:[1, 0, 0, 0], manager:{bests:{5:9000, 0:'x', 3:-4, 9:500}, days:7.8, length:0}}});
+  assert.equal(cleared.unlocked, SHIFTS.length - 1, 'A save that has played First Shift opens every shift');
+  const saved = load({'chip-rush-roles-v8':{unlocked:1, bests:[0, 0, 0, 0], grades:[0, 0, 0, 0], manager:{bests:{5:9000, 0:'x', 3:-4, 9:500}, days:7.8, length:0}}});
   assert.equal(saved.unlocked, 1, 'Manager records never unlock shifts');
   assert.deepEqual(saved.managerRecord, {bests:{5:9000}, days:7, length:0});
   for (const junk of [null, 'x', [], {length:4, days:-3}]) {

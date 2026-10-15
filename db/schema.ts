@@ -9,5 +9,7 @@ export const scores = sqliteTable('scores', {
   missed:integer('missed').notNull(), sourced:integer('sourced').notNull(), calls:integer('calls').notNull(),
   // Open for Business: days survived. Shift rows keep the default 0.
   days:integer('days').notNull().default(0),
+  elapsedMs:integer('elapsed_ms'),
+  clearTimeMs:integer('clear_time_ms'),
   createdAt:integer('created_at').notNull(),
 }, t=>[index('scores_board').on(t.ruleset,t.points,t.shipped,t.createdAt),index('scores_days').on(t.ruleset,t.days,t.points)]);

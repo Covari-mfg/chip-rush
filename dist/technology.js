@@ -9,6 +9,12 @@ export const TECHNOLOGIES = {
   pc:{name:'Powder coating',drawing:'<path d="M3 6h11v9H3zM14 9h8l5-3v12l-5-3h-8M8 15v9h7M20 23l2 3M25 22l3 2M22 28l1 3"/>'},
   lm:{name:'Laser marking',drawing:'<path d="M16 3v10M12 3h8M13 13h6l-3 5zM4 27h24M9 27l3-5h8l3 5M7 22h18"/>'},
   sm:{name:'Sheet metal assembly',drawing:'<path d="M3 7h13v13h13v5H11V12H3zM16 7l5-3M29 20l2-4M21 4v12h10M16 20l5-4"/>'},
+  // Launch Window's outside capabilities: a powder-bed printer, a layup ply
+  // stack, and a stir-welding tool riding a seam.
+  am:{name:'Metal 3D printing',drawing:'<path d="M4 27h24M6 27V9h20v18M10 9V5h12v4M12 13h8M16 13v4M11 23h10M12 21h8M13 19h6"/>'},
+  cf:{name:'Carbon fiber layup',drawing:'<path d="M4 20l12-6 12 6-12 6zM4 15l12-6 12 6M4 10l12-6 12 6M10 23l12-6M10 17l12 6"/>'},
+  optics:{name:'Precision optical grinding',drawing:'<circle cx="16" cy="16" r="11"/><ellipse cx="16" cy="16" rx="5" ry="11"/><path d="M3 16h26M9 7l14 18"/>'},
+  fsw:{name:'Friction stir welding',drawing:'<path d="M3 24h26M3 28h26M16 24v-6M12 18h8v-6h-8zM14 12V4h4v8M7 21c2-1 4 1 6 0m6 0c2-1 4 1 6 0"/>'},
 };
 
 export function technologyIcon(key) {

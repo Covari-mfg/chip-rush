@@ -1,9 +1,10 @@
-import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
+import { RULESET, SHIFTS, isPlayableShift, shiftRuleset } from '../dist/core.js';
+import { shiftGame } from '../dist/launch.js';
 import { MANAGER_ROLE, MANAGER_BOARD, MANAGER_SCORE_RULESETS, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 const fail=(message,status=400)=>json({error:message},status);
-const validRole=role=>Number.isInteger(role)&&role>=0&&role<SHIFTS.length;
+const validRole=isPlayableShift;
 const playerId=request=>request.headers.get('cookie')?.match(/(?:^|;\s*)chip_player=([a-f0-9-]{36})(?:;|$)/)?.[1];
 async function body(request){
   if(!request.headers.get('content-type')?.startsWith('application/json'))throw new Error('Send JSON.');
@@ -13,13 +14,14 @@ async function body(request){
   text+=decoder.decode();const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw new SyntaxError('Expected an object.');return value;
 }
 export function validateResult(value,run,now=Date.now()){
-  if(!run||!validRole(run.role)||run.ruleset!==RULESET||value.role!==run.role)return 'Start a new shift before posting.';
+  if(!run||!validRole(run.role)||run.ruleset!==shiftRuleset(run.role)||value.role!==run.role)return 'Start a new shift before posting.';
   const config=SHIFTS[run.role],wallSeconds=(now-run.started_at)/1000;
   if(wallSeconds>86400)return 'This score submission has expired. Play another shift.';
   const ranges={score:[0,20000],shipped:[0,config.maxOrders??8],missed:[0,15],sourced:[0,config.sourcing?1:0],calls:[0,config.calls?config.callTimes.length:0]};
   for(const [key,[min,max]] of Object.entries(ranges))if(!Number.isInteger(value[key])||value[key]<min||value[key]>max)return 'That result is outside this shift’s limits.';
   if(value.finishReason!==undefined&&!['work-complete','time-up'].includes(value.finishReason))return 'Finish this shift before posting.';
   if(value.elapsed!==undefined&&(!Number.isFinite(value.elapsed)||value.elapsed<0||value.elapsed>config.duration+.1||wallSeconds<value.elapsed-5))return 'That finish time does not match this run.';
+  if(value.clearElapsed!==undefined&&value.clearElapsed!==null&&(!Number.isFinite(value.clearElapsed)||value.clearElapsed<config.passTarget*4||value.shipped<config.passTarget||!Number.isFinite(value.elapsed)||value.clearElapsed>value.elapsed+.01))return 'That clear time does not match the shipment target.';
   if(value.finishReason==='work-complete'){
     if(!Number.isFinite(value.elapsed)||!Number.isInteger(value.spawned)||value.spawned<1||value.spawned>(config.maxOrders??8)||value.spawned!==value.shipped+value.missed)return 'Finish every outstanding order before posting.';
     const lastArrival=value.spawned<2?0:config.firstArrival+(value.spawned-2)*config.interval;
@@ -27,7 +29,8 @@ export function validateResult(value,run,now=Date.now()){
     // Conservative eligibility check, not an authoritative replay. Give the
     // next arrival its longest possible gap; even then it must be ineligible.
     // This shares the game's late-arrival cutoff instead of inventing a timer.
-    const probe=new ShopGame();probe.reset(run.role);probe.orders=[];
+    // Each level's own rules decide arrivals (Launch Window schedules kits).
+    const probe=shiftGame(run.role);probe.orders=[];
     probe.spawnIndex=value.spawned;probe.elapsed=value.elapsed;probe.time=config.duration-value.elapsed;
     // Before four arrivals the queue cannot have been full. Those scheduled
     // arrivals cannot be omitted; allow the engine's 0.1s tick rounding per gap.
@@ -92,13 +95,13 @@ export default {
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
-        const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
-        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,...row})=>({...row,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
+        const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6)).all();
+        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':role===6&&edition!==shiftRuleset(6)?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:(role===6&&edition!==shiftRuleset(6)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
         const value=await body(request);
         const managerRun=value.role===MANAGER_ROLE&&parseBoard(value.ruleset)!==null;
-        if(!managerRun&&(!validRole(value.role)||value.ruleset!==RULESET))return fail('Reload the game to start a current shift.');
+        if(!managerRun&&(!validRole(value.role)||value.ruleset!==shiftRuleset(value.role)))return fail('Reload the game to start a current shift.');
         const player=playerId(request)||crypto.randomUUID(),now=Date.now();
         const recent=await env.DB.prepare('SELECT COUNT(*) AS count FROM runs WHERE player=? AND started_at>?').bind(player,now-60000).first();
         if(recent.count>=10)return fail('Too many restarts. Try again in a minute.',429);
@@ -118,7 +121,7 @@ export default {
         const name=typeof value.name==='string'?value.name.trim().replace(/\s+/g,' '):'';
         if(!/^[\p{L}\p{N} ._'-]{2,24}$/u.test(name))return fail('Use a display name with 2–24 letters, numbers, spaces or . _ - apostrophe.');
         if(manager)await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,days,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,run.ruleset,value.score,value.score,value.shipped,value.missed,value.sourced,0,value.days,Date.now()).run();
-        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,RULESET,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Date.now()).run();
+        else await env.DB.prepare('INSERT OR IGNORE INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(run.id,name,run.role,run.ruleset,value.score,value.score,value.shipped,value.missed,value.sourced,value.calls,Number.isFinite(value.elapsed)?Math.round(value.elapsed*1000):null,Number.isFinite(value.clearElapsed)?Math.round(value.clearElapsed*1000):null,Date.now()).run();
         return json({posted:true,id:run.id});
       }
       return fail('Not found.',404);

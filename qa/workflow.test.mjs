@@ -1,8 +1,9 @@
+import {versionLevelRecords} from '../dist/records.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { ShopGame, SHIFTS, PROGRAM_DURATION, stockType } from '../dist/core.js';
+import { ShopGame, SHIFTS, PROGRAM_DURATION, stockType, nextShiftIndex } from '../dist/core.js';
 import { orderWorkflow } from '../dist/workflow.js';
 import { RUN_LENGTHS } from '../dist/manager.js';
 
@@ -40,7 +41,7 @@ const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
 const migration=main.slice(main.indexOf("const SAVE_KEY="),main.indexOf('const STATION_LAYOUT='));
 function migrate(initial){
   const data=new Map(Object.entries(initial).map(([k,v])=>[k,JSON.stringify(v)]));
-  const context=vm.createContext({SHIFTS,RUN_LENGTHS,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
+  const context=vm.createContext({versionLevelRecords,SHIFTS,RUN_LENGTHS,nextShiftIndex,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
   vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}${migration};this.result={unlocked,bests,grades};`,context);
   return {result:JSON.parse(JSON.stringify(context.result)),data};
 }
@@ -48,28 +49,28 @@ test('optional call rules preserve unlocks and leave historical records intact',
   for(const version of ['v7','v6','v5','v4','v3','v2']) {
     const old={unlocked:2,bests:[2900,5000,8000],grades:[3,3,3]},key='chip-rush-roles-'+version;
     const {result,data}=migrate({[key]:old});
-    assert.deepEqual(result,{unlocked:3,bests:[0,0,0,0,0],grades:[0,0,0,0,0]},'Clearing the last earlier level unlocks Night Shift');
+    assert.deepEqual(result,{unlocked:SHIFTS.length-1,bests:[0,0,0,0,0,0,0],grades:[0,0,0,0,0,0,0]},'A previous First Shift score opens every shift');
     assert.deepEqual(JSON.parse(data.get(key)),old,'Historical records remain intact');
-    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0,0,0]);
+    assert.deepEqual(JSON.parse(data.get('chip-rush-roles-v8')).bests,[0,0,0,0,0,0,0]);
   }
-  const {result}=migrate({'chip-rush-roles-v7':{unlocked:2,bests:[1,2,3],grades:[3,2,0]}});
-  assert.equal(result.unlocked,2,'An uncleared Rush Hour leaves Night Shift locked');
+  const {result}=migrate({'chip-rush-roles-v7':{unlocked:2,bests:[0,2,3],grades:[0,2,0]}});
+  assert.equal(result.unlocked,2,'Without a First Shift record, an uncleared Rush Hour leaves Night Shift locked');
 });
 test('current-season progress takes precedence over previous progress',()=>{
   const {result}=migrate({'chip-rush-roles-v8':{unlocked:1,bests:[1,2,3],grades:[1,0,0]},'chip-rush-roles-v6':{unlocked:2,bests:[9000,9000,9000]}});
-  assert.deepEqual(result,{unlocked:1,bests:[1,2,3,0,0],grades:[1,0,0,0,0]});
+  assert.deepEqual(result,{unlocked:SHIFTS.length-1,bests:[1,2,3,0,0,0,0],grades:[1,0,0,0,0,0,0]});
 });
-test('a save from before Night Shift keeps its records and unlocks it once Rush Hour is cleared',()=>{
+test('a save that has played First Shift keeps its records and opens every shift',()=>{
   const saved={unlocked:2,bests:[3500,4400,3900],grades:[3,3,1]};
   const {result}=migrate({'chip-rush-roles-v8':saved});
-  assert.deepEqual(result,{unlocked:3,bests:[3500,4400,3900,0,0],grades:[3,3,1,0,0]});
-  assert.equal(migrate({'chip-rush-roles-v8':{...saved,grades:[3,3,0]}}).result.unlocked,2,'Rush Hour must be cleared first');
+  assert.deepEqual(result,{unlocked:SHIFTS.length-1,bests:[3500,4400,3900,0,0,0,0],grades:[3,3,1,0,0,0,0]});
+  assert.equal(migrate({'chip-rush-roles-v8':{...saved,bests:[0,4400,3900],grades:[0,3,0]}}).result.unlocked,2,'Without a First Shift record, Rush Hour must be cleared first');
 });
-test('a save from before Dawn Shift keeps its records and unlocks it once Night Shift is cleared',()=>{
-  const saved={unlocked:3,bests:[3500,4400,3900,4800],grades:[3,3,1,2]};
+test('a First Shift run with no score or stars yet does not count as played on load',()=>{
+  const saved={unlocked:3,bests:[0,4400,3900,4800],grades:[0,3,1,2]};
   const {result}=migrate({'chip-rush-roles-v8':saved});
-  assert.deepEqual(result,{unlocked:4,bests:[3500,4400,3900,4800,0],grades:[3,3,1,2,0]});
-  assert.equal(migrate({'chip-rush-roles-v8':{...saved,grades:[3,3,1,0]}}).result.unlocked,3,'Night Shift must be cleared first');
+  assert.deepEqual(result,{unlocked:4,bests:[0,4400,3900,4800,0,0,0],grades:[0,3,1,2,0,0,0]},'The cleared chain still applies');
+  assert.equal(migrate({'chip-rush-roles-v8':{...saved,grades:[0,3,1,0]}}).result.unlocked,3,'Night Shift must be cleared first');
 });
 test('stars from a friend challenge on a locked level unlock nothing',()=>{
   const {result}=migrate({'chip-rush-roles-v8':{unlocked:0,bests:[0,0,9000],grades:[0,0,3]}});
