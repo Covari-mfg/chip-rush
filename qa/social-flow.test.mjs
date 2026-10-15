@@ -81,7 +81,60 @@ test('successful posting sends the finished result once and keeps subsequent sub
   const posts=f.requests.filter(request=>request.path==='/api/scores');
   assert.equal(posts.length,1);
   assert.deepEqual(posts[0].body,{role:2,score:4173,shipped:SHIFTS[2].stars[2],missed:0,sourced:1,calls:3,stars:3,runId:'run-1',name:'Test Player'});
-  assert.equal(f.$('post-score').disabled,true);assert.equal(f.$('post-status').textContent,'Posted. Nice shift.');
+  assert.equal(f.$('post-score').disabled,true);assert.equal(f.$('post-status').textContent,'Score posted.');
+  assert.equal(f.$('post-score').textContent,'Posted');
+  assert.equal(f.$('player-name').disabled,true);
+  assert.equal(f.$('skip-leaderboard').textContent,'Done');
+  assert.equal(f.$('result-board').textContent,'View leaderboard');
+  f.$('result-board').onclick();
+  assert.equal(f.$('post-form').hidden,true,'A posted result reopens the board without another post form');
+});
+
+test('a late run token only enables posting and never opens or submits the form',async()=>{
+  const pending=deferred(),f=setup({fetcher:r=>r.path==='/api/runs'?pending.promise:undefined});
+  f.social.start(2);f.finish();
+  assert.equal(f.$('leaderboard-dialog').open,false);
+  f.$('result-board').onclick();
+  assert.equal(f.$('post-score').disabled,true);
+  f.$('skip-leaderboard').onclick();
+  pending.resolve(response({id:'late-run'}));await settle();
+  assert.equal(f.$('leaderboard-dialog').open,false);
+  assert.equal(f.$('post-score').disabled,false);
+  assert.equal(f.requests.some(r=>r.path==='/api/scores'),false);
+  f.$('result-board').onclick();await f.submit();
+  assert.equal(f.requests.find(r=>r.path==='/api/scores').body.runId,'late-run');
+});
+
+test('every new shift and resumed business run needs its own explicit submission',async()=>{
+  const f=setup();f.social.start(0);await settle();f.finish({role:0});
+  assert.equal(f.requests.some(r=>r.path==='/api/scores'),false);
+  f.$('result-board').onclick();await f.submit();
+  f.social.start(0);await settle();f.finish({role:0});
+  assert.equal(f.$('result-board').textContent,'Post score');
+  assert.equal(f.$('player-name').disabled,false);
+  assert.equal(f.requests.filter(r=>r.path==='/api/scores').length,1);
+  f.social.resume('business-run');
+  f.finish({board:'manager-v1-endless',days:4,stars:4,score:12000});
+  assert.equal(f.requests.filter(r=>r.path==='/api/scores').length,1);
+  f.$('result-board').onclick();await f.submit();
+  assert.equal(f.requests.filter(r=>r.path==='/api/scores').length,2);
+  assert.equal(f.requests.filter(r=>r.path==='/api/scores')[1].body.board,'manager-v1-endless');
+});
+
+test('failed and pending posts require deliberate retry and cannot double-submit',async()=>{
+  const pending=deferred();let attempts=0;
+  const f=setup({fetcher:r=>r.path==='/api/scores'&&++attempts===1?pending.promise:undefined});
+  f.social.start(2);await settle();f.finish();f.$('result-board').onclick();
+  const submitting=f.submit(),duplicate=f.submit();
+  assert.equal(attempts,1);
+  f.$('board-close').onclick();f.$('result-board').onclick();
+  assert.equal(f.$('post-score').disabled,true);
+  pending.reject(new Error('Connection lost'));await Promise.all([submitting,duplicate]);await settle();
+  assert.equal(f.$('post-score').disabled,false);
+  assert.equal(f.$('post-status').textContent,'Connection lost');
+  assert.equal(attempts,1);
+  await f.submit();assert.equal(attempts,2);
+  assert.equal(f.$('post-status').textContent,'Score posted.');
 });
 
 test('a penalized Owner result is posted and shared without replacing its actual score',async()=>{
@@ -109,7 +162,7 @@ for(const outcome of ['success','failure'])test('a stale post '+outcome+' cannot
   await f.submit();
   const posts=f.requests.filter(request=>request.path==='/api/scores');assert.equal(posts.length,2);
   assert.equal(posts[1].body.runId,'run-2');assert.equal(posts[1].body.role,3);assert.equal(posts[1].body.score,2700);
-  assert.equal(f.$('post-status').textContent,'Posted. Nice shift.');
+  assert.equal(f.$('post-status').textContent,'Score posted.');
 });
 
 test('an older run-registration response cannot replace the new shift ownership token',async()=>{
@@ -227,12 +280,14 @@ test('start page shows the first five real scores while the full board retains a
   assert.equal(f.$('leaderboard-dialog').open,true,'The full-board action opens all records');
 });
 
-test('Skip leaderboard closes the form without posting this score, and Post still posts',async()=>{
+test('results stay visible until Post score is clicked, and Cancel never posts',async()=>{
   const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
-  assert.match(html,/id="post-score"[^>]*>Post my score<\/button><button id="skip-leaderboard" type="button">Skip leaderboard<\/button>/);
+  assert.match(html,/id="post-score"[^>]*>Post score<\/button><button id="skip-leaderboard" type="button">Cancel<\/button>/);
   assert.doesNotMatch(html,/board-opt-out|Keep my scores off the leaderboard/);
   const f=setup();f.$('player-name').value='';
   f.social.start(2);await settle();f.finish();await settle();
+  assert.equal(f.$('leaderboard-dialog').open,false);
+  f.$('result-board').onclick();
   assert.equal(f.$('leaderboard-dialog').open,true);
   assert.equal(f.$('post-form').hidden,false);
   assert.equal(f.requests.some(request=>request.path==='/api/scores'),false);
@@ -246,7 +301,7 @@ test('Skip leaderboard closes the form without posting this score, and Post stil
   assert.equal(f.requests.find(request=>request.path==='/api/scores').body.name,'Night Crew');
 });
 
-test('a saved checkbox opt-out does not hide the score form or block posting',async()=>{
+test('saved names prefill the form without publishing, including legacy preferences',async()=>{
   const store=new Map();
   store.set('chip-rush-board',JSON.stringify({name:'Ada',optOut:true}));
   const localStorage={getItem:key=>store.has(key)?store.get(key):null,setItem:(key,value)=>store.set(key,String(value))};
@@ -254,8 +309,13 @@ test('a saved checkbox opt-out does not hide the score form or block posting',as
   assert.equal(blocked.$('player-name').value,'Ada');
   blocked.social.start(2);await settle();blocked.finish();await settle();
   const posts=blocked.requests.filter(request=>request.path==='/api/scores');
-  assert.equal(posts.length,1);
-  assert.equal(posts[0].body.name,'Ada');
+  assert.equal(posts.length,0,'A remembered name is never permission to publish');
+  assert.equal(blocked.$('leaderboard-dialog').open,false);
+  blocked.$('result-board').onclick();
+  assert.equal(blocked.$('player-name').value,'Ada');
+  assert.equal(blocked.requests.some(request=>request.path==='/api/scores'),false);
+  await blocked.submit();
+  assert.equal(blocked.requests.find(request=>request.path==='/api/scores').body.name,'Ada');
   blocked.$('player-name').oninput();
   assert.equal(JSON.parse(store.get('chip-rush-board')).optOut,undefined);
   assert.equal(store.has('chip-rush-roles-v8'),false);
@@ -263,7 +323,8 @@ test('a saved checkbox opt-out does not hide the score form or block posting',as
   const unnamed=setup({localStorage});
   unnamed.$('player-name').value='';
   unnamed.social.start(2);await settle();unnamed.finish();await settle();
-  assert.equal(unnamed.$('leaderboard-dialog').open,true);
+  assert.equal(unnamed.$('leaderboard-dialog').open,false);
+  unnamed.$('result-board').onclick();
   assert.equal(unnamed.$('post-form').hidden,false);
   assert.equal(unnamed.requests.some(request=>request.path==='/api/scores'),false);
 });

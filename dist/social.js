@@ -31,7 +31,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   const localLink=!online||['localhost','[::1]','0.0.0.0'].includes(location.hostname)||location.hostname.endsWith('.localhost')||/^127(?:\.\d{1,3}){3}$/.test(location.hostname);
   const shareNotice=!online?'Local file link: opens on this computer only. Another computer needs its own copy of the game files.':localLink?'Local preview link: opens on this computer only while this preview is running.':'';
   const shareStatus=message=>message+(shareNotice?' '+shareNotice:'');
-  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,skipped=false,board=MANAGER_BOARD,homeBoard=MANAGER_BOARD,homeGeneration=0;
+  let run=null,result=null,generation=0,finishedGeneration=-1,posted=false,boardGeneration=0,posting=null,board=MANAGER_BOARD,homeBoard=MANAGER_BOARD,homeGeneration=0;
   const BOARD_KEY='chip-rush-board';
   function readBoardName(){
     try{
@@ -94,9 +94,13 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     }catch(error){if(token!==boardGeneration)return;$('board-status').textContent=error.message;}
   }
   function syncPostControls(){
-    if(posting&&posting.token===generation)return;
+    if(posting&&posting.token===generation&&!posted)return;
     $('post-score').disabled=!run||posted;
-    if(posted)$('post-status').textContent='Posted. Nice shift.';
+    $('post-score').textContent=posted?'Posted':'Post score';
+    $('player-name').disabled=posted;
+    $('skip-leaderboard').textContent=posted?'Done':'Cancel';
+    $('result-board').textContent=posted?'View leaderboard':'Post score';
+    if(posted)$('post-status').textContent='Score posted.';
     else if(result&&!run)$('post-status').textContent='This shift was not connected. Play a new shift online to post.';
     else $('post-status').textContent='';
   }
@@ -112,7 +116,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
         await api('scores',{...current,runId,name});
         if(token!==generation||current!==result)return;
         posted=true;writeBoardName(name);
-        $('post-status').textContent='Posted. Nice shift.';loadBoard();
+        syncPostControls();loadBoard();
       }catch(error){
         if(token!==generation||current!==result)return;
         $('post-status').textContent=error.message;$('post-score').disabled=false;
@@ -122,14 +126,8 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
     promise.finally(()=>{if(posting&&posting.promise===promise)posting=null;});
     return promise;
   }
-  function maybePost(){
-    if(skipped||!result)return;
-    if($('player-name').value.trim().length>=2)return postScore();
-    if(online)openBoard(true);
-  }
   function skipLeaderboard(event){
     event?.preventDefault();
-    if(!posted)skipped=true;
     $('post-form').hidden=true;
     $('leaderboard-dialog').close();
   }
@@ -145,7 +143,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   if(savedName)$('player-name').value=savedName;
   $('player-name').oninput=()=>writeBoardName($('player-name').value.trim());
   $('skip-leaderboard').onclick=skipLeaderboard;
-  renderHomeTabs();$('board-open').onclick=()=>{board=homeBoard;openBoard();};$('result-board').onclick=()=>openBoard(true);
+  renderHomeTabs();$('board-open').onclick=()=>{board=homeBoard;openBoard();};$('result-board').onclick=()=>openBoard(!posted);
   $('board-close').onclick=()=>$('leaderboard-dialog').close();
   $('post-form').onsubmit=event=>{event.preventDefault();return postScore();};
   $('copy-challenge').onclick=async()=>{try{await navigator.clipboard.writeText($('share-link').value);$('share-status').textContent=shareStatus(localLink?'Local challenge link copied.':'Challenge link copied. Paste it to a friend.');}catch{$('share-link').select();$('share-status').textContent=shareStatus('Select and copy the challenge link below.');}};
@@ -160,9 +158,9 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role,ruleset=shiftRuleset(role)){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role,ruleset=shiftRuleset(role)){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;syncPostControls();}).catch(()=>{});},
     // A saved manager run picks its board run back up; it was registered when the run began.
-    resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;skipped=false;},
+    resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;},
     runId:()=>run,
     finish(value){
       if(!value.board&&!isPlayableShift(value.role))return;
@@ -174,7 +172,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
       $('social-results').hidden=false;$('share-status').textContent='';$('share-link').hidden=true;$('copy-challenge').hidden=true;$('challenge-friend').hidden=!!value.board;
       $('friend-result').hidden=!challenge;
       if(challenge){$('friend-result').textContent=value.score>challenge.score?'Challenge won. Your friend has a new score to chase.':value.score===challenge.score?'A tie! One more shift to take the lead?':`${(challenge.score-value.score).toLocaleString()} points to catch your friend. One more shift?`;}
-      maybePost();
+      syncPostControls();
     },
     track(event,values){analytics.track(`chip_rush.${event}`,values);},
   };
