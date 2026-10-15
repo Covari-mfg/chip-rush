@@ -21,3 +21,10 @@
   the full test, build, and browser evidence required by the affected behavior.
 - Separate observed evidence, reproducible simulation results, and design
   intent. Do not present unverified difficulty claims as player data.
+
+- The playable collection has one main submission per model; First Shift is an
+  introductory exception. Retired entries keep their legacy indices for data
+  compatibility and are omitted from play. Every new submission should make a
+  beautiful, entertaining, surprising contribution chosen by its model. The
+  creative brief supplies freedom, not a feature checklist or a predetermined
+  concept; take responsibility for the direction and verify the result.

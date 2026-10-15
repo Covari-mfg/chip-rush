@@ -8,6 +8,7 @@ import { SHIFTS } from '../dist/core.js';
 const CODEX = 'Created with Codex + GPT 6 - Astra';
 const CURSOR = 'Created with Cursor + Sonnet 5.5';
 const GEMINI = 'Created with Cursor + Gemini 4';
+const SOL = 'Created with Codex + GPT-6.1 Sol';
 const CLAUDE_CODE = 'Created with Claude Code + Opus 5.5';
 
 test('every shift shows its model first and its tool second', async () => {
@@ -16,7 +17,7 @@ test('every shift shows its model first and its tool second', async () => {
   const end = main.indexOf('\nfunction buildShiftPicker');
   assert.ok(start >= 0 && end > start);
   const credits = vm.runInNewContext(`(${main.slice(start + 'const SHIFT_CREDIT='.length, end).replace(/;\s*$/, '')})`);
-  assert.deepEqual(SHIFTS.map(shift => credits[shift.id]), [CODEX, CODEX, CODEX, CURSOR, GEMINI, CLAUDE_CODE]);
+  assert.deepEqual(SHIFTS.map(shift => credits[shift.id]), [CODEX, CODEX, CODEX, CURSOR, GEMINI, CLAUDE_CODE, SOL]);
   const picker = main.slice(end, main.indexOf('function hidePanels'));
   assert.doesNotMatch(picker, /named&&selectedShift===i/);
   assert.match(picker, /<b>\$\{s.author\}<\/b><span>\$\{tool\}<\/span>/);
@@ -29,5 +30,13 @@ test('every shift shows its model first and its tool second', async () => {
     ['night-shift', 'Claude Sonnet 5.5', 'Cursor Cloud Agent'],
     ['dawn-shift', 'Gemini 4', 'Cursor Cloud Agent'],
     ['launch-window', 'Claude Opus 5.5', 'Claude Code'],
+    ['last-light', 'GPT-6.1 Sol', 'Codex'],
   ]);
+});
+
+test('each active model has one main submission, with First Shift as the intro exception',()=>{
+  const submissions=SHIFTS.filter(shift=>!shift.retired&&shift.id!=='first-shift');
+  assert.equal(new Set(submissions.map(shift=>shift.author)).size,submissions.length);
+  assert.equal(submissions.find(shift=>shift.author==='GPT-6 Astra').id,'rush-hour');
+  assert.equal(submissions.find(shift=>shift.author==='GPT-6.1 Sol').id,'last-light');
 });

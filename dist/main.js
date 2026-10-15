@@ -1,8 +1,10 @@
 import * as THREE from './vendor/three.module.js';
 import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig, createHangar, createLaunchComplex, createAssembly, LAUNCH_SITE } from './assets/models.js';
-import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType } from './core.js';
+import { ShopGame, SHIFTS, OPS, PROGRAM_DURATION, stockType, isPlayableShift, nextShiftIndex } from './core.js';
 import { ShopAudio } from './audio.js';
 import { LaunchGame, launchOp } from './launch.js';
+import { BeaconGame } from './beacon.js';
+import { createHarbor } from './assets/harbor.js';
 import { createSocial } from './social.js';
 import { runTime, readSpeedRecords, recordClear } from './records.js';
 import { technologyBadges, technologyIcon } from './technology.js';
@@ -13,6 +15,7 @@ import { createTapNavigation } from './tap-navigation.js';
 
 const speedRecords=(()=>{try{return readSpeedRecords(localStorage,SHIFTS);}catch{return {};}})();
 let homeView='challenges',titleFrame=null;
+let beaconEnding=null,beaconFinaleTime=0;
 const interfaceMode=deviceInterface(navigator);
 document.documentElement.dataset.interface=interfaceMode;
 const phoneDevice=isPhoneDevice(navigator);
@@ -21,7 +24,7 @@ const $=id=>document.getElementById(id);
 if(interfaceMode==='mobile'){$('scene').setAttribute('aria-label','3D workshop. Tap a station to walk over and use it. Tap Dash while walking to move faster.');$('briefing-touch').hidden=false;$('touch-help').hidden=false;$('mobile-tap-hint').hidden=false;$('mobile-dash').hidden=false;document.querySelector('.help-keys').hidden=true;}
 const mobileTaps=createTapNavigation();
 // Shifts and Open for Business share one renderer; game points at the active rules.
-const classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),audio=new ShopAudio();let game=classicGame;
+const classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),audio=new ShopAudio();let game=classicGame;
 const launching=()=>game===launchGame&&!menuMode;
 let challengeRun=false;
 const sourceCard=$('source-card');
@@ -33,7 +36,7 @@ function readRoleSave(key){try{const value=JSON.parse(localStorage.getItem(key)|
 function readUnlocked(value){return Math.max(0,Math.min(SHIFTS.length-1,Math.trunc(Number(value))||0));}
 // A level cleared before its successor existed unlocks that successor. Stars
 // earned on a still-locked level (friend challenges) never unlock anything.
-function unlockCleared(level,stars){for(let i=0;i<SHIFTS.length-1;i++)if(i<=level&&Number(stars?.[i])>0)level=Math.max(level,i+1);return level;}
+function unlockCleared(level,stars){for(let i=0;i<SHIFTS.length-1;i++)if(i<=level&&Number(stars?.[i])>0)level=Math.max(level,nextShiftIndex(i));return level;}
 // Playing First Shift once, cleared or not, opens every shift. A save that
 // already has a First Shift score or star counts as played.
 function playedFirstShift(bests,stars){return Number(bests?.[0])>0||Number(stars?.[0])>0;}
@@ -107,6 +110,7 @@ const openHalls=new Set();
 const MAPS={
   'first-shop':{theme:'day'},
   'night-shop':{theme:'night'},
+  'harbor-pier':{theme:'harbor',shell:'harbor',hide:['office'],fixed:[],place:{ship:{name:'QUAY · LOAD / SAIL'},lathe:{x:-3.6},mill:{x:.5}}},
   'dawn-shop':{theme:'dawn',place:{
     lathe:{x:-3.3,z:-2.95,access:{x:-3.3,z:-1.29}},
     mill:{x:3.1,z:-2.85,access:{x:3.1,z:-1.16}},
@@ -129,7 +133,7 @@ const mapHas=(def,mapId)=>(!def.hall||openHalls.has(def.hall))&&(def.map?[].conc
 const placed=(def,mapId)=>({...def,...MAPS[mapId].place?.[def.id]});
 const accessOf=def=>def.access||{x:def.x,z:def.z+def.d/2+.63};
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,lighting,appliedTheme=null,lightningFlash=0;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,harbor,lighting,appliedTheme=null,lightningFlash=0;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
@@ -334,6 +338,8 @@ function createMaterialBin(type){
 
 // Both themes light the same shop. Night keeps every station readable.
 const THEMES={
+  harborDusk:{sky:0x14283e,backdrop:0x1b3549,hemi:[0xc4d5ee,0x23384f,1.85],sun:[0xffc48a,2.4],fill:[0x83a4dd,1.65],exposure:1.16},
+  harbor:{sky:0x26364f,backdrop:0x254358,hemi:[0xffe4bf,0x35607b,2.1],sun:[0xffc68e,3.6],fill:[0x8bc9dc,2],exposure:1.2},
   day:{sky:0x102c38,backdrop:0x163845,hemi:[0xdafff3,0x466374,2.25],sun:[0xffe6b5,3.8],fill:[0x86d8ee,2],exposure:1.22},
   night:{sky:0x070f19,backdrop:0x0a1620,hemi:[0x9db8f4,0x22303f,1.55],sun:[0xffc98d,2.9],fill:[0x4f7fd6,1.5],exposure:1.16},
   dawn:{sky:0x091828,backdrop:0x0d2134,hemi:[0xb9f0ff,0x1d354c,1.88],sun:[0x6fe3ff,3.4],fill:[0xff9f59,2.05],exposure:1.21},
@@ -360,13 +366,14 @@ function applyMap(){
     appliedTheme=mapKey;openHalls.clear();for(const id of halls)openHalls.add(id);
     applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
     for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;}s.label.querySelector('.station-name').textContent=s.def.name;}
-    const launchMap=MAPS[mapId].shell==='hangar';world.visible=!launchMap;hangar.visible=launchSite.visible=launchMap;
+    const launchMap=MAPS[mapId].shell==='hangar',harborMap=MAPS[mapId].shell==='harbor';world.visible=!launchMap&&!harborMap;hangar.visible=launchSite.visible=launchMap;harbor.visible=harborMap;lighting.backdrop.visible=!harborMap;
     // The east wing widens the room: refit the camera and stretch the sun's shadows over it.
     const wing=mapId==='owner-wing';annex.visible=wing;if(stormRig)stormRig.visible=mapId==='dawn-shop';for(const [id,shell] of hallShells)shell.built.visible=openHalls.has(id);fitLights(wing);
     shopFrame=measureShopFrame();layoutDirty=true;resetView();
   }
   for(const [id,shell] of hallShells)shell.plot.visible=managing&&mapId==='owner-wing'&&!openHalls.has(id)&&(game.hallBuyable(id)||game.hallsPending.includes(id));
   if(managing){const t=game.mode==='evening'||game.mode==='results'?1:Math.min(1,game.elapsed/DAY_SECONDS);applyTheme(THEMES.morning,THEMES.dusk,t*t);}
+  if(beaconing())applyTheme(THEMES.harbor,THEMES.harborDusk,Math.min(1,game.elapsed/game.config.duration));
   if(launching()){const t=Math.min(1,game.elapsed/game.config.duration);applyTheme(THEMES.predawn,THEMES.sunrise,pad.cinematic?Math.min(1,.75+pad.cinematic.t/14):t*.75);}
   for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
   for(const [id,bay] of Object.entries(bays)){const def=stations[id].def;bay.visible=managing&&mapHas(def,mapId)&&!game.stations[id];bay.position.set(def.x,0,def.z);bay.rotation.y=def.baseBay?0:def.rotationY??0;}
@@ -394,7 +401,7 @@ function boot(){
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
   world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);stormRig=createStormRig();stormRig.visible=false;scene.add(stormRig);
-  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);
+  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);harbor=createHarbor();harbor.visible=false;scene.add(harbor);
   for(const h of HALL_PLOTS){const shell=createHall(h);shell.built.visible=shell.plot.visible=false;scene.add(shell.built,shell.plot);hallShells.set(h.id,shell);
     const sign=$('wing-sign').cloneNode(true);sign.id='hall-sign-'+h.id;sign.classList.add('hall-sign');sign.setAttribute('aria-label',`Expand the shop with ${h.name}`);sign.querySelector('.station-name').textContent=`BUILD ${h.name.toUpperCase()}`;sign.onclick=()=>openPopover('hall',h.id);$('wing-sign').after(sign);hallSigns.set(h.id,sign);}
   scene.add(sun.target);
@@ -434,7 +441,8 @@ function measureShopFrame(){
   // A plot for sale peeks in at the edge of the fitted view, but only where it touches floor already open.
   for(const h of HALL_PLOTS)if(!openHalls.has(h.id)&&game.manager&&!menuMode&&game.hallBuyable?.(h.id)&&(h.row===1||HALL_PLOTS.some(o=>openHalls.has(o.id)&&hallAdjacent(o,h))))include(new THREE.Vector3(h.cx,0,h.z0+2));
   if(launchSite?.visible)for(const point of launchSite.userData.framePoints)include(point);
-  for(const shellObject of [...(hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
+  if(harbor?.visible)for(const point of harbor.userData.framePoints)include(point);
+  for(const shellObject of [...(harbor?.visible?[]:hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
     const shell=new THREE.Box3().setFromObject(shellObject);
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
   }
@@ -493,6 +501,7 @@ function updateCamera(dt,instant=false){
   if(playFrame&&!menuMode){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
   if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
+  if(beaconing()&&(beaconEnding||game.mode==='results')){const t=Math.min(1,beaconFinaleTime/4),blend=t*t*(3-2*t);halfHeight=THREE.MathUtils.lerp(halfHeight,8.5,blend);look.lerp(new THREE.Vector3(6,1,-5),blend);}
   camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
   camera.position.copy(look).add(cameraOffset);camera.lookAt(look);
   if(shake>0&&!reduced){camera.position.x+=(Math.random()-.5)*shake*.07;camera.position.y+=(Math.random()-.5)*shake*.04;}
@@ -557,7 +566,10 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='kitted'){floatText(ev.waiting?`KIT · ${ev.waiting} TO GO`:'KIT COMPLETE','assemble',true);const s=stations.assemble;spawnParticles(s.def.x+.8,1.0,s.def.z,0x9fe0ff,5);}
   if(ev.type==='assembling'){floatText('ASSEMBLING','assemble',true);}
   if(ev.type==='expired')toast(`#${ev.orderId} expired`,3.3);
-  if(ev.type==='finish'){if(launching())startTerminalCount();else showResults();}
+  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else showResults();}
+  if(ev.type==='quayLoaded')floatText(`${ev.count} / 3 ON QUAY`,'ship',true);
+  if(ev.type==='tenderDeparted')toast(`Tender away · ${ev.count} part${ev.count===1?'':'s'} · 12s crossing`,2.5);
+  if(ev.type==='beaconLit'&&ev.lit)toast('The light is turning. Keep the boats coming.',3);
   if(ev.type==='load'){const s=stations[ev.station];spawnParticles(s.def.x,1.15,s.def.z,0x7ff0e0,4);}
 }}
 function partSignature(o){return `${o.id}:${o.index}:${o.location}`;}
@@ -565,7 +577,7 @@ function syncParts(){
   const source=game.sourcing?.started?game.sourcing:null;
   const active=[...game.orders,...(source?[source]:[])];
   // Covari crates in transit or waiting at Receiving are drawn by the dock itself.
-  const shown=o=>o.started&&o.location!=='supplier'&&o.location!=='receiving';
+  const shown=o=>o.started&&!['supplier','receiving','quay','tender'].includes(o.location);
   if(game.manager)ensureStaffViews();
   const living=new Set(active.filter(shown).map(o=>o.id));
   for(const [id,entry] of parts){if(!living.has(id)){entry.mesh.removeFromParent();parts.delete(id);}}
@@ -637,6 +649,7 @@ function animateOfficeSeat(dt){
 function animateShop(dt){
   const active=game.mode==='playing';
   applyMap();
+  updateHarbor(dt);
   if(stations.receiving)stations.receiving.model.userData.crate.visible=!!game.receiving;
   for(const [id,s] of Object.entries(stations)){
     const state=game.stations[id],down=!!state?.down,busy=!!state?.part&&!state.ready&&!down&&!state?.service,ready=!!state?.ready,op=game.manager?state?.op:id;
@@ -692,17 +705,18 @@ function revealSelectedTicket(){
 function updateTickets(force){
   const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${o.id===game.selectedId}:${game.stations[o.location]?.ready}:${o.programmed}:${game.office.orderId===o.id}:${game.office.present}:${game.call?.orderId===o.id?game.call.state:""}`).join('|');
   if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. Keep an eye on incoming orders.</div>';}
-    for(const o of game.orders){const el=document.createElement('article');const stock=stockType(o);const active=game.heldOrder?.id===o.id,focus=!game.hand&&(game.office.orderId??game.selectedId)===o.id;el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(active?' carried-job':focus?' passive-focus':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Order ${o.id}, ${o.name}`);const route=orderWorkflow(o,game.config.programming).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><div class="route">${route}</div><div class="ticket-status sr-only">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;$('orders').appendChild(el);}
+    for(const o of game.orders){const el=document.createElement('article');const stock=stockType(o);const active=game.heldOrder?.id===o.id,focus=!game.hand&&(game.office.orderId??game.selectedId)===o.id;el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(active?' carried-job':focus?' passive-focus':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Order ${o.id}, ${o.name}`);const route=orderWorkflow(o,game.config.programming).map(step=>beaconing()&&step.key==='ship'?{...step,label:'QUAY',title:'Load at the quay, then send the tender',done:['quay','tender'].includes(o.location),active:o.index===o.route.length-1&&!['quay','tender'].includes(o.location)}:step).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><div class="route">${route}</div><div class="ticket-status sr-only">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;$('orders').appendChild(el);}
     $('orders').appendChild(sourceCard);if(focused)$(focused)?.focus({preventScroll:true});
     $('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
     if(renderedSelection!==game.selectedId){renderedSelection=game.selectedId;revealSelectedTicket();}
   }
-  for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=ticketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
+  for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=beaconing()&&o.location==='tender'?`${Math.ceil(game.tender.remaining)}s TO LIGHT`:Math.ceil(o.remaining)+'s';el.querySelector('.due').classList.toggle('urgent',o.remaining<20);const rush=game.call?.orderId===o.id?game.call:null;const badge=el.querySelector('.rush-status');badge.hidden=!rush;badge.textContent=rush?(rush.state==='active'?`RUSH +${rush.bonus} · ${Math.ceil(rush.remaining)}s`:`CALL · +${rush.bonus} offer`):'';el.classList.toggle('rush-ticket',!!rush);el.querySelector('.ticket-status').textContent=beaconing()&&o.location==='quay'?'ON QUAY · READY TO SAIL':beaconing()&&o.location==='tender'?'ON TENDER · CROSSING':ticketState(o);el.querySelector('.ticket-status').classList.toggle('sr-only',!beaconing()||!['quay','tender'].includes(o.location));el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
 }
-function nextTarget(){if(game.manager)return managerNextTarget();if(onPhone())return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const ready=Object.entries(game.stations).find(([id,s])=>s.ready);if(ready)return ready[0];if(game.nextCAD?.())return 'office';const candidates=['round','plate','block'].map(type=>game.nextMaterial?.(type)).filter(Boolean);const next=candidates.sort((a,b)=>a.remaining-b.remaining)[0];if(next)return `material-${stockType(next)}`;const o=game.selected;return o?.location==='material'?`material-${stockType(o)}`:o?.location==='hands'?o.route[o.index]:o?.location||null;}
-function stationAction(id){if(id==='assemble'&&launching())return cellAction();if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
+function nextTarget(){if(game.manager)return managerNextTarget();if(onPhone())return 'office';if(game.heldOrder&&!game.heldOrder.programmed)return 'office';if(game.hand)return game.heldOrder?.route[game.heldOrder.index];const ready=Object.entries(game.stations).find(([id,s])=>s.ready);if(ready)return ready[0];if(game.nextCAD?.())return 'office';const candidates=['round','plate','block'].map(type=>game.nextMaterial?.(type)).filter(Boolean);const next=candidates.sort((a,b)=>a.remaining-b.remaining)[0];if(next)return `material-${stockType(next)}`;if(beaconing()&&game.quay.length&&game.tender.phase==='docked')return 'ship';const o=game.selected;return o?.location==='material'?`material-${stockType(o)}`:o?.location==='hands'?o.route[o.index]:o?.location||null;}
+function stationAction(id){if(beaconing()&&id==='ship')return game.heldOrder?'Load finished part onto quay':game.tender.phase==='docked'?(game.quay.length?`Send ${game.quay.length} parts to lighthouse`:'Load a finished part, then use again to sail'):`Tender returns in ${Math.ceil(game.tender.remaining+(game.tender.phase==='outbound'?12:0))}s`;if(id==='assemble'&&launching())return cellAction();if(onPhone())return game.call.state==='answering'?`On the phone · ${Math.ceil(game.call.answerRemaining)}s`:'Choose your reply to the customer';const o=game.heldOrder,s=game.stations[id];if(id==='office')return game.config.overdrive?(game.surgeRemaining>0?`Generator Surge active · 2.0× (${Math.ceil(game.surgeRemaining)}s)`:game.surgeCooldown>0?`Capacitors recharging · ${Math.ceil(game.surgeCooldown)}s`:'Trigger 2.0× Generator Surge (16s)'):!game.config.programming?'CAD prepared for this shift':game.call?.state==='ringing'?'Answer customer call':game.nextCAD?.()?'Auto CAD · stay at the desk':'CAD complete';if(id==='receiving')return game.receiving?(game.hand?`Free your hands to receive #${game.receiving.orderId}`:`Collect Order #${game.receiving.orderId}`):game.sourcing?.state==='sourcing'||game.manager&&game.covariOrders().length?'Delivery on the way':'No delivery waiting';
   if(game.manager){const action=managerStationAction(id);if(action)return action;}if(id.startsWith('material-')){const type=id.slice(9);const next=game.nextMaterial(type);return o?.id===201?'Inspect and ship this customer part':game.hand?`Recycle #${o.id} · restart route`:next?`Collect ${type} stock · #${next.id}`:game.orders.some(job=>stockType(job)===type&&!job.programmed)?'Complete CAD at the office first':`No ${type} job ready`;}if(id==='buffer')return game.hand&&game.buffer?'Swap carried and parked parts':game.hand?'Park carried part':game.buffer?'Collect parked part':'Hold a part here';if(id==='ship')return o?.route[o.index]==='ship'?`Ship #${o.id}`:'Bring an inspected part';if(s?.part)return s.ready?(game.hand?(o?.route[o.index]===id?`Swap for #${s.part.orderId}`:'Held part needs another operation'):`Collect #${s.part.orderId}`):`Working · ${Math.ceil(s.remaining)}s`;return o?.route[o.index]===id?`Start ${opInfo(id).name.toLowerCase()}`:`${opInfo(id)?.name||id} station`;}
 function updateUI(force=false){
+  updateTenderPanel();
   $('clear-run').hidden=!!game.manager;$('clear-clock').textContent=runTime(game.clearElapsed??game.elapsed);$('clear-run').classList.toggle('cleared',game.clearElapsed!==null);$('clear-clock-label').textContent=game.clearElapsed!==null?'CLEARED IN':'CLEAR CLOCK';
   if(game.manager)updateManagerHUD(force);else{
   $('score-label').textContent='SCORE';$('timer-label').textContent='SHIFT ENDS';$('score').classList.remove('negative');
@@ -737,14 +751,15 @@ function updateSourceUI(){
   if(technology.dataset.technology!==job.technology){technology.innerHTML=technologyBadges([job.technology]);technology.dataset.technology=job.technology;}
   $('source-due').textContent=offered?`${Math.ceil(job.offerRemaining)}s`:'+300';
   $('source-partner').hidden=offered;
-  $('source-detail').textContent=job.state==='sourcing'?`· Delivery ${Math.ceil(job.remaining)}s`:job.location==='receiving'?'· Delivered':job.location==='inspect'?(qc.ready?'· QC approved':`· QC ${Math.ceil(qc.remaining)}s`):job.location==='buffer'?'· On bench':job.index>0?'· Ready to ship':'· Ready for QC';
+  $('source-detail').textContent=job.state==='sourcing'?`· Delivery ${Math.ceil(job.remaining)}s`:job.location==='receiving'?'· Delivered':job.location==='inspect'?(qc.ready?'· QC approved':`· QC ${Math.ceil(qc.remaining)}s`):job.location==='buffer'?'· On bench':job.location==='quay'?'· On quay':job.location==='tender'?'· Crossing to the light':job.index>0?'· Ready to ship':'· Ready for QC';
   const route=$('source-route');route.hidden=!delivered;
   if(delivered){const stage=job.location==='receiving'?0:job.index===0?1:2;const signature=String(stage);if(route.dataset.stage!==signature){route.dataset.stage=signature;route.innerHTML=['RECEIVE','QC','SHIP'].map((label,i)=>`<span class="route-step${i<stage?' done':i===stage?' active':''}">${i<stage?'✓ ':''}${label}</span>`).join('<span class="route-arrow">›</span>');}}
   $('source-accept').hidden=!offered;$('source-decline').hidden=!offered;
   $('source-accept').disabled=onPhone();
   const collect=$('source-collect');collect.hidden=!delivered;
   collect.textContent=job.location==='receiving'?'Collect delivery ↗':job.location==='buffer'?'Collect from bench ↗':job.location==='inspect'?(qc.ready?'Collect approved part ↗':'Inspecting…'):job.index>0?'Ship order ↗':'Inspect part ↗';
-  collect.disabled=delivered&&job.location==='inspect'&&!qc.ready;
+  if(beaconing()&&job.location==='quay')collect.textContent='Send tender ↗';if(beaconing()&&job.location==='tender')collect.textContent='Crossing…';
+  collect.disabled=delivered&&(job.location==='inspect'&&!qc.ready||job.location==='tender');
   sourceCard.classList.toggle('delivered',delivered);sourceCard.classList.toggle('chosen',!offered);
 }
 function updateOfficeUI(){
@@ -824,13 +839,14 @@ function frame(now){
   if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
-const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5'};
+const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5','last-light':'Created with Codex + GPT-6.1 Sol'};
 function buildShiftPicker(){
   const holder=$('shift-picker');holder.replaceChildren();
   SHIFTS.forEach((s,i)=>{
+    if(!isPlayableShift(i))return;
     const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=false;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',s.name);
     const tool=s.harness.replace(' Cloud Agent','');const creditHtml=`<small class="shift-credit"><b>${s.author}</b><span>${tool}</span></small>`;
-    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${grades[i]?'★'.repeat(grades[i]):`${Math.round(s.duration/60*10)/10} min`}</span>`;
+    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):`${Math.round(s.duration/60*10)/10} min`}</span>`;
     b.onclick=()=>{selectedShift=i;buildShiftPicker();showHomeView('challenges');};holder.appendChild(b);
   });
   const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].id])}`:''].filter(Boolean);
@@ -856,13 +872,13 @@ function applyHomeRoute(){
   const route=location.hash.replace(/^#\/?/,'');showMenu();
   if(route==='open-for-business'){showHomeView('business');return;}
   if(route.startsWith('challenges')){
-    showHomeView('challenges');const id=route.split('/')[1],index=SHIFTS.findIndex(s=>s.id===id);if(index>=0)showBriefing(index);
+    showHomeView('challenges');const id=route.split('/')[1],index=SHIFTS.findIndex(s=>s.id===id);if(isPlayableShift(index))showBriefing(index);
   }else showHomeView('home');
 }
 
 function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
-function startShift(index){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(index+1).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index);selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -911,7 +927,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(){if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=Math.min(selectedShift,SHIFTS.length-1);game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);social.refreshBoard();}
+function showMenu(){endBeaconEnding();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -923,9 +939,10 @@ function showModelCredit(credit){
   el.append(kicker,names);
 }
 function showBriefing(index){
+  if(!isPlayableShift(index))return;
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
-  $('briefing-back').textContent='Back to challenges';$('briefing-targets').setAttribute('aria-label','Shipment targets');$('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?`${cfg.goal} The count starts at T−${clock(cfg.duration+(cfg.terminalCount??0))}.`:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
+  $('briefing-back').textContent='Back to challenges';$('briefing-targets').setAttribute('aria-label','Shipment targets');$('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?cfg.terminalCount?`${cfg.goal} The count starts at T−${clock(cfg.duration+cfg.terminalCount)}.`:cfg.goal:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>shipped</small></strong></div>`).join('');
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
@@ -946,7 +963,7 @@ function buildModeCard(){
   $('manager-summary').textContent=run?`Day ${run.day} · ${money(run.cash)}`:best?`Endless · Best ${money(best)}`:'Endless';
 }
 function showResults(){
-  if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.min(SHIFTS.length-1,game.shiftIndex+1));
+  if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)));
   // Finishing a First Shift run, pass or fail, opens every shift. Friend challenges unlock nothing.
   const opensAll=!challengeRun&&game.shiftIndex===0&&unlocked<SHIFTS.length-1;if(!challengeRun&&game.shiftIndex===0)unlocked=SHIFTS.length-1;
   const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
@@ -954,6 +971,7 @@ function showResults(){
   $('results-panel').classList.toggle('owner-mastery',shiftMastery);
   $('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'THREE-STAR SHIFT':passed?'CLEARED':'SHIFT OVER'}`;$('result-stars').innerHTML=[1,2,3].map(i=>`<span class="${i>stars?'empty':''}">★</span>`).join(' ');$('result-stars').setAttribute('aria-label',`${stars} out of 3 stars`);
   $('result-title').textContent=shiftMastery?'Absolute machine.':passed?'That’s a good shift.':'One more shift?';
+  if(beaconing()){$('result-title').textContent=passed?'A way home.':'The harbor is still waiting.';}
   if(game===launchGame){$('result-kicker').textContent=`${game.config.name.toUpperCase()} · ${shiftMastery?'FULL STACK':passed?'LIFTOFF':'SCRUBBED'}`;$('result-title').textContent=shiftMastery?'Full stack. Clean flight.':passed?'Liftoff!':'Launch scrubbed.';}
   $('result-message').textContent=game===launchGame?`${game.shipped} sections stacked. ${passed?'The shop built that rocket.':game.config.retryTip}`:`${game.shipped} orders shipped. Clear target: ${game.config.passTarget}. ${game.finishReason==='work-complete'?'No work remaining.':`${game.unfinished} unfinished at closing.`}`;
   const faster=recordClear(speedRecords,game);try{localStorage.setItem('chip-rush-speed-v1',JSON.stringify(speedRecords));}catch{}
@@ -964,11 +982,12 @@ function showResults(){
   $('result-progress').textContent=nextStar<0?(shiftMastery?'Three stars. Exceptional precision under pressure.':'All three stars earned.'):`${game.config.stars[nextStar]-game.shipped} more shipped order${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;
   $('result-score-label').textContent='SCORE';$('result-shipped-label').textContent='SHIPPED';$('result-missed-label').textContent='MISSED';
   $('result-score').textContent=game.score.toLocaleString();$('result-shipped').textContent=game.shipped;$('result-missed').textContent=game.missed;
+  if(beaconing()){$('result-shipped-label').textContent='INSTALLED';$('result-message').textContent=`${game.shipped} lantern parts delivered in ${game.tender.trips} crossing${game.tender.trips===1?'':'s'}. ${passed?'The fishing boats have a light to follow.':game.config.retryTip}`;}
   const labels={base:'Parts',program:'CAD',speed:'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
   $('result-breakdown').textContent=Object.entries(game.scoreDetails).filter(([,v])=>v!==0).map(([k,v])=>`${labels[k]} ${v.toLocaleString()}`).join(' · ')||'Ship a part to start earning points.';
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} SHIPPED`;
   $('result-covari-message').textContent='More work than your shop can handle? Outsource with Covari. Keep the customer. Keep earning.';
-  $('next-button').innerHTML=passed&&!challengeRun&&game.shiftIndex<SHIFTS.length-1?'NEXT SHIFT <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
+  $('next-button').innerHTML=passed&&!challengeRun&&nextShiftIndex(game.shiftIndex)>=0?'NEXT SHIFT <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,clearElapsed:game.clearElapsed,finishReason:game.finishReason,spawned:game.spawnIndex});
 }
 function selectSourceJob(){
@@ -1234,7 +1253,7 @@ function updateManagerTickets(force){
     el.querySelector('.due').textContent=c.remaining>game.time?`${clock(c.remaining-game.time)} tomorrow`:clock(c.remaining);el.classList.toggle('urgent',c.remaining<25);
     el.querySelector('.ticket-status').textContent=state.text;el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,c.remaining/c.deadline)})`;
     el.querySelector('.contract-units').innerHTML=Array.from({length:c.units},(_,i)=>{const u=state.units[i-c.shipped-c.failed];return `<i class="${i<c.shipped?'done':i<c.shipped+c.failed?'failed':u?.started?'active':''}"></i>`;}).join('');updateWorkActions(el,c,c.id);}
-  for(const o of game.orders){if(o.contractId)continue;const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.ticket-status').textContent=managerTicketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;updateWorkActions(el,o,o.id);}
+  for(const o of game.orders){if(o.contractId)continue;const el=$('ticket-'+o.id);if(!el)continue;el.classList.toggle('urgent',o.remaining<20);el.querySelector('.due').textContent=beaconing()&&o.location==='tender'?`${Math.ceil(game.tender.remaining)}s TO LIGHT`:Math.ceil(o.remaining)+'s';el.querySelector('.ticket-status').textContent=managerTicketState(o);el.querySelector('.ticket-progress i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;updateWorkActions(el,o,o.id);}
 }
 function quoteAction(act,id){
   if(game.mode!=='playing')return;
@@ -1700,6 +1719,7 @@ function updateKitTickets(force){
 }
 
 function bindControls(){
+  $('tender-send').onclick=()=>goToStation('ship');$('beacon-results').onclick=()=>{endBeaconEnding();showResults();};
   syncPhoneOrientation();
   addEventListener('pointerdown',unlockHomeMusic);
   addEventListener('keydown',unlockHomeMusic);
@@ -1709,7 +1729,7 @@ function bindControls(){
   $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=(event)=>{if(event.target.closest('a')){window.open(event.target.closest('a').href,'_blank','noopener,noreferrer');event.preventDefault();return;}navigateHome('open-for-business');};$('briefing-back').onclick=()=>navigateHome(briefingManager?'':'challenges');
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
-  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.min(SHIFTS.length-1,game.shiftIndex+1):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
@@ -1727,6 +1747,7 @@ function bindControls(){
     if(e.code==='Escape'&&!$('store-panel').hidden){e.preventDefault();closeStore();return;}
     if(e.code==='KeyM'&&game.manager&&game.mode==='playing'){e.preventDefault();toggleStore();return;}
     if(managingView()&&['Equal','NumpadAdd','Minus','NumpadSubtract','Digit0','Numpad0'].includes(e.code)){e.preventDefault();if(e.code.endsWith('0'))resetView();else zoomView(/Equal|Add/.test(e.code)?1.4:1/1.4);return;}
+    if(beaconEnding&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();endBeaconEnding();showResults();return;}
     if(pad.cinematic&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();skipTerminalCount();return;}
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
     if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
@@ -1777,3 +1798,27 @@ function registerTools(){
   register({name:'start_walk_to_station',title:'Walk to a station',description:'Start walking the machinist to a station. Automatically interacts on arrival using normal movement and collision rules. Read shop state to check arrival.',annotations:{readOnlyHint:false,untrustedContentHint:false},inputSchema:{type:'object',properties:{station:{type:'string',enum:STATION_LAYOUT.map(s=>s.id)}},required:['station'],additionalProperties:false},execute:async(input)=>{if(!input||typeof input.station!=='string'||!stations[input.station])throw new Error('Choose a valid workshop station.');if(game.mode!=='playing')throw new Error('Clock in or resume the shift first.');goToStation(input.station);return {walkingTo:input.station};}});
 }
 try{boot();}catch(error){console.error(error);$('loading').hidden=true;$('fatal').hidden=false;$('fatal-message').textContent='This game needs WebGL 2 in a current browser. Enable hardware acceleration, then reload. '+(error?.message||'');}
+
+
+// Last Light: state comes from BeaconGame. Presentation cannot award deliveries.
+function beaconing(){return game===beaconGame&&!menuMode;}
+function startBeaconEnding(){
+  clearMovement();game.mode='terminal';beaconEnding={t:0};beaconFinaleTime=0;
+  $('beacon-finale').hidden=false;$('beacon-finale-title').textContent=game.passed()?'A way home.':'One more light.';
+  $('beacon-finale-copy').textContent=game.passed()?'Made on this pier. Seen from the sea.':'The boats will wait for your next shift.';
+  $('tender-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.add('beacon-finale');
+}
+function endBeaconEnding(){if(beaconEnding&&game===beaconGame&&game.mode==='terminal')game.mode='results';beaconEnding=null;$('beacon-finale').hidden=true;$('tender-panel').hidden=true;document.body.classList.remove('beacon-finale');}
+function updateHarbor(dt){
+  if(!harbor?.visible)return;
+  if(beaconEnding){beaconEnding.t+=phonePortrait()?0:dt;beaconFinaleTime=beaconEnding.t;if(beaconEnding.t>=10){endBeaconEnding();showResults();}}
+  harbor.userData.update(beaconGame,dt,clockTime,beaconFinaleTime);
+}
+function updateTenderPanel(){
+  const visible=beaconing()&&game.mode==='playing';$('tender-panel').hidden=!visible;if(!visible)return;
+  const boat=game.tender,away=boat.phase!=='docked';
+  $('tender-status').textContent=away?`${boat.phase==='outbound'?'Crossing':'Returning'} · ${Math.ceil(boat.remaining)}s`:'Tender at the quay';
+  $('tender-cargo').textContent=`${game.quay.length} / 3 on quay · ${game.shipped} / ${game.config.passTarget} installed`;
+  $('tender-send').textContent=away?'Tender away':game.quay.length?`Sail with ${game.quay.length} ↗`:'Load at quay ↗';
+  $('tender-send').disabled=away||!!game.hand||!game.quay.length||game.time<12;
+}

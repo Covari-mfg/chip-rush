@@ -1,4 +1,5 @@
 import { ShopGame, SHIFTS, OPS, stockType } from './core.js';
+import { BeaconGame } from './beacon.js';
 
 // Launch Window (level 5): the shop machines flight hardware beside the pad.
 // An order is a kit. Each of its parts starts from its own stock, follows its
@@ -231,7 +232,7 @@ export class LaunchGame extends ShopGame {
 
 // One place to create the rules for a level.
 export function shiftGame(shift) {
-  const game = SHIFTS[shift]?.engine === 'launch' ? new LaunchGame() : new ShopGame();
+  const game = SHIFTS[shift]?.engine === 'launch' ? new LaunchGame() : SHIFTS[shift]?.engine === 'beacon' ? new BeaconGame() : new ShopGame();
   game.reset(shift);
   return game;
 }

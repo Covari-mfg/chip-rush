@@ -85,7 +85,7 @@ export const SHIFTS = [
     programming:false,sourcing:false,calls:false,callTimes:[],passTarget:3,stars:[3,4,5],
   },
   {
-    id:'mixed-orders',mapId:'first-shop',name:'Mixed Orders',author:'GPT-6 Astra',harness:'Codex',
+    id:'mixed-orders',retired:true,mapId:'first-shop',name:'Mixed Orders',author:'GPT-6 Astra',harness:'Codex',
     subtitle:'Prepare CAD. Keep both machines busy.',
     brief:'Prepare CAD at the office, then collect stock. Some parts need both the lathe and mill.',
     tip:'CAD takes 6 seconds. Prepare the next job while machines run. Covari can handle an outside-capability order.',
@@ -97,7 +97,7 @@ export const SHIFTS = [
   {
     id:'rush-hour',mapId:'first-shop',name:'Rush Hour',author:'GPT-6 Astra',harness:'Codex',
     subtitle:'More orders. Calls. Competing promises.',
-    brief:'Keep mixed orders moving while customers call. Take a rush or keep the original promise.',
+    brief:'Prepare CAD at the office, collect the right stock, and keep both machines cutting. Customers may call with optional rush requests. Take a rush or keep the original promise.',
     tip:'Calls pause CAD; answer first at the office. Floor work continues while it rings. Rushes: +100 on time, −25 if missed.',
     retryTip:'Keep both machines cutting. Clear inspection before collecting another part.',
     duration:180,firstArrival:12,interval:18,deadline:105,maxOrders:8,
@@ -141,7 +141,24 @@ export const SHIFTS = [
     programming:false,sourcing:true,sourceJobs:LAUNCH_SOURCE_JOBS,calls:false,callTimes:[],passTarget:4,stars:[4,5,7],
     terminalCount:10,
   },
+  {
+    id:'last-light',mapId:'harbor-pier',engine:'beacon',name:'Last Light',author:'GPT-6.1 Sol',harness:'Codex',musicTrack:'harbor',
+    subtitle:'Make a light. Bring them home.',
+    goal:'Deliver 4 parts to relight the lighthouse.',
+    brief:'The rocket is gone. Down at the harbor, fishing boats are waiting for a light that no longer turns. Your shop has moved onto the pier. Machine and inspect lantern parts, load up to three onto the quay, then use the empty-handed quay again to send the tender. Parts count when they reach the lighthouse. Each crossing takes 12 seconds; the boat takes another 12 to return. Keep making parts while it sails.',
+    tip:'Send one part for a quick delivery, or hold for a fuller boat. Deadlines keep running on the quay and stop aboard. Covari can supply optical glass that this workshop cannot make.',
+    retryTip:'Keep both machines working while the tender is away. Leave 12 seconds for the last crossing.',
+    duration:240,firstArrival:20,interval:23,deadline:120,maxOrders:8,
+    recipes:[0,1,2,1,0,2,1,2],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
+    programming:false,sourcing:true,sourceJobs:[{name:'Ground Fresnel optic',capability:'Precision optical grinding',technology:'optics',gap:'No optical grinding equipment on the pier'}],
+    calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
+  },
 ];
+
+// Retired slots remain in the catalog for historical saves and scores. Entry
+// points use these helpers; UI order never becomes a new numeric identity.
+export const isPlayableShift = index => Number.isInteger(index)&&index>=0&&!!SHIFTS[index]&&!SHIFTS[index].retired;
+export const nextShiftIndex = index => SHIFTS.findIndex((shift,i)=>i>index&&!shift.retired);
 
 export const PROGRAM_DURATION = 6;
 const CALL_INVITATION_DURATION = 22;

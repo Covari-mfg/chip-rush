@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
-import { SHIFTS, OPS, RULESET, ShopGame } from '../dist/core.js';
+import { SHIFTS, OPS, RULESET, ShopGame, nextShiftIndex } from '../dist/core.js';
 import {
   ManagerGame, MANAGER_ROLE, MANAGER_MODE, MANAGER_OPS, MACHINES, BAYS, UPGRADES, WING, STAFF, JOBS, CUSTOMERS, RUN_LENGTHS, DAY_SECONDS, START_CASH,
   QUOTE_WINDOW, MAX_QUOTES, QUOTE_CUTOFF, COVARI_SLOTS, COVARI_DELIVERY, INSTALL_SECONDS, RESALE, LATE_PENALTY, AD, MAX_DAYS, BIDS,
@@ -88,7 +88,7 @@ function assertIntegrity(game) {
 test('Open for Business is a separate mode outside the shift catalog', () => {
   const level = MANAGER_MODE;
   assert.deepEqual(SHIFTS.slice(0, 5).map(shift => shift.id), ['first-shift', 'mixed-orders', 'rush-hour', 'night-shift', 'dawn-shift'], 'Earlier shifts keep their positions');
-  assert.equal(SHIFTS.length, 6, 'Launch Window is appended after Blackout Shift');
+  assert.equal(SHIFTS.length, 7, 'Launch Window and Last Light append after Blackout Shift');
   assert.ok(!SHIFTS.some(shift => shift.id === level.id || shift.mode), 'The mode is not a level');
   assert.ok(MANAGER_ROLE < 0, 'Its server role can never collide with a level index');
   assert.equal(new ManagerGame().start().shiftIndex, MANAGER_ROLE);
@@ -720,7 +720,8 @@ test('shop setup offers one limitless run and one leaderboard tab', async () => 
 });
 
 test('challenge links never carry manager runs', () => {
-  assert.equal(parseChallenge(new URL(challengeURL({role:MANAGER_ROLE, score:5000, shipped:5}, 'https://x.test/')).search), null);
+  assert.throws(()=>challengeURL({role:MANAGER_ROLE, score:5000, shipped:5}, 'https://x.test/'),RangeError);
+  assert.equal(parseChallenge('?'+new URLSearchParams({challenge:'1',rules:RULESET,role:String(MANAGER_ROLE),score:'5000',shipped:'5'})),null);
 });
 
 test('manager records load safely beside shift progress in the v8 save', async () => {
@@ -728,7 +729,7 @@ test('manager records load safely beside shift progress in the v8 save', async (
   const migration = main.slice(main.indexOf('const SAVE_KEY='), main.indexOf('const STATION_LAYOUT='));
   const load = initial => {
     const data = new Map(Object.entries(initial).map(([k, v]) => [k, JSON.stringify(v)]));
-    const context = vm.createContext({SHIFTS, RUN_LENGTHS, localStorage:{getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v)}});
+    const context = vm.createContext({SHIFTS, RUN_LENGTHS, nextShiftIndex, localStorage:{getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v)}});
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,managerRecord};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };

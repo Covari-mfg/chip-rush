@@ -1,8 +1,9 @@
-// Original 104 BPM country/bluegrass loop, procedural 128 BPM storm-synth buffer,
-// and locally synthesized shop cues. Audio unlocks on a home-screen gesture or clock-in.
+// Original country/bluegrass, storm-synth, harbor and launch scores, plus local
+// shop cues. Audio unlocks on a home-screen gesture or clock-in.
 const MUSIC_URL='./assets/music/country-bluegrass-104.mp3';
 const MUSIC_LOOP_SECONDS=1628308/44100;
 const STORM_LOOP_SECONDS=32*60/128; // 15.0s seamless 8-bar 128 BPM synthwave loop
+const HARBOR_BPM=92,HARBOR_LOOP_SECONDS=32*60/HARBOR_BPM;
 const MUSIC_LEVEL=.65; // With the .24 master: about 16 dB below the audition.
 function buildStormBuffer(ctx){
   if(typeof ctx.createBuffer!=='function')return null;
@@ -44,6 +45,67 @@ function buildStormBuffer(ctx){
   }
   return buffer;
 }
+// Last Light: an original eight-bar D-major harbor piece. Every note and its
+// quiet stereo echoes wrap into bar one; no recordings or external assets.
+function buildHarborBuffer(ctx){
+  if(typeof ctx.createBuffer!=='function')return null;
+  const rate=ctx.sampleRate||44100,len=Math.round(rate*HARBOR_LOOP_SECONDS),beat=60/HARBOR_BPM;
+  const buffer=ctx.createBuffer(2,len,rate),L=buffer.getChannelData(0),R=buffer.getChannelData(1);
+  const note=(at,beats,freq,volume,pan,voice)=>{
+    const start=Math.round(at*beat*rate),duration=beats*beat,count=Math.ceil(duration*rate);
+    const left=Math.sqrt((1-pan)/2),right=Math.sqrt((1+pan)/2);
+    const echo1=Math.round(beat*.75*rate),echo2=Math.round(beat*1.5*rate);
+    for(let j=0;j<count;j++){
+      const t=j/rate,u=t/duration,phase=Math.PI*2*freq*t;
+      let sample;
+      if(voice==='string'){
+        const envelope=Math.min(1,t/.55)*Math.min(1,(duration-t)/.95);
+        sample=(Math.sin(phase+.018*Math.sin(t*3.1))+.24*Math.sin(phase*2)+.07*Math.sin(phase*3))*envelope;
+      }else if(voice==='bell'){
+        const envelope=(1-Math.exp(-t*90))*Math.exp(-t*1.8)*Math.pow(1-u,2);
+        sample=(Math.sin(phase)+.30*Math.sin(phase*2.003)*Math.exp(-t*3)+.10*Math.sin(phase*4.01)*Math.exp(-t*6))*envelope;
+      }else{
+        const envelope=(1-Math.exp(-t*180))*Math.exp(-t*7)*Math.pow(1-u,2);
+        sample=(Math.sin(phase)+.32*Math.sin(phase*3.98)*Math.exp(-t*12))*envelope;
+      }
+      sample*=volume;
+      const i=(start+j)%len,a=(i+echo1)%len,b=(i+echo2)%len;
+      L[i]+=sample*left;R[i]+=sample*right;
+      L[a]+=sample*right*.16;R[a]+=sample*left*.16;
+      L[b]+=sample*left*.07;R[b]+=sample*right*.07;
+    }
+  };
+  // Dmaj9, Bm7, Gmaj9, A6: low, slow-bowed harmony beneath the glass melody.
+  const chords=[[146.832,220,277.183,329.628],[123.471,184.997,220,293.665],
+    [97.999,146.832,184.997,220],[110,164.814,220,277.183]];
+  const mallets=[[293.665,440,554.365,659.255],[246.942,369.994,440,587.330],
+    [195.998,293.665,369.994,440],[220,329.628,440,554.365]];
+  for(let bar=0;bar<8;bar++){
+    chords[bar%4].forEach((freq,i)=>note(bar*4,5.4,freq,.030,i%2===0?-.32:.32,'string'));
+    [0,1.5,2.5,3.5].forEach((at,i)=>note(bar*4+at,1.15,mallets[bar%4][(i+(bar>=4?1:0))%4],.15,i%2===0?-.46:.46,'mallet'));
+  }
+  const melody=[[.5,739.989],[2.25,880],[3.5,659.255],[4.75,587.330],[6.25,739.989],[7,880],
+    [8.5,987.767],[10,880],[11,659.255],[12.5,1108.731],[14,880],[15,739.989],
+    [16.5,880],[18.25,739.989],[19.5,659.255],[20.75,587.330],[22,739.989],[23,659.255],
+    [24.5,493.883],[26,587.330],[27,880],[28.5,659.255],[30.25,739.989],[31.25,554.365]];
+  melody.forEach(([at,freq],i)=>note(at,2.8,freq,.12,i%2===0?.23:-.23,'bell'));
+  // Deterministic, low-passed sea hush. Warm the filter with the end of the
+  // same noise cycle so its state crosses the loop boundary continuously.
+  const noise=new Float32Array(len);let seed=20261015,low=0;
+  for(let i=0;i<len;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;noise[i]=seed/2147483648-1;}
+  for(let i=Math.max(0,len-1024);i<len;i++)low+=.075*(noise[i]-low);
+  let energy=0,peak=0;
+  for(let i=0;i<len;i++){
+    low+=.075*(noise[i]-low);
+    const hush=low*.018*(.7+.3*Math.sin(i/len*Math.PI*4));
+    L[i]+=hush;R[i]+=hush*.92;
+    energy+=L[i]*L[i]+R[i]*R[i];peak=Math.max(peak,Math.abs(L[i]),Math.abs(R[i]));
+  }
+  // Keep the calm score audible beside the existing loops, with ample headroom.
+  const gain=Math.min(.085/Math.sqrt(energy/(len*2)),.65/peak);
+  for(let i=0;i<len;i++){L[i]*=gain;R[i]*=gain;}
+  return buffer;
+}
 // Launch Window's original 120 BPM countdown score: three synchronised stems
 // (scripts/music/generate_launch_music.py). The count decides how many play.
 const LAUNCH_STEMS=['./assets/music/launch-base-120.mp3','./assets/music/launch-drive-120.mp3','./assets/music/launch-climax-120.mp3'];
@@ -52,19 +114,19 @@ const LAYERS=[[1,0,0],[1,1,0],[1,1,1],[.8,1,1]];
 export class ShopAudio {
   constructor(){
     this.ctx=null;this.active=false;this.ducked=false;this.track='country';
-    this.musicBuffer=null;this.stormBuffer=null;this.musicSource=null;this.musicOffset=0;this.musicLoad=null;
+    this.musicBuffer=null;this.stormBuffer=null;this.harborBuffer=null;this.musicSource=null;this.musicOffset=0;this.musicLoad=null;
     this.stemBuffers=null;this.stemLoad=null;this.stemSources=null;this.stemOffset=0;this.intensity=0;
   }
   // 'country' is the shop's loop, 'storm' Blackout Shift's synthesized loop,
-  // 'launch' Launch Window's layered countdown stems.
+  // 'launch' Launch Window's layered countdown stems; 'harbor' Last Light.
   setTrack(track='country'){
-    const next=['storm','launch'].includes(track)?track:'country';
+    const next=['storm','launch','harbor'].includes(track)?track:'country';
     if(next===this.track)return;
-    this.track=next;
+    this.track=next;this.musicOffset=0;
     if(this.ctx&&this.musicSource){
       const now=this.ctx.currentTime,{source,fade}=this.musicSource;
       fade.gain.cancelScheduledValues(now);fade.gain.setTargetAtTime(0,now,.015);
-      source.stop(now+.06);this.musicSource=null;this.musicOffset=0;
+      source.stop(now+.06);this.musicSource=null;
     }
     if(next==='launch'){this.intensity=0;this.stemOffset=0;this.loadStems();}
     this.syncMusic();
@@ -97,7 +159,7 @@ export class ShopAudio {
         .then(buffer=>{this.musicBuffer=buffer;this.syncMusic();})
         .catch(()=>{this.musicLoad=null;}); // Cues and gameplay still work; retry on resume.
     }
-    if(this.track==='storm')this.syncMusic();
+    if(this.track==='storm'||this.track==='harbor')this.syncMusic();
   }
   syncMusic(){
     if(!this.ctx)return;
@@ -118,8 +180,9 @@ export class ShopAudio {
       });
     }
     const useStorm=this.track==='storm'&&(this.stormBuffer||(this.stormBuffer=buildStormBuffer(this.ctx)));
-    const buffer=useStorm?this.stormBuffer:this.musicBuffer;
-    const loopCap=useStorm?STORM_LOOP_SECONDS:MUSIC_LOOP_SECONDS;
+    const useHarbor=this.track==='harbor'&&(this.harborBuffer||(this.harborBuffer=buildHarborBuffer(this.ctx)));
+    const buffer=useStorm?this.stormBuffer:useHarbor?this.harborBuffer:this.musicBuffer;
+    const loopCap=useStorm?STORM_LOOP_SECONDS:useHarbor?HARBOR_LOOP_SECONDS:MUSIC_LOOP_SECONDS;
     if(!single&&this.musicSource){
       const {source,fade,startedAt,offset}=this.musicSource;
       this.musicOffset=(offset+now-startedAt)%source.loopEnd;
@@ -148,7 +211,10 @@ export class ShopAudio {
     case'hold':this.note(233,.45,'square',.07);this.note(196,.7,'square',.07,.5);break;
     case'scrub':[392,330,262,196].forEach((f,i)=>this.note(f,.45,'triangle',.18,i*.2));break;
     case'ignition':this.rumble(3.4,.5,160,2.6);break;
-    case'liftoff':this.rumble(6,.85,320,.2);[294,440,587,880].forEach((f,i)=>this.note(f,2.4,'triangle',.11,.05*i));break;}}
+    case'liftoff':this.rumble(6,.85,320,.2);[294,440,587,880].forEach((f,i)=>this.note(f,2.4,'triangle',.11,.05*i));break;
+    // Tender's low two-note horn; a rising bell when another beacon comes on.
+    case'tenderDeparted':this.note(146.832,.7,'sine',.14);this.note(220,.9,'sine',.10,.18);break;
+    case'beaconLit':[587.330,739.989,880,1174.659].forEach((f,i)=>this.note(f,.8,'sine',.14,i*.11));break;}}
   // Filtered noise swell for engines; skipped where the context cannot filter.
   rumble(duration,volume,cutoff,attack){
     if(!this.ctx?.createBiquadFilter||!this.ctx.createBuffer)return;

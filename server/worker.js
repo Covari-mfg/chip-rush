@@ -1,10 +1,10 @@
-import { RULESET, SHIFTS } from '../dist/core.js';
+import { RULESET, SHIFTS, isPlayableShift } from '../dist/core.js';
 import { shiftGame } from '../dist/launch.js';
 import { MANAGER_ROLE, MANAGER_BOARD, MANAGER_SCORE_RULESETS, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 const fail=(message,status=400)=>json({error:message},status);
-const validRole=role=>Number.isInteger(role)&&role>=0&&role<SHIFTS.length;
+const validRole=isPlayableShift;
 const playerId=request=>request.headers.get('cookie')?.match(/(?:^|;\s*)chip_player=([a-f0-9-]{36})(?:;|$)/)?.[1];
 async function body(request){
   if(!request.headers.get('content-type')?.startsWith('application/json'))throw new Error('Send JSON.');
@@ -96,7 +96,7 @@ export default {
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
         const data=await env.DB.prepare('SELECT name,role,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset=? ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET).all();
-        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name,elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
+        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:SHIFTS[role].stars.filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
         const value=await body(request);

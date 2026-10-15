@@ -197,6 +197,8 @@ export class Driver {
     let guard=0;
     while(this.game.mode==='playing'&&guard++<20000) {
       if(this.calls()) continue;
+      // Last Light delivers only after an explicit empty-handed quay visit.
+      if(this.game.tender?.phase==='docked'&&this.game.quay.length&&!this.game.hand){this.interact('ship');continue;}
       // Choosing the Covari card is instant; Decline (the default) lets the offer lapse.
       if(this.covari==='accept'&&this.game.sourcing?.state==='offer'&&this.game.requestSource()){this.event('source-accept');this.tick(Math.max(DT,this.actionDelay));continue;}
       const held=this.game.heldOrder;
@@ -222,7 +224,7 @@ export class Driver {
       }
       if(this.strategy==='serial') {
         let order=this.game.order(this.activeId);
-        if(!order) {order=this.game.orders[0];this.activeId=order?.id;}
+        if(!order||['quay','tender'].includes(order.location)) {order=this.game.orders.find(candidate=>!['quay','tender'].includes(candidate.location));this.activeId=order?.id;}
         if(!order) {this.tick(.2);continue;}
         if(!order.programmed) {
           if (this.game.call?.state==='ringing') { this.tick(.2); continue; }

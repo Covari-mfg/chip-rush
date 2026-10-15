@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { RULESET, SHIFTS } from '../dist/core.js';
+import { RULESET, SHIFTS, isPlayableShift } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 import { runTime } from '../dist/records.js';
 
@@ -31,7 +31,7 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,a
     if(path==='/api/scores')return response({posted:true});
     return response({entries:[]});
   };
-  const context=vm.createContext({RULESET,SHIFTS,runTime,URL,URLSearchParams,AbortSignal,
+  const context=vm.createContext({RULESET,SHIFTS,isPlayableShift,runTime,URL,URLSearchParams,AbortSignal,
     document:{getElementById:$,createElement:element},location:new URL(url),navigator,fetch,localStorage});
   vm.runInContext(executable,context);
   const social=context.createSocial({onChallenge(role){acceptedChallenges.push(role);},analytics});
@@ -42,12 +42,12 @@ function setup({url='https://chip-rush.example/',nativeShare,clipboard,fetcher,a
 
 test('social lifecycle analytics emits one start and one completion per shift',async()=>{
   const events=[];const f=setup({analytics:{track(...args){events.push(args);}}});
-  f.social.start(2);f.finish();f.finish();f.social.start(1);f.finish({role:1,score:2700,shipped:5,sourced:0,calls:0});
+  f.social.start(2);f.finish();f.finish();f.social.start(3);f.finish({role:3,score:2700,shipped:5,sourced:0,calls:0});
   assert.equal(JSON.stringify(events),JSON.stringify([
     ['chip_rush.shift_started',{role:2}],
     ['chip_rush.shift_completed',{role:2,score:4173,shipped:SHIFTS[2].stars[2],sourced:1}],
-    ['chip_rush.shift_started',{role:1}],
-    ['chip_rush.shift_completed',{role:1,score:2700,shipped:5,sourced:0}],
+    ['chip_rush.shift_started',{role:3}],
+    ['chip_rush.shift_completed',{role:3,score:2700,shipped:5,sourced:0}],
   ]));
 });
 
@@ -97,8 +97,8 @@ for(const outcome of ['success','failure'])test('a stale post '+outcome+' cannot
   const f=setup({fetcher:request=>request.path==='/api/scores'&&++scoreRequests===1?pending.promise:undefined});
   f.social.start(2);await settle();f.finish({score:3000,shipped:8});
   const oldSubmission=f.submit();assert.equal(f.$('post-score').disabled,true);
-  f.social.start(1);await settle();f.$('player-name').value='';
-  f.finish({role:1,score:2700,shipped:SHIFTS[1].stars[2],calls:0});
+  f.social.start(3);await settle();f.$('player-name').value='';
+  f.finish({role:3,score:2700,shipped:SHIFTS[3].stars[2],calls:0});
   f.$('result-board').onclick();await settle();
   assert.equal(f.$('post-score').disabled,false);assert.equal(f.$('post-status').textContent,'');
   if(outcome==='success')pending.resolve(response({posted:true}));else pending.reject(new Error('Old request failed'));
@@ -108,7 +108,7 @@ for(const outcome of ['success','failure'])test('a stale post '+outcome+' cannot
   f.$('player-name').value='Test Player';
   await f.submit();
   const posts=f.requests.filter(request=>request.path==='/api/scores');assert.equal(posts.length,2);
-  assert.equal(posts[1].body.runId,'run-2');assert.equal(posts[1].body.role,1);assert.equal(posts[1].body.score,2700);
+  assert.equal(posts[1].body.runId,'run-2');assert.equal(posts[1].body.role,3);assert.equal(posts[1].body.score,2700);
   assert.equal(f.$('post-status').textContent,'Posted. Nice shift.');
 });
 
@@ -117,16 +117,16 @@ test('an older run-registration response cannot replace the new shift ownership 
   const f=setup({fetcher:request=>{
     if(request.path==='/api/runs')return ++starts===1?pending.promise:response({id:'current-run'});
   }});
-  f.social.start(2);f.social.start(1);await settle();
+  f.social.start(2);f.social.start(3);await settle();
   pending.resolve(response({id:'stale-run'}));await settle();
-  f.finish({role:1,shipped:SHIFTS[1].stars[2],score:2500,calls:0});await f.submit();
+  f.finish({role:3,shipped:SHIFTS[3].stars[2],score:2500,calls:0});await f.submit();
   assert.equal(f.requests.find(request=>request.path==='/api/scores').body.runId,'current-run');
 });
 
 test('one unfiltered shift board shows server scores with shift attribution',async()=>{
   const f=setup({fetcher:request=>request.path==='/api/leaderboard'?response({entries:[
     {name:'First Player',shiftName:'Rush Hour',score:5100,shipped:SHIFTS[2].stars[2],stars:3},
-    {name:'Second Player',score:3500,shipped:SHIFTS[1].stars[2],stars:3},
+    {name:'Second Player',score:3500,shipped:SHIFTS[3].stars[2],stars:3},
   ]}):undefined});
   f.$('home-board-tabs').children[1].onclick();await settle();f.$('board-open').onclick();await settle();
   assert.deepEqual(f.requests.map(request=>request.path),['/api/leaderboard','/api/leaderboard']);
@@ -275,8 +275,8 @@ test('an empty community board has no fabricated scores on either surface',async
 });
 
 test('score posting preserves the early completion snapshot',async()=>{
-  const f=setup();f.social.start(1);await settle();
-  f.finish({role:1,score:3000,shipped:6,missed:0,sourced:0,calls:0,elapsed:150,spawned:6,finishReason:'work-complete'});
+  const f=setup();f.social.start(3);await settle();
+  f.finish({role:3,score:3000,shipped:6,missed:0,sourced:0,calls:0,elapsed:150,spawned:6,finishReason:'work-complete'});
   await f.submit();
   const posted=f.requests.find(request=>request.path==='/api/scores').body;
   assert.equal(posted.elapsed,150);assert.equal(posted.spawned,6);assert.equal(posted.finishReason,'work-complete');
@@ -293,4 +293,13 @@ test('homepage defaults to the business board and stale tab responses cannot rep
   assert.equal(rows[0].children[1].children[0].textContent,'Runner');
   assert.match(rows[0].children[1].children[1].textContent,/First Shift.*Clear 1:03.7.*End 2:20.0/);
   f.$('board-open').onclick();await settle();assert.equal(f.requests.at(-1).path,'/api/leaderboard');
+});
+
+test('retired shifts cannot register runs or expose new result sharing',async()=>{
+  const events=[],f=setup({analytics:{track(...args){events.push(args);}}});
+  f.social.start(1);await settle();
+  f.finish({role:1,score:2700,shipped:6,calls:0});
+  assert.equal(f.requests.some(request=>request.path==='/api/runs'),false);
+  assert.equal(f.$('social-results').hidden,true);
+  assert.deepEqual(events,[]);
 });

@@ -1,4 +1,4 @@
-import { RULESET, SHIFTS } from './core.js';
+import { RULESET, SHIFTS, isPlayableShift } from './core.js';
 import { createGameAnalytics } from './analytics.js';
 import { runTime } from './records.js';
 
@@ -16,10 +16,11 @@ export function parseChallenge(search) {
   const [role,score,shipped]=values;
   // Keep legacy numeric role indices stable when appending campaign shifts.
   if(p.get('rules')!==RULESET)return null;
-  if(!Number.isInteger(role)||role>=SHIFTS.length||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+(SHIFTS[role].sourcing&&shipped>=2?300:0)+(SHIFTS[role].calls?SHIFTS[role].callTimes.length*25:0))return null;
+  if(!isPlayableShift(role)||!Number.isInteger(score)||score>20000||!Number.isInteger(shipped)||shipped>(SHIFTS[role].maxOrders??8)||score>shipped*1600+(SHIFTS[role].sourcing&&shipped>=2?300:0)+(SHIFTS[role].calls?SHIFTS[role].callTimes.length*25:0))return null;
   return Object.freeze({role,score,shipped,stars:SHIFTS[role].stars.filter(n=>shipped>=n).length});
 }
 export function challengeURL(result,base) {
+  if(!isPlayableShift(result.role))throw new RangeError('This shift is retired or unavailable.');
   const url=new URL(base);url.search='';url.hash='';
   for(const [key,value] of Object.entries({challenge:1,rules:RULESET,role:result.role,score:result.score,shipped:result.shipped}))url.searchParams.set(key,value);
   return url.href;
@@ -149,7 +150,7 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   $('post-form').onsubmit=event=>{event.preventDefault();return postScore();};
   $('copy-challenge').onclick=async()=>{try{await navigator.clipboard.writeText($('share-link').value);$('share-status').textContent=shareStatus(localLink?'Local challenge link copied.':'Challenge link copied. Paste it to a friend.');}catch{$('share-link').select();$('share-status').textContent=shareStatus('Select and copy the challenge link below.');}};
   $('challenge-friend').onclick=async()=>{
-    if(!result)return;
+    if(!result||!isPlayableShift(result.role))return;
     const url=challengeURL(result,location.href),text=`My CHIP RUSH shift: ${summary(result)}.`+(localLink?' '+shareNotice:' Can you beat it?');
     $('share-link').value=url;$('share-link').hidden=false;$('copy-challenge').hidden=false;$('share-status').textContent=shareStatus(localLink?'Copy this local challenge link.':'Share your score with a friend, or copy the link below.');
     if(navigator.share&&!localLink){try{await navigator.share({title:'CHIP RUSH · Your shift starts here',text,url});return;}catch(error){if(error.name==='AbortError')return;}}
@@ -159,11 +160,12 @@ export function createSocial({onChallenge,analytics=createGameAnalytics()}) {
   return {
     challenge,
     refreshBoard:()=>loadBoard(false),
-    start(role,ruleset=RULESET){const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
+    start(role,ruleset=RULESET){if(!isManagerBoard(ruleset)&&!isPlayableShift(role))return;const token=++generation;result=null;run=null;posted=false;skipped=false;analytics.track('chip_rush.shift_started',{role});api('runs',{role,ruleset}).then(value=>{if(token!==generation)return;run=value.id;if(result)maybePost();syncPostControls();}).catch(()=>{});},
     // A saved manager run picks its board run back up; it was registered when the run began.
     resume(runId){++generation;result=null;run=typeof runId==='string'&&runId?runId:null;posted=false;skipped=false;},
     runId:()=>run,
     finish(value){
+      if(!value.board&&!isPlayableShift(value.role))return;
       if(generation>0&&finishedGeneration===generation)return;
       finishedGeneration=generation;
       // Manager runs carry their own stars (days survived); shift stars come from the level.

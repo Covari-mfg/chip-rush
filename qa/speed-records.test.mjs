@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { ShopGame, SHIFTS } from '../dist/core.js';
+import { ShopGame, SHIFTS, isPlayableShift } from '../dist/core.js';
 import { shiftGame } from '../dist/launch.js';
 import { runTime, readSpeedRecords, recordClear } from '../dist/records.js';
 
@@ -51,10 +51,10 @@ test('every challenge is selectable for a fresh save without changing stable cat
   const credits=main.slice(main.indexOf('const SHIFT_CREDIT='),main.indexOf('\nfunction buildShiftPicker'));
   const picker=main.slice(main.indexOf('function buildShiftPicker('),main.indexOf('\nfunction playSelection('));
   const holder={children:[],replaceChildren(){this.children=[];},appendChild(node){this.children.push(node);}};
-  const nodes=new Map();const $=id=>{if(id==='shift-picker')return holder;if(!nodes.has(id))nodes.set(id,{setAttribute(){}});return nodes.get(id);};const start=$('start-button');const context=vm.createContext({SHIFTS,runTime,homeView:'challenges',savedRunSummary:()=>null,selectedShift:0,unlocked:0,bests:SHIFTS.map(()=>0),grades:SHIFTS.map(()=>0),speedRecords:{},$,document:{createElement:()=>({dataset:{},setAttribute(){}})}});
+  const nodes=new Map();const $=id=>{if(id==='shift-picker')return holder;if(!nodes.has(id))nodes.set(id,{setAttribute(){}});return nodes.get(id);};const start=$('start-button');const context=vm.createContext({SHIFTS,isPlayableShift,runTime,homeView:'challenges',savedRunSummary:()=>null,selectedShift:0,unlocked:0,bests:SHIFTS.map(()=>0),grades:SHIFTS.map(()=>0),speedRecords:{},$,document:{createElement:()=>({dataset:{},setAttribute(){}})}});
   vm.runInContext(credits+'\n'+picker+'\nbuildShiftPicker();',context);
-  const cards=holder.children.filter(n=>n.dataset.levelId);assert.deepEqual(cards.map(c=>c.dataset.levelId),SHIFTS.map(s=>s.id));
-  assert.ok(cards.every(c=>!c.disabled));cards.at(-1).onclick();assert.match(start.innerHTML,/Launch Window/);
+  const cards=holder.children.filter(n=>n.dataset.levelId);assert.deepEqual(cards.map(c=>c.dataset.levelId),SHIFTS.filter(s=>!s.retired).map(s=>s.id));
+  assert.ok(cards.every(c=>!c.disabled));cards.at(-1).onclick();assert.ok(start.innerHTML.includes(SHIFTS.at(-1).name));
 });
 
 

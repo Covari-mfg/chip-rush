@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RULESET, SHIFTS } from '../dist/core.js';
+import { RULESET, SHIFTS, isPlayableShift } from '../dist/core.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
 
 function query(extra={}) {
@@ -9,6 +9,7 @@ function query(extra={}) {
 
 test('challenge links round-trip each role and keep only current challenge parameters',()=>{
   for(const role of SHIFTS.keys()) {
+    if(!isPlayableShift(role))continue;
     const result={role,score:role===2?4173:2000,shipped:SHIFTS[role].stars[2]};
     const url=new URL(challengeURL(result,'https://example.test/chip-rush/?watch=owner&old=1#results'));
     assert.equal(url.origin,'https://example.test');assert.equal(url.pathname,'/chip-rush/');
@@ -51,11 +52,12 @@ test('challenge numeric fields reject signs, decimals, nonfinite values, markup,
   assert.equal(parseChallenge(query({score:'20001'})),null);
   assert.equal(parseChallenge(query({shipped:'13'})),null);
   assert.equal(parseChallenge(query({role:'0',shipped:'9'})),null);
-  for(const role of [1,2])assert.equal(parseChallenge(query({role:String(role),shipped:String(SHIFTS[role].maxOrders+1)})),null,'Current higher-role order limits are enforced');
+  for(const role of [2,3])assert.equal(parseChallenge(query({role:String(role),shipped:String(SHIFTS[role].maxOrders+1)})),null,'Current higher-role order limits are enforced');
 });
 
 test('challenge stars are derived from role targets and cannot be supplied in the link',()=>{
   for(const [role,shift] of SHIFTS.entries()) {
+    if(!isPlayableShift(role))continue;
     for(const shipped of [0,...shift.stars]) {
       const value=parseChallenge(query({role:String(role),score:String(shipped*100),shipped:String(shipped),stars:'3',name:'<img src=x>'}));
       assert.deepEqual(value,{role,score:shipped*100,shipped,stars:shift.stars.filter(target=>shipped>=target).length});
@@ -67,7 +69,7 @@ test('challenge stars are derived from role targets and cannot be supplied in th
 
 test('valid zero and maximum counts parse without silently changing the challenge',()=>{
   assert.deepEqual(parseChallenge(query({role:'0',score:'0',shipped:'0'})),{role:0,score:0,shipped:0,stars:0});
-  for(const role of [1,2]) {
+  for(const role of [2,3]) {
     const shipped=SHIFTS[role].maxOrders,score=shipped*1600;
     assert.deepEqual(parseChallenge(query({role:String(role),score:String(score),shipped:String(shipped)})),{role,score,shipped,stars:3});
   }
@@ -81,5 +83,10 @@ test('challenge links cannot claim points unsupported by shipments, sourcing, an
   assert.deepEqual(parseChallenge(query({score:'3575',shipped:'2'})),{role:2,score:3575,shipped:2,stars:0});
   assert.equal(parseChallenge(query({score:'135',shipped:'0'})),null,'Outsourcing requires two ordinary shipments first');
   assert.equal(parseChallenge(query({role:'0',score:'3201',shipped:'2'})),null,'Operator has no outsourcing bonus');
-  assert.equal(parseChallenge(query({role:'1',score:'61',shipped:'0'})),null,'Only Owner earns customer-call points');
+  assert.equal(parseChallenge(query({role:'3',score:'61',shipped:'0'})),null,'Only Owner earns customer-call points');
+});
+
+test('retired Mixed Orders cannot be parsed or used to create a friend challenge',()=>{
+  assert.equal(parseChallenge(query({role:'1',score:'2500',shipped:'6'})),null);
+  assert.throws(()=>challengeURL({role:1,score:2500,shipped:6},'https://example.test/'),RangeError);
 });

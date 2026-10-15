@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile, stat } from 'node:fs/promises';
-import { ShopGame, SHIFTS, OPS, RULESET, LAUNCH_SOURCE_JOBS, scoreShipment, stockType } from '../dist/core.js';
+import { ShopGame, SHIFTS, OPS, RULESET, LAUNCH_SOURCE_JOBS, scoreShipment, stockType, nextShiftIndex } from '../dist/core.js';
 import { LaunchGame, KITS, ASSEMBLY, LAUNCH_LEVEL, kitSeconds, shiftGame } from '../dist/launch.js';
 import { TECHNOLOGIES } from '../dist/technology.js';
 import { challengeURL, parseChallenge } from '../dist/social.js';
@@ -357,11 +357,11 @@ test('Launch Window opens with the rest once First Shift has been played', async
   const migration = main.slice(main.indexOf('const SAVE_KEY='), main.indexOf('const STATION_LAYOUT='));
   const load = save => {
     const data = new Map([['chip-rush-roles-v8', JSON.stringify(save)]]);
-    const context = vm.createContext({ SHIFTS, RUN_LENGTHS:[0,3,5,7], localStorage:{ getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v) } });
+    const context = vm.createContext({ SHIFTS, nextShiftIndex, RUN_LENGTHS:[0,3,5,7], localStorage:{ getItem:k => data.get(k) ?? null, setItem:(k, v) => data.set(k, v) } });
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,bests,grades};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };
-  assert.deepEqual(load({ unlocked:0, bests:[640], grades:[0] }), { unlocked:LAUNCH, bests:[640,0,0,0,0,0], grades:[0,0,0,0,0,0] }, 'A failed First Shift run still counts');
+  assert.deepEqual(load({ unlocked:0, bests:[640], grades:[0] }), { unlocked:SHIFTS.length-1, bests:[640,0,0,0,0,0,0], grades:[0,0,0,0,0,0,0] }, 'A failed First Shift run still counts');
   assert.equal(load({ unlocked:0, bests:[], grades:[] }).unlocked, 0, 'A new player starts at First Shift');
   assert.equal(load({ unlocked:0, bests:[0,0,9000], grades:[0,0,3] }).unlocked, 0, 'Friend-challenge stars elsewhere open nothing');
 });

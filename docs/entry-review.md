@@ -2,7 +2,7 @@
 
 The start screen keeps the 3D workshop visible behind a compact shift rail,
 with a bottom strip for small windows. Shifts and Open for Business have
-separate tabs. All six shifts are available immediately, each with a bold
+separate tabs. All six playable shifts are available immediately, each with a bold
 gold model credit and a smaller harness credit. One Play or Continue action
 starts the game; briefings remain available through How to play.
 
@@ -16,7 +16,10 @@ at clear while the run continues for points. Pause time and the Launch Window
 cinematic are excluded. Results show points, clear time and full run time.
 Fastest clears save independently by stable level ID in `chip-rush-speed-v1`.
 Existing scores, saves, friend links and numeric catalog order remain compatible.
-Legacy unlock values are retained but no longer gate the picker.
+Legacy unlock values are retained but no longer gate the picker. Mixed Orders
+is retired; its index remains reserved, and old scores retain their identity.
+First Shift is the introduction; Rush Hour is Astra's main submission. Last Light
+adds GPT-6.1 Sol's pier, tender dispatch and lighthouse chapter.
 
 ## Database rollout
 
@@ -27,7 +30,7 @@ the existing leaderboard trust model, rather than replay verification.
 
 ## Verification
 
-All 350 automated tests passed, together with the Rush Hour expert balance
+All 387 automated tests passed, together with the Rush Hour expert balance
 assertion, standalone and hosted builds, Worker dry run and diff whitespace
 check.
 Browser review covered desktop and narrow layouts, direct Launch Window entry,

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import worker, { validateResult } from '../server/worker.js';
-import { RULESET, SHIFTS, ShopGame } from '../dist/core.js';
+import { RULESET, SHIFTS, ShopGame, isPlayableShift } from '../dist/core.js';
 import { simulateShift } from './balance.mjs';
 
 const journal=JSON.parse(await readFile(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'));
@@ -86,7 +86,7 @@ test('only same-origin POSTs are accepted, including run creation',async t=>{
 
 test('run creation rejects invalid roles and stale rulesets',async t=>{
   const f=fixture(t);
-  for(const role of [-1,SHIFTS.length,.5,'2',null]) {
+  for(const role of [-1,1,SHIFTS.length,.5,'2',null]) {
     assert.equal((await f.send('/api/runs',{method:'POST',data:{role,ruleset:RULESET}})).status,400);
   }
   assert.equal((await f.send('/api/runs',{method:'POST',data:{role:2,ruleset:'old-rules'}})).status,400);
@@ -119,6 +119,7 @@ test('display-name validation rejects markup, control content, and length violat
 
 test('result validation enforces full-shift eligibility, one-day expiry, and ruleset/role identity',()=>{
   for(const role of SHIFTS.keys()) {
+    if(!isPlayableShift(role))continue;
     const run={role,ruleset:RULESET,started_at:START};
     const value={role,score:1000,shipped:SHIFTS[role].passTarget,missed:0,sourced:0,calls:role===2?3:0};
     const eligibleAt=START+(SHIFTS[role].duration-5)*1000;
@@ -173,11 +174,11 @@ test('result caps reject noninteger counts, impossible role counts, and unearned
   assert.equal(validateResult({...valid,score:300,shipped:2,sourced:1,calls:3},run,START+180000),null,'Sourcing remains valid after all call points are lost to missed rushes');
   assert.match(validateResult({...valid,score:76,shipped:0,calls:3},run,START+180000),/completed work/);
   assert.equal(validateResult({...valid,score:6000},run,START+180000),null,'Real performance is not limited by a role ceiling');
-  for(const role of [0,1]) {
+  for(const role of [0,3]) {
     assert.ok(validateResult({...valid,role,calls:1},{...run,role},START+180000));
   }
   assert.ok(validateResult({...valid,role:0,shipped:9,calls:0},{...run,role:0},START+180000));
-  for(const role of [1,2]) {
+  for(const role of [2,3]) {
     assert.ok(validateResult({...valid,role,shipped:SHIFTS[role].maxOrders+1,calls:0},{...run,role},START+180000),'Shipment counts respect the current workload');
   }
 });
@@ -209,9 +210,9 @@ test('repeated posts are idempotent and cannot overwrite the first accepted resu
 
 test('one board mixes current roles by earned score and excludes incompatible older rulesets',async t=>{
   const f=fixture(t);
-  const results=[{role:0,name:'Alex',score:3000,shipped:5},{role:1,name:'Bea',score:2000,shipped:SHIFTS[1].stars[2]},{role:2,name:'Charlie',score:2100,shipped:SHIFTS[2].stars[2]},{role:2,name:'Dana',score:1500,shipped:SHIFTS[2].passTarget}];
+  const results=[{role:0,name:'Alex',score:3000,shipped:5},{role:3,name:'Bea',score:2000,shipped:SHIFTS[3].stars[2]},{role:2,name:'Charlie',score:2100,shipped:SHIFTS[2].stars[2]},{role:2,name:'Dana',score:1500,shipped:SHIFTS[2].passTarget}];
   for(const result of results) {
-    const run=await f.start(result.role);assert.equal((await f.post(run,result)).status,200);
+    const run=await f.start(result.role);assert.equal((await f.post(run,result,{now:START+SHIFTS[result.role].duration*1000})).status,200);
   }
   f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('old-score','Legacy',2,'roles-v4-covari',9000,9000,12,0,0,3,START);
   const {entries}=await (await f.send('/api/leaderboard')).json();
@@ -297,7 +298,7 @@ test('API unavailability does not prevent the static game from loading',async t=
 // Exercise the actual early-finish engine result through the HTTP/DB boundary.
 test('completed workloads can post before the shift timer without losing run ownership checks',async t=>{
   const f=fixture(t);
-  for(const role of [0,1,2]){
+  for(const role of [0,2,3]){
     const result=simulateShift(role,{reaction:.1,dash:true});
     assert.equal(result.finishReason,'work-complete');
     assert.ok(result.elapsed<SHIFTS[role].duration);
@@ -312,11 +313,11 @@ test('completed workloads can post before the shift timer without losing run own
 });
 
 test('early completion requires plausible elapsed time, resolved orders, and no eligible future arrivals',()=>{
-  const run={role:1,ruleset:RULESET,started_at:START};
-  const done={role:1,score:3000,shipped:6,missed:0,sourced:0,calls:0,elapsed:150,spawned:6,finishReason:'work-complete'};
-  assert.equal(validateResult(done,run,START+150000),null);
-  for(const patch of [{elapsed:0},{elapsed:NaN},{elapsed:Infinity},{elapsed:'150'},{elapsed:181},{elapsed:undefined},{spawned:undefined},{spawned:5},{spawned:7},{spawned:6.5},{shipped:4},{finishReason:'paused'},{finishReason:'time-up'}]){
-    assert.ok(validateResult({...done,...patch},run,START+150000),JSON.stringify(patch));
+  const run={role:3,ruleset:RULESET,started_at:START};
+  const done={role:3,score:3000,shipped:6,missed:0,sourced:0,calls:0,elapsed:180,spawned:6,finishReason:'work-complete'};
+  assert.equal(validateResult(done,run,START+180000),null);
+  for(const patch of [{elapsed:0},{elapsed:NaN},{elapsed:Infinity},{elapsed:'180'},{elapsed:211},{elapsed:undefined},{spawned:undefined},{spawned:5},{spawned:7},{spawned:6.5},{shipped:4},{finishReason:'paused'},{finishReason:'time-up'}]){
+    assert.ok(validateResult({...done,...patch},run,START+180000),JSON.stringify(patch));
   }
   assert.ok(validateResult(done,run,START+1000),'Cannot invent elapsed time beyond server wall time');
   assert.ok(validateResult({...done,elapsed:100,spawned:4,shipped:4},run,START+100000),'Reaching the pass target is not completion');
@@ -326,7 +327,7 @@ test('early completion requires plausible elapsed time, resolved orders, and no 
 
 
 test('early results cannot omit arrivals before the queue could have filled',()=>{
-  for(const role of [0,1,2]){
+  for(const role of [0,2,3]){
     const elapsed=SHIFTS[role].duration-20;
     for(const spawned of [1,2,3]){
       const result={role,score:1600,shipped:spawned,missed:0,sourced:0,calls:0,elapsed,spawned,finishReason:'work-complete'};
@@ -346,9 +347,11 @@ test('new public shift records preserve clear and end times while legacy rows re
   assert.equal(row.shiftId,'first-shift');assert.equal(row.shiftName,'First Shift');
   assert.equal(row.elapsed,150);assert.equal(row.clearTime,64.275);
   assert.equal('player' in row,false);assert.equal('role' in row,false);
-  const legacy=await f.start(1);assert.equal((await f.post(legacy,{calls:0})).status,200);
+  f.sqlite.prepare('INSERT INTO scores(id,name,role,ruleset,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('retired-score','Former Player',1,RULESET,2700,2700,6,0,0,0,START-1);
   const old=(await (await f.send('/api/leaderboard')).json()).entries.find(r=>r.shiftId==='mixed-orders');
-  assert.equal(old.elapsed,null);assert.equal(old.clearTime,null);
+  assert.equal(old.shiftName,'Mixed Orders (retired)');assert.equal(old.score,2700);
+  assert.equal(old.stars,3);assert.equal(old.elapsed,null);assert.equal(old.clearTime,null);
+  assert.equal(f.sqlite.prepare('SELECT role FROM scores WHERE id=?').get('retired-score').role,1);
 });
 
 test('clear time requires enough shipments, a plausible split, and an end time',async t=>{
@@ -358,4 +361,13 @@ test('clear time requires enough shipments, a plausible split, and an end time',
   assert.equal((await f.post(run,{elapsed:150,clearElapsed:60,shipped:2,calls:0})).status,400);
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,0);
   assert.equal((await f.post(run,{elapsed:150,clearElapsed:60,calls:0})).status,200);
+});
+
+test('retired Mixed Orders rejects old in-flight run submissions without deleting history',async t=>{
+  const f=fixture(t),player=crypto.randomUUID(),id=crypto.randomUUID();
+  f.sqlite.prepare('INSERT INTO runs(id,player,role,ruleset,started_at) VALUES(?,?,?,?,?)').run(id,player,1,RULESET,START);
+  const response=await f.send('/api/scores',{method:'POST',cookie:'chip_player='+player,now:START+180000,data:{runId:id,role:1,name:'Former Player',score:2700,shipped:6,missed:0,sourced:0,calls:0}});
+  assert.equal(response.status,400);assert.match((await response.json()).error,/new shift/);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM scores').get().n,0);
+  assert.equal(f.sqlite.prepare('SELECT role FROM runs WHERE id=?').get(id).role,1);
 });
