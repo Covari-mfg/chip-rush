@@ -180,3 +180,25 @@ first-edition record preservation, new-edition posting, real boat geometry and
 fleet movement. Both balance assertions, standalone and hosted builds, Worker
 dry run and whitespace checks passed. This verifies implementation and
 scripted playability; the creator judges the experience.
+
+## Post-submission sailing correction
+
+After PR #31 merged, the creator reported boats sailing backwards and passing
+through each other. The hull's pointed end faced +Z while headings and wakes
+assumed -Z. The model now agrees with its travel direction. The tender follows
+a continuous outbound/return loop; fishing boats use a separate route around
+the island with fixed spacing, including simultaneous batch arrivals. Channel
+markers sit outside both routes, and stationary boats leave no wake.
+
+Existing spare horizontal camera space now shows more of the sailing channel;
+shop scale and floor visibility are preserved. Gameplay timing, cargo, scores
+and saved records are unchanged. This is a visual correction to the submitted
+level, recorded as further human feedback rather than a new model submission.
+
+All 401 tests pass. Regression checks cover actual hull orientation, forward
+motion on both tender legs, continuous headings at each dock, hull separation
+across simultaneous and scheduled fleet arrivals, channel-marker clearance,
+and camera scale/floor visibility. The standalone and hosted builds were
+rebuilt. A separate browser animation fixture at 3× speed was used to inspect
+both legs and passing traffic; it does not represent an earned score or a
+changed game camera. The creator's paused playthrough was left untouched.
