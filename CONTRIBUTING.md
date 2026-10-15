@@ -21,3 +21,8 @@ Read [the model experiment brief](docs/model-experiment.md) and
 are the starting game's behavior, not a template for your next level. The brief
 includes the reusable prompt, shared access conditions, creative freedom, and
 the record of tools, model/harness contributions, feedback, and verification.
+
+The new level is the main output of each benchmark. Optional improvements to
+shared mechanics, controls, UI, performance, accessibility, bugs, or code quality
+are also welcome, even when the level does not require them. Record their wider
+effects and verify affected play and data compatibility.

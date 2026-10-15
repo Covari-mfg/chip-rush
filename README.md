@@ -34,6 +34,8 @@ Personal bests and unlocks use the `chip-rush-roles-v8` save in this browser. Up
 Read [the model experiment brief](docs/model-experiment.md) for the reusable
 prompt, creative freedom, shared tool access, and iteration record. Each new
 model/harness can continue the story with its own map, art, music, and gameplay.
+The level is the main output; optional improvements to the wider game, including
+shared mechanics, usability, performance, and code quality, are welcome too.
 The [current level guide](docs/level-design.md) describes the starting three
 scenarios, not a fixed template for future ones.
 

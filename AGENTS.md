@@ -2,7 +2,10 @@
 
 - Before adding a level, read [docs/model-experiment.md](docs/model-experiment.md).
   It defines the creative experiment, shared access conditions, iteration record,
-  and reusable prompt. New levels may evolve maps, art, music, and gameplay.
+  and reusable prompt. The new level is the main output. Every benchmark may
+  also optionally improve the wider game: shared mechanics, controls, UI,
+  performance, accessibility, bug fixes, or code quality. These contributions
+  need not be required by the level; document and verify their wider effects.
 - Read [docs/level-design.md](docs/level-design.md) for the current levels and
   implementation. It describes existing behavior, not a template for new levels.
 - Every level from Night Shift onward includes Covari outsourcing, and the offer

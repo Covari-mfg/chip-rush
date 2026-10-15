@@ -24,6 +24,10 @@ access, human feedback, time, and other models can affect the outcome.
 > like the next chapter of this game and show your creative and engineering
 > judgment. Entertain us, surprise us, and make something beautiful: a distinct
 > playable experience whose contribution is visible beside the whole game.
+> The level is your main output. You may also improve the wider game: shared
+> mechanics, controls, UI, performance, accessibility, bug fixes, or code quality.
+> Those contributions are optional and need not be required by your level.
+> Document their effects and verify that existing play and records still work.
 > Do not ask the creator to supply your concept or treat the previous levels as
 > a checklist. Take creative responsibility. Check and record the tools available
 > to you before starting. Build a playable local version for us to iterate on together. Keep earlier levels
@@ -46,6 +50,15 @@ music, soundscape, machines, order flow, interactions, objectives, and difficult
 You may introduce mechanics, reinterpret existing ones, or omit mechanics that
 do not suit the new level. A level need not be harder than the last one. You
 may refactor or extend the engine when your design needs it.
+
+Every benchmark also permits optional contributions to the wider game, whether
+or not the new level needs them. Improve shared mechanics, controls, UI,
+performance, accessibility, reliability, or code quality wherever your judgment
+finds a worthwhile opportunity. The playable level remains the main output;
+shared improvements are welcome, not an additional requirement. Describe their
+effects on existing modes and levels, and verify the affected behavior and data
+compatibility. Deliberate changes to released level designs still follow the
+boundaries below.
 
 Keep a recognizable connection to the world and the player's journey. Explain
 that connection briefly; no predetermined plot, map sequence, visual style,
@@ -133,6 +146,8 @@ Fill it as work proceeds; unknown values should be marked unknown, not invented.
 - **Creative intent:** how this continues the journey and what this level does
   differently. Describe the implemented world, objective, controls, progression,
   scoring, and ending conditions as relevant to your design.
+- **Wider game contributions (optional):** shared improvements made alongside
+  the level, why they help, affected modes/levels, and verification.
 - **Iteration log:** initial proposal, meaningful user feedback, changes made,
   and human/manual or other-model contributions. Link artifacts where useful;
   no need to preserve private reasoning or duplicate the whole conversation.
