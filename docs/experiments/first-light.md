@@ -1,6 +1,7 @@
 # First Light (`first-light`)
 
-A Claude Fable 5.2 / Claude Code submission. Local build for creator review; unreleased.
+A Claude Fable 5.2 / Claude Code submission. Second edition, revised after the
+creator played the first. Final submission; unreleased.
 
 ## Identity and starting conditions
 
@@ -15,10 +16,11 @@ A Claude Fable 5.2 / Claude Code submission. Local build for creator review; unr
 | Browser | Headless Chromium through Playwright, software WebGL (SwiftShader), 1280×720 and 860×540, station-label clicks and real key events. No GPU and no audio output |
 | External services | None. No downloaded art, recordings, paid media or web research |
 | Delegation | None. One agent did the design, code, art, score, tests and this record |
-| Human direction | The creator's whole brief was the repository and "You should have the experiment instructions to continue this game. Impress me." No concept, mechanic or setting was supplied |
+| Human direction | The creator's whole brief was the repository and "You should have the experiment instructions to continue this game. Impress me." No concept, mechanic or setting was supplied. The creator then played the first edition twice and gave the feedback recorded under Iteration; no fix was prescribed |
 
-Differences from the shared offer: no interactive browser and no human
-playtest inside the run, no hardware GPU, and nothing could be listened to.
+Differences from the shared offer: no interactive browser for the model, no
+hardware GPU, and nothing could be listened to. The creator's playtest is the
+only human play.
 
 ## Creative intent
 
@@ -30,23 +32,28 @@ chapter's. On the night side of the pass, a light on the coast below flashes
 twice every four seconds; the PA says what it is.
 
 **The new verb is the toss.** Nothing falls in orbit, so a part does not have
-to be carried. With a part in hand, click the station it needs next (or press
-F) and it drifts there at a steady 3.2 units a second while the machinist does
-something else. Each machine has a catch ring that holds one part, adrift or
-waiting, and loads it the moment the machine is empty. Walking a part over and
-handing it in still works, and a busy machine takes one part into its ring by
-hand.
+to be carried. E is the whole control: standing at the station a part needs,
+it hands the part over; anywhere else, it tosses the part there, and it drifts
+at a steady 3.2 units a second while the machinist does something else.
+Clicking a station does the same. A dashed line runs from the hands to where
+the part will go, the button reads what E will do ("Toss → POLISH"), and a
+part in the air carries its order number and a trail. Each machine has a catch
+ring that holds one part, adrift or waiting, and loads it the moment the
+machine is empty.
 
-**The floor is a ring.** The walkway runs around a well with the telescope's
-mirror in it, and the planet turns underneath. Stock is on the west side, the
-lathe, mill and gold chamber along the back, Inspection on the east, and the
-polisher on the front edge, so every segment crosses the well twice in the
-air: back to front for polishing, front to back for gold. A lap of the ring is
-about 37 units; a toss across the well is about six. Walking the ring while
-parts cross it is the level's rhythm.
+**The floor is a ring around a well, and the well can be crossed.** The
+walkway runs around the telescope's mirror with the planet turning underneath.
+Stock is on the west side, the lathe, mill and gold chamber along the back,
+Inspection on the east, and the polisher on the front edge. There is no deck
+in the well: step off the edge and the machinist floats across, slower than
+walking (3.3 against 4.4) but far shorter than the lap. So each trip is a
+choice between walking the ring, floating across, and tossing from where you
+stand.
 
 **The mirror is the shipping station and the objective.** A tested segment is
-tossed into the mirror and takes the next of twelve outer slots. Six clear,
+tossed into the mirror from anywhere, or handed over from anywhere beside it,
+and takes the next of twelve outer slots. While a finished segment is in hand,
+the mirror's own ring and the next empty slot light up. Six clear,
 nine and twelve earn the higher stars. Each segment plays its own note; the
 twelve in order are the level's melody, and the music adds a layer at two,
 six and nine segments.
@@ -82,7 +89,7 @@ Implemented numbers: see [level-design.md](../level-design.md#first-light-first-
 - `dist/main.js`: map `orbital-dock`, toss input, flight and ring placement,
   tickets, labels, PA lines, day-to-night lighting, the ending and results.
 - `dist/core.js`: catalog entry at legacy index 7 and `ORBIT_SOURCE_JOBS`.
-- Tests: `qa/first-light.test.mjs` (26 cases), `qa/first-light-balance.mjs`.
+- Tests: `qa/first-light.test.mjs` (31 cases), `qa/first-light-balance.mjs`.
 
 ## Wider game contributions
 
@@ -96,6 +103,8 @@ Small, and each used by this level:
   below it, so it does not cover the machinist standing behind it.
 - **`orderWorkflow(order, programming, ops)`** takes the station table of the
   level in play. Default behaviour is unchanged.
+- **Per-map float zone** (`MAPS[id].float`): floor that is crossed at a
+  slower speed. Only this map has one; `updateMovement` is otherwise unchanged.
 - **Layered music is no longer Launch Window only.** `ShopAudio` picks stems,
   loop length and layer table by track. Launch Window's stems, layers and
   resume offset are covered by the existing audio tests, which pass unchanged.
@@ -133,11 +142,61 @@ rules through `shiftGame()`.
 4. **Balance.** First timing left the twelfth segment unspawned for an expert
    route. Arrivals moved to 8 s then every 13 s, deadline 85 s, clock 215 s.
 
-No creator feedback yet. Everything above is the model's own review.
+Everything above was the model's own review.
+
+### Second edition: after the creator played it
+
+The creator played the first edition twice and reported, as a player:
+
+- the pack on the machinist's back flickers;
+- it is overwhelming at first; a second run was clearer and a strategy formed;
+- several times a part "just disappeared out of my hand", or went into
+  something and nothing came out;
+- the place to hand a finished segment to the telescope is undefined;
+- the ring makes the run from the machines to the polisher "the longest run",
+  the same cycle every time, with "nothing to optimize" and "no chance to
+  avoid this";
+- the look is good, and wanting to see the end result do well was real.
+
+No fix was prescribed. The model's reading: the toss was the level's whole
+idea and it had not landed. It was bound to a click and to F, so a keyboard
+player walked every part round the ring, which is exactly the tedium
+described, and a click that did toss looked like a part vanishing. The ring
+then offered one route and no decision. Changes, all by the model:
+
+1. **E tosses.** At the part's next station E hands it over; anywhere else it
+   tosses it there. F and the separate Toss button are gone from the screen (F
+   still works). The Interact button now says what E will do.
+2. **The toss is shown before and after.** A dashed aim line and a mark at the
+   target while a part is held; red if that catch ring is taken. In the air the
+   part is larger, lit, trailed and tagged with its order number; a waiting
+   part's tag reads "waiting". The target station flashes "INCOMING", a ring
+   catch reads "IN RING · LOADS NEXT", and the first stock pickup of a run
+   says to press E.
+3. **The well can be crossed.** The rail is gone; the machinist floats across
+   either side of the mirror. Mill to polisher is about 8 units instead of 17.
+   The ring is no longer the only route.
+4. **The mirror has a hand-in.** It carries its own large catch ring, which
+   pulses with the next empty slot whenever a finished segment is held, and a
+   segment can be handed over from anywhere beside the mirror, on the deck or
+   floating.
+5. **The pack.** Its trim shared a face with the pack and the pack sat 5 mm
+   off the torso and cast a shadow on it. The parts now stand clear of each
+   other and the suit casts no shadow on the body it moves with.
+6. **A calmer start.** The second order arrives at 12 s instead of 8, then
+   every 14 s; deadlines are 90 s; the clock is 220 s. Twelve of twelve is
+   still an expert route.
+7. PA lines moved to the bottom left, where they cover no station.
+
+Not changed: the route every segment takes. The creator found the sequence
+repetitive; the model judged that the repetition hurt because it was all
+walking, and addressed that rather than shortening the route. If it still
+drags, the next thing to try is letting a ready machine send its part on by
+itself.
 
 ## Evidence
 
-**Automated.** 431 tests pass (405 before; 26 new). Existing tests changed
+**Automated.** 436 tests pass (405 before; 31 new). Existing tests changed
 only where they pin the catalog size, the save-array length, the credit list,
 or need a stub for a function this level adds to a block they extract.
 `node qa/balance.mjs --rush --ignore-calls --expert --assert` and
@@ -153,31 +212,38 @@ difficulty.
 
 | Strategy | Set | Stars | Missed / unfinished | Score | Clear | Finish |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Carry by hand, serial, 1.5 s reactions | 1 | 0 | 7 / 1 | 451 | not cleared | 3:35.0 |
-| Carry by hand, 0.5 s reactions | 6 | 1 | 3 / 0 | 1,998 | 3:27.6 | 3:27.6 |
-| Toss, 1.0 s reactions | 7 | 1 | 2 / 1 | 2,485 | 3:12.5 | 3:35.0 |
-| Toss, 0.5 s reactions | 11 | 2 | 0 / 0 | 5,672 | 2:28.7 | 3:33.8 |
-| Toss, 0.1 s reactions, dash | 12 | 3 | 0 / 0 | 6,821 | 2:01.7 | 3:18.8 |
-| Toss, 0.5 s reactions, Covari accepted | 8 + sunshield | 1 | 1 / 1 | 3,599 | 2:45.5 | 3:35.0 |
+| Carry by hand, serial, 1.5 s reactions | 2 | 0 | 5 / 2 | 816 | not cleared | 3:40.0 |
+| Carry by hand, 0.5 s reactions | 7 | 1 | 1 / 2 | 2,666 | 3:16.2 | 3:40.0 |
+| Toss, 1.0 s reactions | 7 | 1 | 1 / 2 | 2,655 | 3:13.1 | 3:40.0 |
+| Toss, 0.5 s reactions | 10 | 2 | 0 / 1 | 5,268 | 2:23.4 | 3:40.0 |
+| Toss, 0.1 s reactions, dash | 12 | 3 | 0 / 0 | 7,274 | 2:11.6 | 3:21.7 |
+| Toss, 0.5 s reactions, Covari accepted | 9 + sunshield | 2 | 0 / 2 | 4,830 | 2:23.5 | 3:40.0 |
 
-At the same pace, tossing sets almost twice what carrying does. Accepting
-Covari cost this greedy route three segments: the capsule, QC and the extra
-toss compete for the same hands. A better route may lose less; that was not
-searched for.
+Second-edition numbers; every driver floats across the well at the game's
+float speed. With the crossing, carrying by hand now clears at a steady pace
+(it set 6 in the first edition's ring and barely cleared), and tossing at the
+same pace still sets three more. Accepting Covari costs this greedy route one
+segment.
 
 **Browser.** An accelerated review controller ran the game's own frame logic
 (movement, collision, ticks, events) and acted only through station labels and
-the ticket's Covari button. No part, score or state was injected. The run in
-the pictures below: 11 segments set, 0 missed, 6,172 points, two stars, clear
-at 2:15.8, finished at 3:22.9, sunshield deployed, then the ending and
-results. An earlier run of the same controller set 10 for 5,437. Separately checked with real input events: the picker
-entry and credit, the briefing, F to toss with and without a part in hand,
+the ticket's Covari button. No part, score or state was injected. The
+second-edition run in the pictures below: 11 segments set, 0 missed, 6,577
+points, two stars, clear at 2:17.1, finished at 3:26.4, sunshield deployed,
+then the ending and results. Separately checked with real key events and no
+mouse: walk to the bin, E to take stock (the button then reads
+"Toss → LATHE" and the first-run tip shows), E again to toss, and walking off
+the deck to float. Also the picker entry and credit, the briefing,
 pause and resume, the narrow 860×540 layout, and the standalone file opened
 from `file://`. No page errors or console warnings in any run. The controller
 and its debug hook were injected by the test harness at load and are not in
 the repository.
 
-![Day side, parts adrift](first-light/01-day.jpg)
+![A part in hand: the aim line, the first-run tip and what E will do](first-light/07-aim-and-toss.jpg)
+
+![Floating across the well](first-light/08-floating.jpg)
+
+![Day side](first-light/01-day.jpg)
 
 ![Sunset over the limb](first-light/02-sunset.jpg)
 
@@ -198,15 +264,15 @@ mission is used.
 
 ## Known limitations and untested
 
-- **Nobody has played it.** No human difficulty, readability or enjoyment
-  claim is made. Whether clicking a station to toss is discovered without
-  reading the tip is the first thing to watch.
+- **The second edition has not been played by a person.** The creator played
+  the first. Whether E-to-toss and the crossing fix what they felt is theirs to
+  judge; no difficulty or enjoyment claim is made.
 - **Not heard.** The score and cues are checked numerically (length, loop
   point, headroom), not by ear.
 - **No real GPU.** Rendering was checked in software WebGL only. Colour, the
   shader's cost on integrated graphics and 60 Hz feel are unverified.
 - **Touch and phones** are unverified. Tapping a station tosses, as clicking
-  does; there is no on-screen Toss button on phones.
+  does.
 - The lighthouse passes in the right-hand margin, which a window narrower than
   about 16:10 does not show.
 - A segment adrift at closing is unfinished, as an unfinished crossing is in
@@ -216,5 +282,5 @@ mission is used.
 
 ## Release
 
-Not released. Creator acceptance pending. Draft PR #35 from
+Final submission. Not released; creator acceptance pending. Draft PR #35 from
 `ccr-2efedbeb-n7f24r`; no merge, deployment, migration or public score.

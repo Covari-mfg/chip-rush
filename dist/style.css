@@ -588,7 +588,9 @@ body:not(.playing):not(.paused) .overlay:not(.centered){background:linear-gradie
 
 @media(max-width:1050px),(max-height:599px){:where(html[data-interface="desktop"]) .tender-panel{top:139px;padding:6px 10px;gap:12px}:where(html[data-interface="desktop"]) .tender-panel strong{font-size:10px;line-height:12px}:where(html[data-interface="desktop"]) .tender-panel small{font-size:9px;line-height:11px;margin-top:2px}:where(html[data-interface="desktop"]) .tender-panel button{font-size:10px;padding:6px 9px}}
 /* First Light: the toss control and the telescope's first picture. */
-body.orbit-mode .action-controls{grid-template-columns:1fr 1fr 1fr}
+body.orbit-mode .action-controls{grid-template-columns:minmax(190px,1.7fr) 1fr}
+body.orbit-mode #action-interact{white-space:nowrap}
+.part-tag{position:absolute;z-index:12;pointer-events:none;transform:translate(-50%,-100%);padding:2px 5px;border-radius:5px;background:#102e37d9;border:1px solid #9ff5e880;color:#c9fff6;font-size:11px;font-weight:800;line-height:1.2;white-space:nowrap}
 .firstlight{position:absolute;inset:0;z-index:26;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2vh,18px);pointer-events:none;background:radial-gradient(circle at 50% 46%,#02030a00 0,#02030a00 24%,#02030ab8 78%);animation:firstlight-in 2.4s ease-out both}
 .firstlight-scope{width:min(62vh,78vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center}
 .firstlight-scope canvas{width:100%;height:100%;border-radius:50%;opacity:0;box-shadow:0 0 0 2px #f2cc8255,0 0 0 9px #05080fcc,0 0 70px #f2c14e33;background:#02030a}
@@ -601,4 +603,5 @@ body.firstlight-finale #shop-sidebar,body.firstlight-finale #orders,body.firstli
 @keyframes firstlight-in{from{background-color:#02030a00}to{background-color:#02030a22}}
 @media (prefers-reduced-motion:reduce){.firstlight{animation:none}}
 @media(max-height:520px){.firstlight{flex-direction:row;gap:22px}.firstlight-scope{width:min(74vh,44vw)}.firstlight-copy{min-height:0;max-width:40vw}}
-body.orbit-mode .pa-banner{top:auto;bottom:clamp(64px,10vh,92px)}
+/* Bottom left, clear of every station label and the toast. */
+body.orbit-mode .pa-banner{top:auto;left:18px;bottom:clamp(58px,9vh,84px);transform:none;max-width:min(430px,60vw);animation:none}

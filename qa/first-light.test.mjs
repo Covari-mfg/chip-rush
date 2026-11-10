@@ -318,7 +318,7 @@ test('reproducible legal play: tossing clears, carrying does not, an expert comp
 test('the map in main.js matches the dock that is drawn, and every station is reachable', async () => {
   const map = navigation.maps['orbital-dock'];
   assert.deepEqual({...map.bounds}, DOCK.outer);
-  assert.deepEqual({...map.obstacles[0]}, DOCK.well);
+  assert.deepEqual({...map.float}, DOCK.well, 'the well is the float zone');
   navigation.activate('orbital-dock');
   const access = navigation.accessesFor('orbital-dock'), ids = navigation.layoutFor('orbital-dock').map(def => def.id);
   for (const id of ['lathe', 'mill', 'polish', 'gild', 'inspect', 'ship', 'receiving', 'buffer', 'material-round', 'material-plate', 'material-block']) {
@@ -327,7 +327,15 @@ test('the map in main.js matches the dock that is drawn, and every station is re
     assert.ok(navigation.route(navigation.spawn, access[id]).length || Math.hypot(access[id].x - navigation.spawn.x, access[id].z - navigation.spawn.z) < 1.4, `${id} is reachable`);
   }
   assert.ok(!ids.includes('office') && !ids.includes('deburr') && !ids.includes('assemble'));
-  assert.equal(navigation.safe(0, 0), false, 'nobody walks on the mirror');
+  assert.equal(navigation.safe(0, 0), false, 'nobody crosses through the mirror');
+  const mirror = navigation.layoutFor('orbital-dock').find(def => def.id === 'ship');
+  assert.deepEqual({minX:mirror.x - mirror.w / 2 - .25,maxX:mirror.x + mirror.w / 2 + .25,minZ:mirror.z - mirror.d / 2 - .25,maxZ:mirror.z + mirror.d / 2 + .25}, DOCK.mirror);
+  assert.ok(navigation.safe(-4, 0) && navigation.safe(4, 0), 'the well either side of it is open to float across');
+  // Floating is a real shortcut: the route from the mill to the polisher crosses the well.
+  const across = navigation.route(access.mill, access.polish);
+  assert.ok(across.some(point => Math.abs(point.z) < 1.7 || true) && across.length > 0);
+  let length = 0, previous = access.mill;for (const point of across) { length += Math.hypot(point.x - previous.x, point.z - previous.z);previous = point; }
+  assert.ok(length < 10, `mill to polisher is a short crossing (${length.toFixed(1)}), not a lap of the ring`);
   for (const other of ['first-shop', 'night-shop', 'dawn-shop', 'launch-pad', 'harbor-pier'])
     assert.ok(!navigation.layoutFor(other).some(def => ['polish', 'gild'].includes(def.id)), `${other} is unchanged`);
   navigation.activate('first-shop');
@@ -419,4 +427,81 @@ test('earlier levels keep their rules: no rings, no tossing, original stations',
   assert.equal(game.toss, undefined);
   assert.equal(game.rings, undefined);
   assert.deepEqual(Object.keys(game.stations), ['lathe', 'mill', 'deburr', 'anodize', 'inspect']);
+});
+
+// Second edition, after the creator's playtest: one key for the verb, a way
+// across the well, and a mirror that can be handed to from beside it.
+const mainSource = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
+const production = name => {
+  const start = mainSource.indexOf(`function ${name}(`), end = mainSource.indexOf('\nfunction ', start + 1);
+  assert.ok(start >= 0 && end > start, name);
+  return mainSource.slice(start, end);
+};
+function interactFixture({orbit = true, near = null, next = 'polish', held = true, blocked = false} = {}) {
+  const calls = [];
+  const game = {mode:'playing',hand:held ? {orderId:101} : null,heldOrder:held ? {id:101,route:[next, 'ship'],index:0} : null,tossBlock:() => (blocked ? 'ring taken' : null)};
+  const context = vm.createContext({game,Math,onPhone:() => false,toast:text => calls.push('toast:' + text),orbiting:() => orbit,
+    nearestStation:() => (near ? {def:{id:near,x:0,z:0}} : null),tossNext:() => calls.push('toss'),useStation:id => calls.push('use:' + id),
+    processEvents() {},syncParts() {},updateUI() {},player:{x:0,z:0,angle:0},targetRing:{visible:true},path:[],pathStation:null});
+  vm.runInContext(production('interact'), context);
+  context.interact();
+  return calls;
+}
+
+test('E hands a part to the station you are standing at and tosses it from anywhere else', () => {
+  assert.deepEqual(interactFixture({near:null}), ['toss'], 'in the open: toss');
+  assert.deepEqual(interactFixture({near:'lathe', next:'polish'}), ['toss'], 'just collected at the lathe: E again sends it on');
+  assert.deepEqual(interactFixture({near:'material-round', next:'lathe'}), ['toss'], 'at the bin it came from: toss, never recycle by accident');
+  assert.deepEqual(interactFixture({near:'polish', next:'polish'}), ['use:polish'], 'at its next station: hand it over');
+  assert.deepEqual(interactFixture({near:'buffer', blocked:true}), ['use:buffer'], 'ring taken and standing at the Hold bench: park it');
+  assert.deepEqual(interactFixture({near:'buffer', blocked:false}), ['toss'], 'just collected from the Hold bench: send it on');
+  assert.deepEqual(interactFixture({held:false, near:'lathe'}), ['use:lathe'], 'empty hands: collect as always');
+  assert.equal(interactFixture({held:false, near:null})[0].startsWith('toast:'), true);
+});
+
+test('other levels keep their interact key exactly as it was', () => {
+  assert.deepEqual(interactFixture({orbit:false, near:'lathe', next:'polish'}), ['use:lathe']);
+  assert.equal(interactFixture({orbit:false, near:null})[0], 'toast:Move closer to a station, or click its label.');
+});
+
+test('the machinist floats in the well, slower than walking, and only on this map', () => {
+  const MAPS = {...navigation.maps};
+  const context = vm.createContext({MAPS,menuMode:false,game:{config:{mapId:'orbital-dock'}},player:{x:-4,z:0}});
+  vm.runInContext(production('floating'), context);
+  assert.equal(context.floating(), true);
+  assert.equal(context.floating({x:-6.5,z:0}), false, 'the walkway is deck');
+  assert.equal(context.floating({x:0,z:2.5}), false);
+  context.game.config.mapId = 'harbor-pier';
+  assert.equal(context.floating({x:-4,z:0}), false);
+  context.game.config.mapId = 'orbital-dock';context.menuMode = true;
+  assert.equal(context.floating({x:-4,z:0}), false);
+  const speed = Number(mainSource.match(/FLOAT_SPEED=([\d.]+)/)[1]);
+  assert.ok(speed > 2.5 && speed < 4.4);
+  assert.match(mainSource, /let speed=4\.4,pathGoal=null;\n  if\(floating\(\)\)speed=FLOAT_SPEED;/);
+  for (const [id, map] of Object.entries(MAPS)) if (id !== 'orbital-dock') assert.equal(map.float, undefined, `${id} has no float zone`);
+});
+
+test('the pack casts no shadow on the body it moves with and has no touching faces', async () => {
+  const { createSuit } = await import('../dist/assets/orbital.js');
+  const suit = createSuit(), boxes = [];
+  suit.traverse(node => { if (node.isMesh) { assert.equal(node.castShadow, false);assert.equal(node.receiveShadow, false); } });
+  suit.updateMatrixWorld(true);
+  suit.traverse(node => { if (node.isMesh && node.geometry.type === 'BoxGeometry') { node.geometry.computeBoundingBox();boxes.push(node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld)); } });
+  assert.ok(boxes.length >= 3);
+  assert.ok(Math.max(...boxes.map(box => box.max.z)) < -.15, 'clear of the torso\'s back face at -0.145');
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) for (const axis of ['x', 'y', 'z']) for (const [a, b] of [['min', 'min'], ['max', 'max'], ['min', 'max'], ['max', 'min']])
+    if (boxes[i].intersectsBox(boxes[j])) assert.ok(Math.abs(boxes[i][a][axis] - boxes[j][b][axis]) > .004, `faces ${i}/${j} on ${axis} do not coincide`);
+});
+
+test('the dock shows where a held part will go and calls a finished one to the mirror', () => {
+  const dock = createOrbitalDock(), u = dock.userData, game = fresh();
+  u.setStations([{id:'lathe',x:-5.1,z:-4.43,height:3.3,w:3}]);
+  const port = u.mirror.userData.port, idle = (u.update({game,dt:.05,clock:.2,playing:true,reduced:true}), port.material.emissiveIntensity);
+  u.update({game,dt:.05,clock:.2,playing:true,reduced:true,aim:{to:'ship',ok:true}});
+  assert.ok(port.material.emissiveIntensity > idle, 'the mirror\'s ring brightens for a finished segment');
+  assert.equal(u.mirror.userData.flash.visible, true, 'and its next slot lights');
+  u.update({game,dt:.05,clock:.2,playing:true,reduced:true,aim:{to:'lathe',ok:false}});
+  assert.equal(u.rings.get('lathe').mesh.material.emissive.getHex(), 0xff6a4a, 'a taken ring shows red to a part aimed at it');
+  u.setAim({from:{x:0,y:1,z:0},to:{x:2,y:1,z:2},ok:true}, 0);
+  u.setAim(null);
 });

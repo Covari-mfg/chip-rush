@@ -6,7 +6,8 @@ import * as THREE from '../vendor/three.module.js';
 const C={cream:0xe5e2cd,creamLight:0xf6f0db,plate:0xbcc6c1,teal:0x17787e,tealDark:0x154c56,cyan:0x69eee6,navy:0x183441,dark:0x0f222c,steel:0x8daab2,shiny:0xc8dedb,gold:0xeac16b,foil:0xd9a441,orange:0xec8150,panel:0x1c3272,white:0xf3f4ee};
 // The walkway is a ring around the mirror well. main.js repeats these numbers
 // in its map table (qa/first-light.test.mjs keeps the two in step).
-export const DOCK={outer:{minX:-7.4,maxX:7.4,minZ:-3.15,maxZ:3.15},well:{minX:-6,maxX:6,minZ:-1.75,maxZ:1.75}};
+// Inside the well there is no deck: the machinist floats across it, around the mirror.
+export const DOCK={outer:{minX:-7.4,maxX:7.4,minZ:-3.15,maxZ:3.15},well:{minX:-6,maxX:6,minZ:-1.75,maxZ:1.75},mirror:{minX:-2.25,maxX:2.25,minZ:-1.75,maxZ:1.75}};
 export const MIRROR={x:0,y:-.34,z:0,tilt:.31,radius:.425};
 const SQ3=Math.sqrt(3);
 // Pointy hexes in axial coordinates. The inner six flew on the rocket; the
@@ -98,10 +99,13 @@ export function createSuit(){
   const bubble=new THREE.Mesh(new THREE.SphereGeometry(.335,20,14),new THREE.MeshStandardMaterial({color:0xbfe9f2,transparent:true,opacity:.2,roughness:.08,metalness:.2,depthWrite:false,envMap:skyReflection(),envMapIntensity:1.2}));
   bubble.position.set(0,1.235,.01);bubble.renderOrder=2;g.add(bubble);
   const collar=add(g,new THREE.TorusGeometry(.2,.045,8,20),mat(C.white,.5),0,1.0,0);collar.rotation.x=Math.PI/2;
-  box(g,.36,.42,.17,0,.82,-.235,C.white);box(g,.3,.1,.19,0,.98,-.24,C.foil,mat(C.foil,.35,.7));
-  for(const x of [-.11,.11])cyl(g,.035,.05,.07,x,.6,-.25,C.steel,10);
-  cyl(g,.008,.008,.34,.14,1.2,-.26,C.steel,6);add(g,new THREE.SphereGeometry(.025,8,6),glow(0xff5a4a,1.2),.14,1.38,-.26);
-  g.traverse(node=>{if(node.isMesh)node.receiveShadow=false;});
+  // The pack stands clear of the back and its trim stands proud of the pack:
+  // faces that nearly touch shimmer as the machinist walks.
+  box(g,.34,.4,.15,0,.8,-.27,C.white);box(g,.38,.08,.19,0,.9,-.27,C.foil,mat(C.foil,.35,.7));
+  box(g,.2,.05,.06,0,.99,-.2,C.navy);
+  for(const x of [-.1,.1])cyl(g,.035,.05,.07,x,.565,-.27,C.steel,10);
+  cyl(g,.008,.008,.34,.13,1.17,-.3,C.steel,6);add(g,new THREE.SphereGeometry(.025,8,6),glow(0xff5a4a,1.2),.13,1.35,-.3);
+  g.traverse(node=>{if(node.isMesh){node.receiveShadow=false;node.castShadow=false;}});
   return g;
 }
 
@@ -190,8 +194,11 @@ function createMirror(){
   const ghostMaterial=new THREE.MeshBasicMaterial({color:0x8fe8dc,transparent:true,opacity:.5,depthWrite:false,side:THREE.DoubleSide});
   const ghostGeo=new THREE.RingGeometry(r*.74,r*.9,6,1);ghostGeo.rotateX(-Math.PI/2);ghostGeo.rotateY(Math.PI/2);
   const ghosts=MIRROR_LAYOUT.outer.map(p=>{const line=new THREE.Mesh(ghostGeo,ghostMaterial);line.position.set(p.x,.012,p.z);g.add(line);return line;});
+  // The mirror's own catch ring, above the secondary: where a finished segment is sent.
+  const port=new THREE.Mesh(new THREE.TorusGeometry(.62,.055,10,48),new THREE.MeshStandardMaterial({color:0xffd98a,emissive:0xffb93a,emissiveIntensity:.6,roughness:.4}));
+  port.rotation.x=Math.PI/2;port.position.set(0,1.95,0);port.castShadow=false;port.receiveShadow=false;g.add(port);
   const flash=new THREE.Mesh(hexGeo(r*1.05,.02),new THREE.MeshBasicMaterial({color:0xfff2c0,transparent:true,opacity:0,depthWrite:false}));flash.visible=false;g.add(flash);
-  g.userData={flown,made,ghosts,ghostMaterial,flash,gold,shown:0,pop:[]};
+  g.userData={flown,made,ghosts,ghostMaterial,flash,gold,port,shown:0,pop:[]};
   return g;
 }
 
@@ -346,12 +353,7 @@ export function createOrbitalDock(){
   const edgeStrip=(x0,x1,z0,z1,material)=>{const m=box(g,Math.max(.05,x1-x0),.03,Math.max(.05,z1-z0),(x0+x1)/2,.012,(z0+z1)/2,0,material);m.castShadow=false;return m;};
   for(const [x0,x1,z0,z1] of [[well.minX,well.maxX,well.minZ-.05,well.minZ],[well.minX,well.maxX,well.maxZ,well.maxZ+.05],[well.minX-.05,well.minX,well.minZ,well.maxZ],[well.maxX,well.maxX+.05,well.minZ,well.maxZ]])edgeStrip(x0,x1,z0,z1,wellGlow);
   for(const [x0,x1,z0,z1] of [[outer.minX,outer.maxX,outer.minZ,outer.minZ+.05],[outer.minX,outer.maxX,outer.maxZ-.05,outer.maxZ],[outer.minX,outer.minX+.05,outer.minZ,outer.maxZ],[outer.maxX-.05,outer.maxX,outer.minZ,outer.maxZ]])edgeStrip(x0,x1,z0,z1,rimGlow);
-  // Low rail and posts around the well, so its edge reads as an edge.
-  for(const [x0,x1,z0,z1] of [[well.minX,well.maxX,well.minZ,well.minZ],[well.minX,well.maxX,well.maxZ,well.maxZ],[well.minX,well.minX,well.minZ,well.maxZ],[well.maxX,well.maxX,well.minZ,well.maxZ]]){
-    const length=Math.max(x1-x0,z1-z0),along=x1>x0,count=Math.round(length/1.4);
-    box(g,along?length:.04,.035,along?.04:length,(x0+x1)/2,.3,(z0+z1)/2,0,edge).castShadow=false;
-    for(let i=0;i<=count;i++)box(g,.05,.3,.05,along?x0+length*i/count:x0,.15,along?z0:z0+length*i/count,0,edge).castShadow=false;
-  }
+  // The well has no rail: its lit edge is where walking ends and floating begins.
   // Station pads hang outboard of the ring; the corners between them are open.
   const pads=[[-6.95,1.2,-5.75,-3.15],[3.55,6.25,-5.2,-3.15],[-9.55,-7.4,-1.6,1.6],[7.4,10.3,-1.25,1.25],[-6.4,-3.6,3.15,5.05],[-1.0,1.6,3.15,4.9],[3.8,6.2,3.15,4.4]];
   for(const [x0,x1,z0,z1] of pads){
@@ -421,12 +423,22 @@ export function createOrbitalDock(){
       const position=line.geometry.attributes.position;position.setXYZ(0,pair.from.x,pair.from.y,pair.from.z);position.setXYZ(1,pair.to.x,pair.to.y,pair.to.z);position.needsUpdate=true;line.computeLineDistances();
     });
   }
+  // Where the held part would go: a line from the hands and a mark at the far end.
+  const aimMaterial=new THREE.LineDashedMaterial({color:0xfff2c0,transparent:true,opacity:.9,dashSize:.22,gapSize:.16});
+  const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(1,0,0)]),aimMaterial);aimLine.frustumCulled=false;aimLine.visible=false;aimLine.renderOrder=5;root.add(aimLine);
+  const aimMark=new THREE.Mesh(new THREE.TorusGeometry(.26,.03,8,28),new THREE.MeshBasicMaterial({color:0xfff2c0,transparent:true,opacity:.9,depthTest:false}));aimMark.rotation.x=Math.PI/2-.62;aimMark.visible=false;aimMark.renderOrder=6;root.add(aimMark);
+  function setAim(aim,clock=0){
+    aimLine.visible=aimMark.visible=!!aim;if(!aim)return;
+    const position=aimLine.geometry.attributes.position;position.setXYZ(0,aim.from.x,aim.from.y,aim.from.z);position.setXYZ(1,aim.to.x,aim.to.y,aim.to.z);position.needsUpdate=true;aimLine.computeLineDistances();
+    const color=aim.ok?0xfff2c0:0xff8a6b;aimMaterial.color.set(color);aimMaterial.opacity=aim.ok?.9:.5;aimMark.material.color.set(color);
+    aimMark.position.copy(aim.to);aimMark.scale.setScalar(1+.18*Math.sin(clock*7));
+  }
   const slotWorld=index=>mirror.localToWorld(MIRROR_LAYOUT.outer[Math.max(0,Math.min(MIRROR_LAYOUT.outer.length-1,index))].clone().setY(.06));
   const ringPoint=id=>rings.get(id)?.point??null;
   const stationModels={};
   let spin=0,lastInstalled=0;
 
-  function update({game,dt=0,clock=0,playing=false,finale=0,reduced=false,width=1280,height=720}){
+  function update({game,dt=0,clock=0,playing=false,finale=0,reduced=false,width=1280,height=720,aim=null}){
     const duration=game?.config?.duration||210,elapsed=game?.elapsed||0,fraction=Math.min(1,elapsed/duration);
     const sun=orbitSun(fraction),night=1-sun.daylight;
     spin=playing?ORBIT_SPIN*elapsed:spin+ORBIT_SPIN*dt;
@@ -456,7 +468,10 @@ export function createOrbitalDock(){
       m.flash.visible=k<1;m.flash.position.copy(MIRROR_LAYOUT.outer[pop.index]).setY(.08);m.flash.material.opacity=(1-k)*.9;
       if(k>=1){pivot.position.y=0;pivot.scale.setScalar(1);m.pop.splice(i,1);}
     }
-    if(!m.pop.length)m.flash.visible=false;
+    // Holding a finished segment: its slot and the mirror's ring call for it.
+    const calling=aim?.to==='ship',arriving=!!game?.flights?.some(flight=>flight.to==='ship');
+    if(!m.pop.length){m.flash.visible=calling&&count<m.made.length;if(m.flash.visible){m.flash.position.copy(MIRROR_LAYOUT.outer[count]).setY(.03);m.flash.material.opacity=reduced?.5:.35+.3*Math.sin(clock*7);}}
+    m.port.material.emissiveIntensity=calling||arriving?(reduced?1.6:1.5+.7*Math.sin(clock*8)):.45+night*.5;m.port.scale.setScalar(calling?1.12:1);m.port.visible=finale<=0;
     // First light: every segment eases from its own small tilt into one surface.
     const phase=finale>0?Math.min(1,Math.max(0,(finale-1)/4)):0,settle=1-phase*phase*(3-2*phase);
     for(const pivot of [...m.flown,...m.made]){pivot.rotation.x=pivot.userData.tilt.x*settle;pivot.rotation.z=pivot.userData.tilt.z*settle;}
@@ -483,8 +498,9 @@ export function createOrbitalDock(){
     for(const [id,ring] of rings){
       const holding=game?.rings?.[id]!=null,inbound=!!game?.flights?.some(flight=>flight.to===id);
       const material=ring.mesh.material;material.emissive.set(holding?0xffc14a:0x45d8c8);material.color.set(holding?0xffd98a:0x7df0e2);
-      material.emissiveIntensity=holding?1.5:inbound?(reduced?1.2:1.0+.6*Math.sin(clock*9)):.35+night*.35;
-      ring.mesh.scale.setScalar(holding?1.08:1);
+      const aimed=aim?.to===id;if(aimed&&!holding)material.emissive.set(aim.ok?0xfff2c0:0xff6a4a);
+      material.emissiveIntensity=holding?1.5:aimed?(reduced?1.6:1.5+.6*Math.sin(clock*8)):inbound?(reduced?1.2:1.0+.6*Math.sin(clock*9)):.35+night*.35;
+      ring.mesh.scale.setScalar(holding?1.08:aimed?1.15:1);
     }
     // Polisher and gold chamber.
     const polish=stationModels.polish,gild=stationModels.gild,busy=id=>{const station=game?.stations?.[id];return !!station?.part&&!station.ready;};
@@ -497,7 +513,7 @@ export function createOrbitalDock(){
       gild.userData.ember.material.emissiveIntensity=glowing*3;gild.userData.ember.visible=on;
     }
   }
-  root.userData={update,setStations,setGuides,slotWorld,ringPoint,stationModels,mirror,mirrorStation,shield,capsule,sky,rings,
+  root.userData={update,setStations,setGuides,setAim,slotWorld,ringPoint,stationModels,mirror,mirrorStation,shield,capsule,sky,rings,
     // The play camera frames the working dock, not the arrays or the sky.
     framePoints:[new THREE.Vector3(-9.55,0,-5.75),new THREE.Vector3(10.3,0,-5.2),new THREE.Vector3(-9.55,0,5.05),new THREE.Vector3(10.3,0,4.9),new THREE.Vector3(4.9,2.75,-4.25),new THREE.Vector3(-5.1,3.4,-5.4)]};
   return root;

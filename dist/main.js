@@ -20,8 +20,8 @@ const speedRecords=(()=>{try{return readSpeedRecords(localStorage,SHIFTS);}catch
 let homeView='challenges',titleFrame=null;
 let beaconEnding=null,beaconFinaleTime=0;
 // First Light's ending, toss animation and PA cursor (declared before boot runs).
-let firstLight=null,firstLightTime=0,firstLightView=null,tossSwing=0,orbitCall=0;
-const flightOrigins=new Map();
+let firstLight=null,firstLightTime=0,firstLightView=null,tossSwing=0,orbitCall=0,orbitCoach=0,orbitPromptText='',trailClock=0;
+const flightOrigins=new Map(),partTags=new Map(),FLOAT_SPEED=3.3;
 const interfaceMode=deviceInterface(navigator);
 document.documentElement.dataset.interface=interfaceMode;
 const phoneDevice=isPhoneDevice(navigator);
@@ -128,9 +128,10 @@ const MAPS={
   // First Light: a ring walkway around the telescope's mirror well. Stations
   // hang outboard of the ring; the mirror in the middle is the shipping station.
   'orbital-dock':{theme:'orbitDay',shell:'orbit',hide:['office'],fixed:[],
-    bounds:{minX:-7.4,maxX:7.4,minZ:-3.15,maxZ:3.15},obstacles:[{minX:-6,maxX:6,minZ:-1.75,maxZ:1.75}],
+    // float: the well has no deck. The machinist drifts across it, slower than walking, around the mirror.
+    bounds:{minX:-7.4,maxX:7.4,minZ:-3.15,maxZ:3.15},float:{minX:-6,maxX:6,minZ:-1.75,maxZ:1.75},
     place:{lathe:{x:-5.1,z:-4.43},mill:{x:-.9,z:-4.45},inspect:{x:8.85,z:0,access:{x:6.95,z:0}},
-      ship:{name:'MIRROR',x:0,z:0,rotationY:0,height:.55,w:3.6,d:3.2,access:{x:0,z:2.3},label:{x:3.9,y:0,z:.75}},
+      ship:{name:'MIRROR',x:0,z:0,rotationY:0,height:.55,w:4,d:3,access:{x:0,z:2.3},label:{x:3.75,y:0,z:1.1}},
       receiving:{x:5,z:3.8,access:{x:5,z:2.75},label:{x:5,y:.45,z:4.3}},buffer:{x:-5,z:4.125,access:{x:-5,z:2.75},label:{x:-5,y:.45,z:4.95}},
       'material-round':{x:-8.475,z:-.95,access:{x:-6.95,z:-.95}},'material-plate':{x:-8.475,z:0,access:{x:-6.95,z:0}},'material-block':{x:-8.475,z:.95,access:{x:-6.95,z:.95}}}},
   'dawn-shop':{theme:'dawn',place:{
@@ -318,7 +319,10 @@ function tapFloor(point,event){
   if(interfaceMode==='mobile')updateMobileDash();
 }
 function nearestStation(){let chosen=null,dist=1.32;for(const s of Object.values(stations)){if(!s.model.visible||s.def.id==='receiving'&&!game.config.sourcing||(game.manager&&bayOf(s.def.id)&&!game.stations[s.def.id]))continue;const d=Math.hypot(player.x-s.access.x,player.z-s.access.z);if(d<dist&&d<(s.def.id==='office'?.78:1.32)){chosen=s;dist=d;}}return chosen;}
-function interact(){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=nearestStation();if(s){path=[];pathStation=null;targetRing.visible=false;player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);useStation(s.def.id);processEvents();syncParts();updateUI(true);}else toast('Move closer to a station, or click its label.');}
+function interact(){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=nearestStation();
+  // First Light: with a part in hand, E hands it to its next station if you are standing there and tosses it there if you are not.
+  if(orbiting()&&game.hand&&s?.def.id!==game.heldOrder.route[game.heldOrder.index]&&!(s?.def.id==='buffer'&&game.tossBlock(game.heldOrder.route[game.heldOrder.index])))return tossNext();
+  if(s){path=[];pathStation=null;targetRing.visible=false;player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);useStation(s.def.id);processEvents();syncParts();updateUI(true);}else toast('Move closer to a station, or click its label.');}
 function dash(){if(game.mode!=='playing'||onPhone()||dashCooldown>0)return;dashCooldown=1.3;dashTime=.2;dashDirection.set(Math.sin(player.angle),0,Math.cos(player.angle));audio.event('dash');}
 // The phone's button boosts its current route, without changing destination.
 function mobileDash(){if(!path.length)return;dash();updateMobileDash();}
@@ -630,7 +634,7 @@ function syncParts(){
     if(o.location==='hands'||staffCarry){(staffCarry||carryAnchor).add(mesh);mesh.position.set(0,0,0);mesh.scale.setScalar(1.15);}
     else if(o.location==='kit'){stations.assemble.model.add(mesh);mesh.scale.setScalar(.82);}
     // Adrift or waiting in a catch ring: placed every frame by placeOrbitParts.
-    else if(o.location==='flight'||o.location.startsWith('ring-')){scene.add(mesh);mesh.scale.setScalar(1.15);}
+    else if(o.location==='flight'||o.location.startsWith('ring-')){scene.add(mesh);mesh.scale.setScalar(o.location==='flight'?1.7:1.3);if(o.location==='flight')mesh.add(flightHalo());}
     else{const id=o.location==='buffer'?'buffer':o.location;const s=stations[id];if(s){s.model.add(mesh);mesh.position.copy(s.model.userData.workPoint||new THREE.Vector3(0,1.2,0));}}
   }
   // Kitted parts fill the cell's trays in kit order; reflow as kits leave.
@@ -642,6 +646,7 @@ function updateMovement(dt){
   let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
   let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0);
   const move=new THREE.Vector3();let speed=4.4,pathGoal=null;
+  if(floating())speed=FLOAT_SPEED;
   if(Math.hypot(sx,sy)>.1){path=[];pathStation=null;targetRing.visible=false;move.copy(right).multiplyScalar(sx).addScaledVector(down,sy);if(move.length()>1)move.normalize();}
   else if(path.length){
     let goal=path[0],dist=Math.hypot(goal.x-player.x,goal.z-player.z);
@@ -929,7 +934,7 @@ function applyHomeRoute(){
 
 function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
-function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();orbitCall=0;if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -964,7 +969,7 @@ function savedRunSummary(){
   try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
-function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);document.body.classList.toggle('orbit-mode',game===orbitGame);$('action-toss').hidden=game!==orbitGame;$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);document.body.classList.toggle('orbit-mode',game===orbitGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
 function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
@@ -1844,7 +1849,7 @@ function bindControls(){
   canvas.addEventListener('wheel',e=>{if(!managingView())return;e.preventDefault();zoomView(Math.exp(-e.deltaY*.0015),e.clientX,e.clientY);},{passive:false});
   canvas.addEventListener('contextmenu',e=>{if(managingView())e.preventDefault();});
   $('zoom-in').onclick=()=>zoomView(1.4);$('zoom-out').onclick=()=>zoomView(1/1.4);$('zoom-fit').onclick=resetView;
-  for(const [id,action] of [['mobile-dash',mobileDash],['action-interact',interact],['action-dash',dash],['action-toss',tossNext]]){
+  for(const [id,action] of [['mobile-dash',mobileDash],['action-interact',interact],['action-dash',dash]]){
     const button=$(id);
     button.onpointerdown=e=>{if(e.button!==0||button.disabled)return;e.preventDefault();action();};
     // Pointer actions fire immediately; keyboard/assistive activation uses click.
@@ -1888,7 +1893,7 @@ function updateTenderPanel(){
 
 
 // First Light: state comes from FirstLightGame. Presentation cannot install a segment.
-const ORBIT_CALLS=[[4,'Dock 7, good morning. Six segments flew up with the telescope. Twelve to go.'],[60,'Sunset ahead. Work lamps are coming on.'],[LIGHTHOUSE_AT+8,'Night side. That light on the coast is the lighthouse you rebuilt.'],[185,'Thirty seconds to first light. Last segments to the mirror.']];
+const ORBIT_CALLS=[[4,'Dock 7, good morning. Six segments flew up with the telescope. Twelve to go.'],[24,'No deck in the well. Step off the edge and float across.'],[60,'Sunset ahead. Work lamps are coming on.'],[LIGHTHOUSE_AT+8,'Night side. That light on the coast is the lighthouse you rebuilt.'],[190,'Thirty seconds to first light. Last segments to the mirror.']];
 function applyOrbitTheme(){
   const angle=orbitSun(Math.min(1,game.elapsed/game.config.duration)).angle;
   if(angle<=96)applyTheme(THEMES.orbitDay,THEMES.orbitGold,Math.max(0,(angle-35)/61));
@@ -1909,10 +1914,17 @@ function tossTo(id){
 }
 function tossNext(){
   if(!orbiting()||game.mode!=='playing')return;
-  const held=game.heldOrder;if(!held)return toast('Pick up a part first. F tosses it to its next station.');
+  const held=game.heldOrder;if(!held)return toast('Pick up a part first. Then E tosses it to its next station.');
   const key=held.route[held.index];if(tossTo(key))return;
-  const blocked=game.tossBlock(key);if(blocked)return toast(blocked);
+  const blocked=game.tossBlock(key);if(blocked)return toast(`${blocked} ${game.tossBlock('buffer')?'Collect what is ready first.':'Click HOLD BENCH to park this one.'}`,3.2);
   useStation(key);processEvents();syncParts();updateUI(true);
+}
+// The well: no deck, so the machinist floats.
+function floating(position=player){const zone=!menuMode&&MAPS[game.config?.mapId]?.float;return !!zone&&position.x>zone.minX&&position.x<zone.maxX&&position.z>zone.minZ&&position.z<zone.maxZ;}
+let haloMaterial=null;
+function flightHalo(){
+  haloMaterial??=new THREE.SpriteMaterial({map:smokeMap(),color:0xffe9b0,transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending});
+  const sprite=new THREE.Sprite(haloMaterial);sprite.scale.setScalar(.95);sprite.position.y=.08;sprite.renderOrder=4;return sprite;
 }
 function orbitFlightTarget(flight){
   const u=orbitDock.userData;
@@ -1931,14 +1943,39 @@ function placeOrbitParts(dt){
     const target=orbitFlightTarget(flight),origin=flightOrigins.get(flight.orderId)??target,k=1-Math.max(0,flight.remaining)/flight.duration;
     mesh.position.lerpVectors(origin,target,k);
     if(!reduced){mesh.rotation.x+=dt*1.9;mesh.rotation.z+=dt*1.3;}
-    guides.push({from:mesh.position,to:target});
+    guides.push({from:mesh.position,to:target});tagPart(flight.orderId,mesh.position,`#${flight.orderId} →`);
+    if(dt>0&&!reduced&&trailClock<=0)puff(mesh.position.x,mesh.position.y,mesh.position.z,{vx:0,vy:0,vz:0,size:.2,grow:.3,life:.95,opacity:.4,color:0x9ff5e8,drag:.6});
   }
   for(const id of [...flightOrigins.keys()])if(!game.flights.some(flight=>flight.orderId===id))flightOrigins.delete(id);
   for(const [key,id] of Object.entries(game.rings)){
     const mesh=id==null?null:parts.get(id)?.mesh,point=orbitDock.userData.ringPoint(key);if(!mesh||!point)continue;
-    mesh.position.copy(point);mesh.position.y+=reduced?-.1:-.1+Math.sin(clockTime*2.2+point.x)*.045;mesh.rotation.set(.5,mesh.rotation.y+dt*.9,0);
+    mesh.position.copy(point);mesh.position.y+=reduced?-.1:-.1+Math.sin(clockTime*2.2+point.x)*.045;mesh.rotation.set(.5,mesh.rotation.y+dt*.9,0);tagPart(id,mesh.position,`#${id} waiting`);
   }
+  trailClock=trailClock<=0?.07:trailClock-dt;
+  for(const [id,tag] of partTags)if(!tag.seen){tag.el.remove();partTags.delete(id);}else tag.seen=false;
   orbitDock.userData.setGuides(guides);
+}
+// A small order tag follows every part that is not in the machinist's hands or a machine.
+function tagPart(id,position,text){
+  let tag=partTags.get(id);
+  if(!tag){const el=document.createElement('span');el.className='part-tag';$('floating-text').appendChild(el);tag={el,text:''};partTags.set(id,tag);}
+  if(tag.text!==text){tag.text=text;tag.el.textContent=text;}
+  const point=screenPoint(new THREE.Vector3(position.x,position.y+.42,position.z));tag.el.style.left=point.x+'px';tag.el.style.top=point.y+'px';tag.seen=true;
+}
+// What E does right now, shown on the button.
+function orbitPrompt(){
+  const held=game.heldOrder,near=nearby?.def.id,name=key=>stations[key]?.def.name??key;
+  if(!held){const station=near&&game.stations[near];return station?.ready?`Collect #${station.part.orderId}`:near?.startsWith('material-')?(game.nextMaterial(near.slice(9))?`Take ${name(near)} stock`:`No ${name(near)} job`):near==='receiving'&&game.receiving?'Collect delivery':near==='buffer'&&game.buffer?'Collect parked part':'Interact';}
+  const next=held.route[held.index];
+  if(near===next)return next==='ship'?'Set in MIRROR':game.stations[next]?.part&&!game.stations[next].ready?`Hang in ${name(next)} ring`:`Load ${name(next)}`;
+  if(game.tossBlock(next))return near==='buffer'?'Park on HOLD BENCH':`${name(next)} ring full`;
+  return `Toss → ${name(next)}`;
+}
+function orbitAim(){
+  const held=game.heldOrder;if(!held||game.mode!=='playing')return null;
+  const to=held.route[held.index],u=orbitDock.userData;
+  const point=to==='ship'?(held.id===201?new THREE.Vector3(0,.2,.3):u.slotWorld(game.installed.length+game.flights.filter(f=>f.to==='ship'&&f.orderId!==201).length)):u.ringPoint(to)?.clone();
+  return point?{to,ok:!game.tossBlock(to),from:carryAnchor.getWorldPosition(new THREE.Vector3()),point}:null;
 }
 function orbitStationAction(id){
   const o=game.heldOrder,next=o?.route[o.index],station=game.stations[id];
@@ -1950,7 +1987,9 @@ function orbitStationAction(id){
   return o&&next===id?`Start ${opOf(id).name.toLowerCase()} · or toss from anywhere (F)`:`${opOf(id).name} station`;
 }
 function orbitEvent(ev){
-  if(ev.type==='caught'){floatText('CAUGHT',ev.station,true);const point=orbitDock.userData.ringPoint(ev.station);if(point)spawnParticles(point.x,point.y,point.z,0x9ff5e8,4);}
+  if(ev.type==='toss'){if(orbitCoach<2)orbitCoach=2;if(ev.to!=='ship'&&ev.to!=='buffer')floatText(`#${ev.orderId} INCOMING`,ev.to,true);}
+  if(ev.type==='pickup'&&orbitCoach===0&&ev.station?.startsWith('material-')){orbitCoach=1;toast('Press E to toss it. Up here, parts drift to their station on their own.',5);}
+  if(ev.type==='caught'){floatText(ev.station==='buffer'?'PARKED':'IN RING · LOADS NEXT',ev.station,true);const point=orbitDock.userData.ringPoint(ev.station);if(point)spawnParticles(point.x,point.y,point.z,0x9ff5e8,4);}
   if(ev.type==='installed'){
     audio.segment(ev.slot);
     const star=game.config.stars.indexOf(ev.count),mirror=FLOWN_SEGMENTS+ev.count,whole=FLOWN_SEGMENTS+MIRROR_SLOTS;
@@ -1959,6 +1998,10 @@ function orbitEvent(ev){
   if(ev.type==='shieldDeployed')showPA('Covari’s sunshield is unfolding under the mirror. +300.');
 }
 function updateOrbit(dt){
+  if(!orbiting()){
+    if(playerRing)playerRing.visible=true;
+    if(orbitPromptText){orbitPromptText='';$('action-interact').lastChild.textContent=' Interact';}
+  }
   if(!orbitDock?.visible)return;
   const live=orbiting(),playing=live&&game.mode==='playing';
   if(firstLight){
@@ -1971,8 +2014,27 @@ function updateOrbit(dt){
     if(crossed(T.reveal)){audio.event(game.passed()?'firstLight':'outOfFocus');$('firstlight-title').textContent=game.passed()?'First light.':'Out of focus.';$('firstlight-caption').textContent=game.passed()?(game.stars()===3?'A full mirror. Light that left before there were shops.':`${FLOWN_SEGMENTS+made} of ${FLOWN_SEGMENTS+MIRROR_SLOTS} segments. More mirror, sharper sky.`):`${FLOWN_SEGMENTS+made} of ${FLOWN_SEGMENTS+MIRROR_SLOTS} segments cannot hold a focus. ${game.config.passTarget-made} more.`;}
     if(t>=T.end){endFirstLight();showResults();}
   }
-  orbitDock.userData.update({game:orbitGame,dt,clock:clockTime,playing,finale:firstLight?firstLight.t:live&&game.mode==='results'?99:0,reduced,width:viewport.w,height:viewport.h});
+  const aim=playing?orbitAim():null;
+  orbitDock.userData.update({game:orbitGame,dt,clock:clockTime,playing,finale:firstLight?firstLight.t:live&&game.mode==='results'?99:0,reduced,width:viewport.w,height:viewport.h,aim});
+  orbitDock.userData.setAim(aim?{from:aim.from,to:aim.point,ok:aim.ok}:null,clockTime);
   if(live&&game.mode!=='results')placeOrbitParts(game.mode==='playing'?dt:0);
+  updateSmoke(dt);
+  if(live){
+    // Hand a finished segment over from anywhere beside the mirror: its approach point follows the machinist.
+    const box=stations.ship.def,rx=box.w/2+.55,rz=box.d/2+.5,inside=Math.abs(player.x)<rx&&Math.abs(player.z)<rz;
+    const spot=inside?{x:player.x,z:player.z}:{x:Math.max(-rx,Math.min(rx,player.x)),z:Math.max(-rz,Math.min(rz,player.z))};
+    if(safeSpot(spot.x,spot.z))stations.ship.access=spot;
+    // Off the deck the machinist floats: feet up, a little higher, no ground ring.
+    const adrift=floating(),u=character.userData;playerRing.visible=!adrift;
+    if(adrift&&game.mode==='playing'){
+      character.position.y=.24+(reduced?0:Math.sin(clockTime*2.6)*.05);
+      for(const leg of [u.leftLeg,u.rightLeg])if(leg)leg.rotation.x=.45+(reduced?0:Math.sin(clockTime*3+(leg===u.leftLeg?0:1.6))*.12);
+      for(const knee of [u.leftKnee,u.rightKnee])if(knee)knee.rotation.x=.5;
+      if(!reduced&&dt>0&&trailClock<=0&&viewFollow)puff(player.x,.55,player.z,{vx:-Math.sin(player.angle)*.6,vy:-.1,vz:-Math.cos(player.angle)*.6,size:.16,grow:.5,life:.6,opacity:.35});
+    }else for(const knee of [u.leftKnee,u.rightKnee])if(knee&&!u.officeSeated)knee.rotation.x=0;
+    const prompt=game.mode==='playing'?orbitPrompt():'Interact';
+    if(prompt!==orbitPromptText){orbitPromptText=prompt;$('action-interact').lastChild.textContent=' '+prompt;}
+  }
   if(pad.pa>0){pad.pa-=dt;if(pad.pa<=0)$('pa-banner').hidden=true;}
   if(playing){
     while(orbitCall<ORBIT_CALLS.length&&game.elapsed>=ORBIT_CALLS[orbitCall][0]){if(game.elapsed<ORBIT_CALLS[orbitCall][0]+3)showPA(ORBIT_CALLS[orbitCall][1]);orbitCall++;}

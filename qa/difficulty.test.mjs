@@ -174,7 +174,7 @@ function movementProbe({position={...navigation.spawn},route=[],dash=.2,directio
     character:{userData:{},position:new Vector3(),rotation:{y:0},scale:{y:1}},
     playerRing:{position:new Vector3()},targetRing:{visible:true},
     right:new Vector3(17,0,-11).normalize(),down:new Vector3(11,0,17).normalize(),
-    nearestStation:()=>null,processEvents(){},
+    nearestStation:()=>null,processEvents(){},floating:()=>false,FLOAT_SPEED:3.3,
   });
   vm.runInContext(`${section('const STATION_LAYOUT=','\nlet renderer')}
     ${section('const BASE_BOUNDS=','\nfunction save')}

@@ -20,7 +20,7 @@ function fixture(){
     document:{createElement:element},selectedShift:0,bests:SHIFTS.map(()=>0),grades:SHIFTS.map(()=>0),speedRecords:{},
     runTime:String,showHomeView(){},hidePanels(){},showModelCredit(){},clock:String,SHIFT_CREDIT:{},
     location:{hash:''},showMenu(){},briefingManager:false,
-    endBeaconEnding(){},endFirstLight(){},flightOrigins:new Map(),audio:{init(){}},phonePortrait:()=>false,closePopover(){},resetBays(){},enterFloor(){},
+    endBeaconEnding(){},endFirstLight(){},flightOrigins:new Map(),partTags:new Map(),audio:{init(){}},phonePortrait:()=>false,closePopover(){},resetBays(){},enterFloor(){},
     resetPad(){},processEvents(){},updateUI(){},classicGame:{reset:index=>started.push(index)},launchGame:{},
     social:{start(){}},game:null,
   });

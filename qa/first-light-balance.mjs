@@ -9,9 +9,16 @@ import {resolve} from 'node:path';
 import {stockType,SHIFTS,shiftRuleset} from '../dist/core.js';
 import {ORBIT_LEVEL,tossSeconds,MIRROR_SLOTS} from '../dist/orbit.js';
 import {validateResult} from '../server/worker.js';
+import {readFile} from 'node:fs/promises';
 import {Driver,navigation} from './balance.mjs';
 
 const DT=.05,MAP=SHIFTS[ORBIT_LEVEL].mapId,HAND_RANGE=1.35;
+const FLOAT=navigation.maps[MAP].float,WALK=4.4,DASH=11,DASH_TIME=.2,DASH_COOLDOWN=1.3;
+const main=await readFile(new URL('../dist/main.js',import.meta.url),'utf8');
+const FLOAT_SPEED=Number(main.match(/FLOAT_SPEED=([\d.]+)/)?.[1]);
+assert.ok(FLOAT_SPEED>0&&FLOAT_SPEED<WALK,'Floating is slower than walking');
+assert.match(main,/if\(floating\(\)\)speed=FLOAT_SPEED;/,'Production movement slows in the well');
+const adrift=p=>p.x>FLOAT.minX&&p.x<FLOAT.maxX&&p.z>FLOAT.minZ&&p.z<FLOAT.maxZ;
 export class OrbitDriver extends Driver {
   // strategy 'toss' uses the level's verb; 'carry' walks every part by hand.
   constructor({strategy='toss',reaction=.5,dash=false,covari='decline'}={}){
@@ -25,6 +32,25 @@ export class OrbitDriver extends Driver {
     const points=super.pathTo(id);let previous=this.position;
     for(const point of points){assert.ok(navigation.clear(previous,point),`Collision-safe segment to ${id}`);previous=point;this.checkedSegments++;}
     return points;
+  }
+  // Frame-by-frame travel along the production route: walking speed on the
+  // deck, floating speed in the well, and legal straight-line dashes.
+  walk(id){
+    if(this.at===id)return;
+    const before=this.game.elapsed;
+    for(const target of this.pathTo(id)){
+      let guard=0;
+      while(this.game.mode==='playing'&&guard++<4000){
+        const dx=target.x-this.position.x,dz=target.z-this.position.z,left=Math.hypot(dx,dz);
+        if(left<1e-6)break;
+        let step,seconds=DT;
+        if(this.dash&&this.dashCooldown<1e-8&&left>=DASH*DASH_TIME){step=DASH*DASH_TIME;seconds=DASH_TIME;this.dashCooldown=DASH_COOLDOWN;this.dashes++;}
+        else{const speed=adrift(this.position)?FLOAT_SPEED:WALK;step=Math.min(left,speed*DT);seconds=step/speed;}
+        this.position={x:this.position.x+dx/left*step,z:this.position.z+dz/left*step};
+        this.tick(seconds);
+      }
+    }
+    this.tick(DT);this.travelSeconds+=this.game.elapsed-before;this.at=id;
   }
   recordEvents(events){
     for(const event of events){
