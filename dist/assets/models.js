@@ -716,6 +716,33 @@ export function createWorkshop() {
   }
   return batchStatic(g);
 }
+// Pocket Shift's narrow, deep room for a portrait phone: the same slab, tiles,
+// walls and light fittings as the workshop, cut to the walkable bounds given.
+export function createPocketShop({minX,maxX,minZ,maxZ}) {
+  const g=new THREE.Group();g.name='pocket-shop';
+  const x0=minX-.2,x1=maxX+.2,z0=minZ-.3,z1=maxZ+.3,w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
+  box(g,w,.42,d,cx,-.27,cz,C.navy,.16);
+  box(g,w-.4,.075,d-.4,cx,-.025,cz,0x4e6971,.02).castShadow=false;
+  const floorMats=[0x506b73,0x4d6971,0x526e75,0x4b676f].map(c=>mat(c,.93));
+  const nx=Math.floor((w-.4)/1.41),nz=Math.floor((d-.4)/1.38),tx=cx-(nx-1)*1.41/2,tz=cz-(nz-1)*1.38/2;
+  for(let x=0;x<nx;x++)for(let z=0;z<nz;z++)
+    box(g,1.397,.035,1.367,tx+x*1.41,.021,tz+z*1.38,0,.006,floorMats[(x*7+z*3)%4]).castShadow=false;
+  // Back and left walls only; the camera side stays open, as in the workshop.
+  box(g,w,3.08,.20,cx,1.54,z0+.13,C.tealDark,.035);
+  box(g,w+.08,.12,.26,cx,3.13,z0+.13,C.navy,.015);
+  box(g,.20,2.46,d-.2,x0+.13,1.23,cz+.1,C.tealDark,.035);
+  box(g,.26,.12,d-.1,x0+.13,2.50,cz+.1,C.navy,.015);
+  for(let i=0;i<Math.floor(d/1.94);i++)box(g,.065,2.15,.065,x0+.26,1.30,z0+1.2+i*1.94,0x36616a,.004);
+  for(const x of [cx-w/4,cx+w/4]) {
+    box(g,2.0,.19,.27,x,2.81,z0+.38,C.navy,.023);
+    box(g,1.80,.07,.29,x,2.755,z0+.41,C.creamLight,.015,glow(0xd8f6e7,.8));
+  }
+  // Gold safety line around the walkable floor.
+  for(const z of [minZ+.05,maxZ-.05])box(g,maxX-minX,.008,.055,(minX+maxX)/2,.048,z,C.gold,.002).castShadow=false;
+  for(const x of [minX+.05,maxX-.05])box(g,.055,.008,maxZ-minZ,x,.048,(minZ+maxZ)/2,C.gold,.002).castShadow=false;
+  textPlate(g,'POCKET SHOP',1.8,.25,cx,2.17,z0+.245,{color:'#e8dcb5',bg:'#294c57',size:34});
+  return batchStatic(g);
+}
 // Staff share the machinist's build in their own colors. Materials are cloned
 // so recoloring a hire never touches the player or the shared cache.
 export function createWorker(coverall=0x4f8fd6,cap=0x183441) {

@@ -344,6 +344,8 @@ starts with $1,500, a lathe, a mill and QC.
   briefing offer Continue, mid-day saves resume paused, and a finished run
   clears it.
 
+Pocket Shift (`#/pocket`, hidden, no scores) is a portrait phone prototype on First Shift's rules, not a level; see [experiments/pocket-shift.md](experiments/pocket-shift.md).
+
 ## Design and release rules
 
 - Describe each new level's implemented design and verification in its experiment

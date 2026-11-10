@@ -702,20 +702,21 @@
   }
 }
 
-/* Phones use the full landscape shop; portrait is a solid rotate prompt. */
+/* Phones use the full landscape shop; portrait is a solid rotate prompt.
+   The hidden Pocket Shift route (html[data-mode="pocket"]) is built for portrait. */
 #phone-rotate-screen {
   display: none;
 }
 
 @media (orientation: portrait) {
-  :where(html[data-phone="true"]) #game > :not(#phone-rotate-screen),
-  :where(html[data-phone="true"]) .board-dialog {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #game > :not(#phone-rotate-screen),
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) .board-dialog {
     visibility: hidden !important;
     pointer-events: none !important;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen,
-  :where(html[data-phone="true"]) #phone-rotate-screen[hidden] {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen,
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen[hidden] {
     position: fixed;
     inset: 0;
     z-index: 100;
@@ -734,7 +735,7 @@
     overscroll-behavior: contain;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen .rotate-device {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen .rotate-device {
     display: block;
     position: relative;
     width: 106px;
@@ -746,7 +747,7 @@
     flex-shrink: 0;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen .rotate-device::before {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen .rotate-device::before {
     content: '';
     position: absolute;
     top: 17px;
@@ -757,7 +758,7 @@
     background: #65dec9;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen .rotate-device::after {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen .rotate-device::after {
     content: '↻';
     position: absolute;
     top: -37px;
@@ -768,7 +769,7 @@
     line-height: 1;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen .eyebrow {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen .eyebrow {
     margin: 0 0 14px;
     font-size: 12px;
     font-weight: 800;
@@ -777,7 +778,7 @@
     color: #65dec9;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen h1 {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen h1 {
     max-width: 340px;
     margin: 0 0 18px;
     font-size: clamp(30px, 8vw, 42px);
@@ -786,7 +787,7 @@
     letter-spacing: -1.2px;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen > p:not(.eyebrow) {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen > p:not(.eyebrow) {
     max-width: 320px;
     margin: 0;
     color: #bad0ca;
@@ -794,7 +795,7 @@
     line-height: 1.6;
   }
 
-  :where(html[data-phone="true"]) #phone-rotate-screen #phone-rotate-status:not(:empty) {
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen #phone-rotate-status:not(:empty) {
     margin-top: 18px;
     color: #ffd36e;
     font-size: 14px;
@@ -1058,3 +1059,112 @@
 :where(html[data-interface="mobile"]) #welcome .role-setup{overflow:visible;padding:0 3px}
 :where(html[data-interface="mobile"]) #welcome #start-button{position:static;transform:none;width:calc(100% - 6px);margin:0 3px;padding:10px 15px}
 :where(html[data-interface="mobile"]) #clear-run:not([hidden]){display:flex}
+
+/* Pocket Shift (hidden #/pocket route): portrait, one thumb. html[data-mode="pocket"]
+   is set only while that route is open; nothing here touches any other screen. */
+html[data-mode="pocket"] #help-button,
+html[data-mode="pocket"] #mobile-dash,
+html[data-mode="pocket"] body.playing #mobile-dash:not([hidden]),
+html[data-mode="pocket"] #live-hud .scoreboard > span:has(#score),
+html[data-mode="pocket"] #clear-run:not([hidden]) {
+  display: none !important;
+}
+/* Every station is a tap target here, so idle labels stay on screen. */
+html[data-mode="pocket"][data-interface="mobile"] body.playing .station-label:not([hidden]) {
+  display: flex !important;
+}
+html[data-mode="pocket"][data-interface="mobile"] {
+  --mobile-order-top: calc(52px + var(--mobile-safe-top));
+}
+html[data-mode="pocket"][data-interface="mobile"] body.playing .topbar {
+  height: 50px;
+  padding: 3px 8px;
+}
+html[data-mode="pocket"][data-interface="mobile"] body.playing .icon-button {
+  width: 44px;
+  height: 44px;
+  font-size: 19px;
+}
+html[data-mode="pocket"][data-interface="mobile"] body.playing #live-hud {
+  right: calc(58px + var(--mobile-safe-right));
+  height: 44px;
+}
+html[data-mode="pocket"][data-interface="mobile"] body.playing .status-row {
+  height: 44px;
+}
+html[data-mode="pocket"][data-interface="mobile"] body.playing #mobile-tap-hint {
+  left: calc(12px + var(--mobile-safe-left));
+}
+/* The plan: a numbered badge on each queued station's label. */
+html[data-mode="pocket"] .station-label[data-queue] {
+  border-color: #ffd36b;
+  box-shadow: 0 0 0 2px #ffd36b55, 0 4px 10px #0003;
+}
+html[data-mode="pocket"] .station-label[data-queue]::before {
+  content: attr(data-queue);
+  position: absolute;
+  top: -13px;
+  left: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffd36b;
+  color: #102a32;
+  font: 900 15px/26px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  box-shadow: 0 2px 6px #0007;
+  pointer-events: none;
+}
+html[data-mode="pocket"] .station-label.queue-head::before {
+  background: #7af0c0;
+  animation: pocket-head 1s ease-in-out infinite;
+}
+html[data-mode="pocket"] .station-label.queue-full {
+  animation: pocket-full .32s ease-in-out;
+}
+@keyframes pocket-head { 50% { transform: scale(1.14); } }
+@keyframes pocket-full { 25% { transform: translate(calc(-50% - 5px), -100%); } 75% { transform: translate(calc(-50% + 5px), -100%); } }
+.pocket-panel .pocket-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pocket-panel .pocket-title h2 {
+  margin: 0;
+}
+.pocket-panel .pocket-tag {
+  padding: 3px 8px;
+  border: 1px solid #ffd36b99;
+  border-radius: 999px;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.pocket-panel > p,
+.pocket-panel .pocket-outcome {
+  margin: 14px 0 20px;
+  color: #b1c6c6;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.pocket-panel .pocket-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px 0;
+  border-block: 1px solid var(--line);
+}
+.pocket-panel .pocket-stats strong {
+  display: block;
+  font: 700 32px ui-monospace, monospace;
+}
+.pocket-panel .pocket-stats span {
+  display: block;
+  margin-top: 6px;
+  color: #a3bebb;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+}
