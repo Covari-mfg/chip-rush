@@ -2,7 +2,7 @@
 
 The start screen keeps the 3D workshop visible behind a compact shift rail,
 with a bottom strip for small windows. Shifts and Open for Business have
-separate tabs. All six playable shifts are available immediately, each with a bold
+separate tabs. All playable shifts (seven since First Light) are available immediately, each with a bold
 gold model credit and a smaller harness credit. One Play or Continue action
 starts the game; briefings remain available through How to play.
 

@@ -36,6 +36,7 @@ count playable entries independently of these legacy identities.
 | 4 | `dawn-shift` | Blackout Shift | 180s | 5 shipments | 5 / 6 / 8 | Cellular `dawn-shop` floor around a central QC hub and 3D Backup Generator; zero CAD delay; 1.5× Harmonic Overdrive (2+ machines); 2.0× Office/Lightning Surges; 128 BPM storm-synth music; precision Covari capability gap |
 | 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
 | 6 | `last-light` | Last Light | 220s | 6 deliveries | 6 / 9 / 12 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
+| 7 | `first-light` | First Light | 215s | 6 segments | 6 / 9 / 12 | Zero-g toss and one-part catch rings on the `orbital-dock` ring; the telescope mirror is the shipping station; the ending is the picture it takes; sunshield film outsourced |
 
 First Shift and Rush Hour use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
@@ -492,3 +493,49 @@ stars are archived inside existing local saves; clear times use a new record
 key while retaining the old one. The shared board labels old rows as first
 edition and derives their original 4/6/8 stars. Current runs and challenge
 links require the new edition. No additional database migration is required.
+
+## First Light (`first-light`)
+
+Claude Fable 5.2 / Claude Code's submission. The rocket from Launch Window
+carried a space telescope with six of its eighteen mirror segments; the shop
+makes the other twelve at an orbital dock. Full record:
+[experiments/first-light.md](experiments/first-light.md).
+
+**Rules** (`FirstLightGame` in `dist/orbit.js`, `engine:'orbit'`).
+
+- Three segments (`SEGMENTS`): Turned (round, `lathe → polish → gild →
+  inspect`, 230), Milled (plate, `mill → polish → gild → inspect`, 250), Ribbed
+  (block, `mill → lathe → polish → gild → inspect`, 330). Lathe 8 s, mill 10 s,
+  polish 6 s, gold coat 7 s, inspect 4 s. No CAD, no calls.
+- Up to twelve orders: the first at 0 s, the second at 8 s, then every 13 s;
+  85 s deadlines (+14 for the first); the shared four-order limit; a
+  late-arrival cut on the segment's own route. 215 s clock. Six set segments
+  clear; nine and twelve earn the higher stars.
+- **Toss.** `toss(key, seconds)` sends the held part to its next station, the
+  Hold bench or the mirror. The renderer and the balance driver pass
+  `tossSeconds(distance)`: floor distance from the machinist to the station at
+  3.2 units a second, bounded to 0.4–8 s by the rules. Deadlines keep running
+  in the air.
+- **Catch rings.** Each machine's ring holds one part, adrift or waiting; a
+  second toss at it is refused (the click then walks there as usual). A part
+  landing at an empty machine starts at once; otherwise it waits and loads
+  when the machine is emptied. Interacting at a busy machine with the right
+  part hangs it in a free ring by hand. Standing at a station hands the part
+  over as in every other level.
+- **The mirror** is `ship`. A landing there is the shipment: shared scoring,
+  streak, clear split and events. A segment still adrift at closing is
+  unfinished. The shift cannot finish early with anything adrift.
+- **Covari** (`ORBIT_SOURCE_JOBS`): Sunshield membrane, thin-film lamination,
+  "No film line in orbit". Shared rules; 300 points; no star credit; sets
+  `shield`.
+
+**Presentation.** Map `orbital-dock` (shell `orbit`): a ring walkway
+(`bounds` ±7.4 × ±3.15) around a well (the map's one obstacle), stations
+outboard of it, the mirror in the middle as a `variants` model for Shipping.
+`dist/assets/orbital.js` draws the dock and a full-screen planet-and-sky
+shader behind it; `orbitSun()` takes the shift from full sun into shadow and
+`applyOrbitTheme()` follows it. The ending (`startFirstLight`, mode
+`terminal`, `dist/firstlight.js`) draws what the installed segments can see.
+Music track `orbit`: three synthesized stems layered by segments set.
+
+Legacy index 7, shared ruleset and board, no migration.

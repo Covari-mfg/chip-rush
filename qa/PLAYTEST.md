@@ -1,5 +1,15 @@
 # CHIP RUSH verification
 
+## First Light (level 8 in the catalog, seventh playable shift) · 2026-11-10 (local source, not released)
+
+Full record: [docs/experiments/first-light.md](../docs/experiments/first-light.md).
+
+- 431 automated tests pass (26 new in `qa/first-light.test.mjs`), plus `node qa/balance.mjs --rush --ignore-calls --expert --assert`, `node qa/first-light-balance.mjs --assert`, `pnpm build`, `pnpm deploy:dry-run` and `git diff --check`.
+- Simulation (not player data): carrying every part by hand sets 1 (slow serial) or 6 (0.5 s); tossing sets 7 at 1.0 s, 11 at 0.5 s (2 stars) and 12 of 12 for an expert dash route (3 stars, 6,821). Accepting Covari at 0.5 s sets 8 plus the sunshield for exactly 300.
+- Browser (headless Chromium, software WebGL, station-label clicks and real key events through an accelerated review controller that is not in the repository): a full shift set 11 segments with 0 missed for 6,172 points and 2 stars (clear 2:15.8, end 3:22.9), took the Covari sunshield, and ran the ending and results with no page errors. Picker credit, briefing, F to toss, pause/resume, 860×540 and the `file://` standalone were checked.
+- Earlier levels: rules, layouts, timing and score bounds unchanged; their tests pass with only catalog-size, save-length and credit-list expectations updated.
+- Untested: human play, listening to the score, a real GPU, touch and phones, hosted D1.
+
 ## Launch Window (level 6, on Blackout Shift) · 2026-10-14 (local source, not released)
 
 Full record: [docs/experiments/launch-window.md](../docs/experiments/launch-window.md).

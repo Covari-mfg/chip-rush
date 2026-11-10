@@ -68,6 +68,11 @@ export const LAUNCH_SOURCE_JOBS = [
   {name:'Carbon fairing panel',capability:'Carbon fiber layup',technology:'cf',gap:'No composite cell at the pad'},
   {name:'Welded tank dome',capability:'Friction stir welding',technology:'fsw',gap:'No stir welder at the pad'},
 ];
+// The orbital dock turns, mills, polishes and gold-coats mirror segments. It
+// has no thin-film line, so the telescope's sunshield comes from Covari.
+export const ORBIT_SOURCE_JOBS = [
+  {name:'Sunshield membrane',capability:'Thin-film lamination',technology:'film',gap:'No film line in orbit'},
+];
 // New-level creative brief: docs/model-experiment.md. Current scenario details:
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
 // Future levels may evolve mechanics; preserve earlier scenarios and their data.
@@ -152,6 +157,19 @@ export const SHIFTS = [
     recipes:[0,1,2,1,2,0,0,1,2,1,2,0],unlocks:['lathe','mill','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:[{name:'Ground Fresnel optic',capability:'Precision optical grinding',technology:'optics',gap:'No optical grinding equipment on the pier'}],
     calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
+  },
+  // First Light runs on FirstLightGame (dist/orbit.js): parts are tossed in
+  // zero-g and wait in catch rings. recipes indexes SEGMENTS there.
+  {
+    id:'first-light',mapId:'orbital-dock',engine:'orbit',name:'First Light',author:'Claude Fable 5.2',harness:'Claude Code',musicTrack:'orbit',
+    subtitle:'Zero-g. Toss, don’t carry. Finish the mirror.',
+    goal:'Set 6 new segments in the telescope mirror. Twelve make the picture sharp.',
+    brief:'The rocket this shop helped fly carried a space telescope, with six of its eighteen mirror segments. The lighthouse brought the boats home; this one looks the other way. Clock in at the orbital dock and make the missing twelve: cut each blank, polish it, coat it in gold, test it, and set it in the mirror. Nothing falls up here. With a part in your hands, click its next station and it drifts there on its own. Every machine has a catch ring that holds one waiting part and loads it when the machine is free.',
+    tip:'Toss, don’t carry: click the next station, or press F, and keep moving while the part drifts. A catch ring holds one part for a busy machine.',
+    retryTip:'Keep the polisher and the gold chamber fed from across the dock. While a part drifts, start the next blank.',
+    duration:215,firstArrival:8,interval:13,deadline:85,maxOrders:12,
+    recipes:[0,1,2,1,0,2,0,1,2,1,0,2],unlocks:['lathe','mill','polish','gild','inspect'],stock:['round','plate','block'],
+    programming:false,sourcing:true,sourceJobs:ORBIT_SOURCE_JOBS,calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
   },
 ];
 

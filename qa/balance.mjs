@@ -278,10 +278,18 @@ export function simulateShift(shift, options = {}) {
   return new Driver(shift, options.strategy ?? 'flow', options.phonePolicy ?? 'decline', options).run();
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+// Runs after this module has finished loading: First Light's driver imports it.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) (async () => {
   const reaction=Number(process.argv.find(arg=>arg.startsWith('--reaction='))?.split('=')[1] ?? .5);
   const rows=[];
-  for(let shift=0;shift<SHIFTS.length;shift++)for(const strategy of ['serial','flow'])rows.push(simulateShift(shift,{strategy,reaction}));
+  // First Light's normal action is the toss, which this driver does not know.
+  // Its own driver plays it: serial carries by hand, flow tosses.
+  const orbit=SHIFTS.some(level=>level.engine==='orbit')?await import('./first-light-balance.mjs'):null;
+  for(let shift=0;shift<SHIFTS.length;shift++)for(const strategy of ['serial','flow']){
+    if(SHIFTS[shift].engine!=='orbit'){rows.push(simulateShift(shift,{strategy,reaction}));continue;}
+    const row=orbit.simulateOrbit({strategy:strategy==='serial'?'carry':'toss',reaction});
+    rows.push({role:row.role,strategy,phone:'decline',rush:false,reaction,movement:`click route + walk${strategy==='flow'?' + toss':''}`,spawned:row.spawned,shipped:row.shipped,pass:row.pass,stars:row.stars,score:row.score,missed:row.missed,unfinished:row.unfinished,elapsed:+row.elapsed.toFixed(2),log:row.log});
+  }
   if(process.argv.includes('--rush'))rows.push(simulateShift(2,{reaction,phonePolicy:'accept'}));
   if(process.argv.includes('--ignore-calls'))rows.push(simulateShift(2,{reaction,phonePolicy:'ignore'}));
   if(process.argv.includes('--expert'))for(const phonePolicy of ['decline','accept'])rows.push(simulateShift(2,{reaction:.1,dash:true,phonePolicy}));
@@ -291,4 +299,4 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     assert.ok(rows.filter(row=>row.strategy==='flow'&&row.phone==='decline').every(row=>row.pass),'Every role must pass using reproducible normal actions');
     if(process.argv.includes('--expert'))assert.ok(rows.filter(row=>row.movement==='click route + dash').every(row=>row.stars===3&&row.missed===0),'Expert routes must prove Owner mastery with either rush choice');
   }
-}
+})();

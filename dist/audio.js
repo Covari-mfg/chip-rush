@@ -111,16 +111,81 @@ function buildHarborBuffer(ctx){
 const LAUNCH_STEMS=['./assets/music/launch-base-120.mp3','./assets/music/launch-drive-120.mp3','./assets/music/launch-climax-120.mp3'];
 const LAUNCH_LOOP_SECONDS=32;
 const LAYERS=[[1,0,0],[1,1,0],[1,1,1],[.8,1,1]];
+// First Light: an original eight-bar piece in D Lydian at 80 BPM, built here
+// as three synchronised stems: a slow pad and bass, a soft pulse of plucked
+// notes, and a high bell line. Installed mirror segments bring the layers in.
+// No recordings or external assets. Stems use half the device rate: nothing
+// in them sits above 6 kHz, and the buffers stay small.
+const ORBIT_BPM=80,ORBIT_LOOP_SECONDS=32*60/ORBIT_BPM;
+const ORBIT_LAYERS=[[1,.3,0],[1,1,0],[1,1,.75],[.9,1,1]];
+// One note per installed segment; in order they are the level's melody.
+const SEGMENT_NOTES=[587.330,739.989,880,830.609,739.989,659.255,880,987.767,1108.731,880,1174.659,1479.978];
+function buildOrbitStems(ctx){
+  if(typeof ctx.createBuffer!=='function')return null;
+  const rate=Math.max(8000,Math.round((ctx.sampleRate||44100)/2)),len=Math.round(rate*ORBIT_LOOP_SECONDS),beat=60/ORBIT_BPM;
+  const make=()=>{const buffer=ctx.createBuffer(2,len,rate);return {buffer,L:buffer.getChannelData(0),R:buffer.getChannelData(1)};};
+  const note=(stem,at,beats,freq,volume,pan,voice)=>{
+    const start=Math.round(at*beat*rate),duration=beats*beat,count=Math.ceil(duration*rate);
+    const left=Math.sqrt((1-pan)/2),right=Math.sqrt((1+pan)/2),echo=Math.round(beat*.75*rate);
+    for(let j=0;j<count;j++){
+      const t=j/rate,u=t/duration,phase=Math.PI*2*freq*t;let sample;
+      if(voice==='pad'){
+        const envelope=Math.min(1,t/1.4)*Math.min(1,(duration-t)/1.8);
+        sample=(Math.sin(phase+.02*Math.sin(t*2.3))+.18*Math.sin(phase*2+.4)+.05*Math.sin(phase*3))*envelope;
+      }else if(voice==='bass'){
+        const envelope=Math.min(1,t/.08)*Math.min(1,(duration-t)/.9);
+        sample=(Math.sin(phase)+.12*Math.sin(phase*2))*envelope;
+      }else if(voice==='pluck'){
+        const envelope=(1-Math.exp(-t*220))*Math.exp(-t*5.5)*Math.pow(1-u,2);
+        sample=(Math.sin(phase)+.28*Math.sin(phase*2.001)*Math.exp(-t*9)+.08*Math.sin(phase*3.99)*Math.exp(-t*14))*envelope;
+      }else if(voice==='thump'){
+        const envelope=Math.exp(-t*13)*(1-Math.exp(-t*400));
+        sample=Math.sin(Math.PI*2*(freq+60*Math.exp(-t*30))*t)*envelope;
+      }else{
+        const envelope=(1-Math.exp(-t*70))*Math.exp(-t*1.5)*Math.pow(1-u,2);
+        sample=(Math.sin(phase)+.26*Math.sin(phase*2.003)*Math.exp(-t*2.6)+.07*Math.sin(phase*5.01)*Math.exp(-t*7))*envelope;
+      }
+      sample*=volume;
+      const i=(start+j)%len,a=(i+echo)%len,b=(i+echo*2)%len;
+      stem.L[i]+=sample*left;stem.R[i]+=sample*right;
+      if(voice==='pluck'||voice==='bell'){stem.L[a]+=sample*right*.22;stem.R[a]+=sample*left*.22;stem.L[b]+=sample*left*.09;stem.R[b]+=sample*right*.09;}
+    }
+  };
+  const base=make(),pulse=make(),shine=make();
+  // Dmaj9, E/D, Bm9, Gmaj7#11: two bars each.
+  const chords=[[146.832,220,277.183,329.628,369.994],[146.832,207.652,246.942,329.628,415.305],
+    [123.471,184.997,220,277.183,369.994],[97.999,146.832,184.997,277.183,369.994]];
+  const roots=[73.416,73.416,61.735,48.999];
+  for(let c=0;c<4;c++){
+    chords[c].forEach((freq,i)=>note(base,c*8,9.2,freq,.05,[-.5,.45,-.2,.3,0][i],'pad'));
+    note(base,c*8,7.6,roots[c],.16,0,'bass');note(base,c*8+4,3.6,roots[c]*1.5,.05,0,'bass');
+    // Plucked eighths walk up and down the chord, an octave above the pad.
+    const tones=chords[c].slice(1).map(freq=>freq*2),order=[0,1,2,3,2,1,3,2,0,2,1,3,2,3,1,2];
+    for(let step=0;step<16;step++)if(step%8!==7)note(pulse,c*8+step*.5,1.1,tones[order[step]],step%4===0?.105:.07,step%2?.42:-.42,'pluck');
+    for(const at of [0,2.5,4,6.5])note(pulse,c*8+at,.5,46,.16,0,'thump');
+  }
+  const melody=[[1,880],[3,1108.731],[4.5,1479.978],[7,1318.510],[9,1244.508],[11,987.767],[12.5,1318.510],[15,1108.731],
+    [17,1108.731],[19,1479.978],[20.5,1760],[23,1479.978],[25,1108.731],[27,1479.978],[28.5,1108.731],[30.5,880]];
+  melody.forEach(([at,freq],i)=>note(shine,at,3.6,freq,.085,i%2?.3:-.3,'bell'));
+  // One shared gain keeps the three stems balanced against each other.
+  let peak=0,energy=0;
+  for(const stem of [base,pulse,shine])for(let i=0;i<len;i++){peak=Math.max(peak,Math.abs(stem.L[i]),Math.abs(stem.R[i]));}
+  for(let i=0;i<len;i++){const l=base.L[i]+pulse.L[i]+shine.L[i],r=base.R[i]+pulse.R[i]+shine.R[i];energy+=l*l+r*r;peak=Math.max(peak,Math.abs(l),Math.abs(r));}
+  const gain=Math.min(.1/Math.sqrt(energy/(len*2)),.7/peak);
+  for(const stem of [base,pulse,shine])for(let i=0;i<len;i++){stem.L[i]*=gain;stem.R[i]*=gain;}
+  return [base.buffer,pulse.buffer,shine.buffer];
+}
 export class ShopAudio {
   constructor(){
     this.ctx=null;this.active=false;this.ducked=false;this.track='country';
     this.musicBuffer=null;this.stormBuffer=null;this.harborBuffer=null;this.musicSource=null;this.musicOffset=0;this.musicLoad=null;
-    this.stemBuffers=null;this.stemLoad=null;this.stemSources=null;this.stemOffset=0;this.intensity=0;
+    this.stemBuffers=null;this.stemLoad=null;this.stemSources=null;this.stemOffset=0;this.intensity=0;this.orbitStems=null;
   }
   // 'country' is the shop's loop, 'storm' Blackout Shift's synthesized loop,
-  // 'launch' Launch Window's layered countdown stems; 'harbor' Last Light.
+  // 'launch' Launch Window's layered countdown stems; 'harbor' Last Light;
+  // 'orbit' First Light's three synthesized stems.
   setTrack(track='country'){
-    const next=['storm','launch','harbor'].includes(track)?track:'country';
+    const next=['storm','launch','harbor','orbit'].includes(track)?track:'country';
     if(next===this.track)return;
     this.track=next;this.musicOffset=0;
     if(this.ctx&&this.musicSource){
@@ -129,12 +194,14 @@ export class ShopAudio {
       source.stop(now+.06);this.musicSource=null;
     }
     if(next==='launch'){this.intensity=0;this.stemOffset=0;this.loadStems();}
+    if(next==='orbit'){this.intensity=0;this.stemOffset=0;}
     this.syncMusic();
   }
   setIntensity(level){
     level=Math.max(0,Math.min(LAYERS.length-1,Math.trunc(level)||0));if(level===this.intensity)return;this.intensity=level;
-    if(this.ctx&&this.stemSources)this.stemSources.forEach((entry,i)=>entry.layer.gain.setTargetAtTime(LAYERS[level][i],this.ctx.currentTime,.9));
+    if(this.ctx&&this.stemSources)this.stemSources.forEach((entry,i)=>entry.layer.gain.setTargetAtTime(this.layers()[level][i],this.ctx.currentTime,.9));
   }
+  layers(){return this.track==='orbit'?ORBIT_LAYERS:LAYERS;}
   loadStems(){
     if(!this.ctx||this.stemBuffers||this.stemLoad)return;
     this.stemLoad=Promise.all(LAUNCH_STEMS.map(url=>fetch(url,{signal:globalThis.AbortSignal?.timeout?.(15000)})
@@ -159,24 +226,27 @@ export class ShopAudio {
         .then(buffer=>{this.musicBuffer=buffer;this.syncMusic();})
         .catch(()=>{this.musicLoad=null;}); // Cues and gameplay still work; retry on resume.
     }
-    if(this.track==='storm'||this.track==='harbor')this.syncMusic();
+    if(this.track==='storm'||this.track==='harbor'||this.track==='orbit')this.syncMusic();
   }
   syncMusic(){
     if(!this.ctx)return;
-    const now=this.ctx.currentTime,launch=this.active&&this.track==='launch',single=this.active&&!launch;
+    const orbit=this.track==='orbit',stems=orbit?(this.orbitStems||(this.orbitStems=buildOrbitStems(this.ctx))):this.stemBuffers;
+    // A device that cannot build buffers plays First Light without music.
+    const layered=this.track==='launch'||orbit,loop=orbit?ORBIT_LOOP_SECONDS:LAUNCH_LOOP_SECONDS;
+    const now=this.ctx.currentTime,launch=this.active&&layered,single=this.active&&!layered;
     if(!launch&&this.stemSources){
-      const first=this.stemSources[0];this.stemOffset=(first.offset+now-first.startedAt)%LAUNCH_LOOP_SECONDS;
+      const first=this.stemSources[0];this.stemOffset=(first.offset+now-first.startedAt)%first.loop;
       for(const {source,fade} of this.stemSources){fade.gain.cancelScheduledValues(now);fade.gain.setTargetAtTime(0,now,.05);source.stop(now+.25);}
       this.stemSources=null;
-    }else if(launch&&this.stemBuffers&&!this.stemSources){
-      const offset=this.stemOffset%LAUNCH_LOOP_SECONDS;
-      this.stemSources=this.stemBuffers.map((buffer,i)=>{
+    }else if(launch&&stems&&!this.stemSources){
+      const offset=this.stemOffset%loop;
+      this.stemSources=stems.map((buffer,i)=>{
         const source=this.ctx.createBufferSource(),fade=this.ctx.createGain(),layer=this.ctx.createGain();
-        source.buffer=buffer;source.loop=true;source.loopStart=0;source.loopEnd=Math.min(LAUNCH_LOOP_SECONDS,buffer.duration);
-        layer.gain.value=LAYERS[this.intensity][i];source.connect(layer);layer.connect(fade);fade.connect(this.musicGain);
+        source.buffer=buffer;source.loop=true;source.loopStart=0;source.loopEnd=Math.min(loop,buffer.duration);
+        layer.gain.value=this.layers()[this.intensity][i];source.connect(layer);layer.connect(fade);fade.connect(this.musicGain);
         fade.gain.setValueAtTime(0,now);fade.gain.setTargetAtTime(1,now,.08);
         source.onended=()=>{source.disconnect();layer.disconnect();fade.disconnect();};
-        source.start(now,offset);return {source,fade,layer,startedAt:now,offset};
+        source.start(now,offset);return {source,fade,layer,startedAt:now,offset,loop};
       });
     }
     const useStorm=this.track==='storm'&&(this.stormBuffer||(this.stormBuffer=buildStormBuffer(this.ctx)));
@@ -214,7 +284,15 @@ export class ShopAudio {
     case'liftoff':this.rumble(6,.85,320,.2);[294,440,587,880].forEach((f,i)=>this.note(f,2.4,'triangle',.11,.05*i));break;
     // Tender's low two-note horn; a rising bell when another beacon comes on.
     case'tenderDeparted':this.note(146.832,.7,'sine',.14);this.note(220,.9,'sine',.10,.18);break;
-    case'beaconLit':[587.330,739.989,880,1174.659].forEach((f,i)=>this.note(f,.8,'sine',.14,i*.11));break;}}
+    case'beaconLit':[587.330,739.989,880,1174.659].forEach((f,i)=>this.note(f,.8,'sine',.14,i*.11));break;
+    // First Light: a soft push, a catch, film unfolding, the picture arriving.
+    case'toss':this.note(330,.22,'sine',.1,0,520);this.note(990,.1,'sine',.04,.04,1320);break;
+    case'caught':this.note(1320,.07,'sine',.1);this.note(880,.12,'sine',.07,.05);break;
+    case'shieldDeployed':[440,554.365,659.255,830.609,1108.731].forEach((f,i)=>this.note(f,.9,'sine',.1,i*.16));break;
+    case'firstLight':[293.665,440,554.365,739.989,830.609,1174.659].forEach((f,i)=>this.note(f,3.2,'sine',.1,i*.09));break;
+    case'outOfFocus':[440,415.305,369.994].forEach((f,i)=>this.note(f,.9,'sine',.09,i*.3));break;}}
+  // The note for the nth installed segment, a little brighter each time.
+  segment(index,delay=0){const freq=SEGMENT_NOTES[Math.max(0,index)%SEGMENT_NOTES.length];this.note(freq,1.1,'sine',.17,delay);this.note(freq*2,.5,'sine',.05,delay+.02);this.note(freq/2,.7,'triangle',.06,delay);}
   // Filtered noise swell for engines; skipped where the context cannot filter.
   rumble(duration,volume,cutoff,attack){
     if(!this.ctx?.createBiquadFilter||!this.ctx.createBuffer)return;
