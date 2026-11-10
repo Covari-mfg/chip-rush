@@ -216,5 +216,5 @@ mission is used.
 
 ## Release
 
-Not released. Creator acceptance pending. Draft PR opened from
+Not released. Creator acceptance pending. Draft PR #35 from
 `ccr-2efedbeb-n7f24r`; no merge, deployment, migration or public score.
