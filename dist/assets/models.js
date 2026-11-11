@@ -722,6 +722,35 @@ export function createWorkshop() {
   }
   return batchStatic(g);
 }
+// Pocket Shift's room for a portrait phone: the workshop's slab and tiles cut
+// flush to the walkable bounds, so the floor runs edge to edge of the screen.
+// No side walls; a low back wall with the delivery door the Covari crate comes
+// through (doorX), so nothing tall stands between the camera and a station.
+export function createPocketShop({minX,maxX,minZ,maxZ},{doorX=minX+1.2,doorWidth=1.7}={}) {
+  const g=new THREE.Group();g.name='pocket-shop';
+  const x0=minX-.12,x1=maxX+.12,z0=minZ-.32,z1=maxZ+.14,w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
+  box(g,w,.42,d,cx,-.27,cz,C.navy,.06);
+  box(g,w-.06,.075,d-.06,cx,-.025,cz,0x4e6971,.02).castShadow=false;
+  const floorMats=[0x506b73,0x4d6971,0x526e75,0x4b676f].map(c=>mat(c,.93));
+  const fw=maxX-minX,fd=maxZ-minZ,nx=Math.max(1,Math.round(fw/1.4)),nz=Math.max(1,Math.round(fd/1.4)),tw=fw/nx,td=fd/nz;
+  for(let x=0;x<nx;x++)for(let z=0;z<nz;z++)
+    box(g,tw-.013,.035,td-.013,minX+(x+.5)*tw,.021,minZ+(z+.5)*td,0,.006,floorMats[(x*7+z*3)%4]).castShadow=false;
+  // Low back wall, broken by the delivery door.
+  const wallH=1.15,wz=minZ-.17,doorL=doorX-doorWidth/2,doorR=doorX+doorWidth/2;
+  for(const [a,b] of [[x0,doorL],[doorR,x1]])if(b>a){box(g,b-a,wallH,.2,(a+b)/2,wallH/2,wz,C.tealDark,.03);box(g,b-a+.02,.08,.26,(a+b)/2,wallH+.03,wz,C.navy,.012);}
+  // Door frame and the raised shutter.
+  for(const x of [doorL,doorR])box(g,.12,1.55,.26,x,.775,wz,C.navy,.02);
+  box(g,doorWidth+.12,.16,.3,doorX,1.6,wz,C.navy,.02);
+  box(g,doorWidth-.04,.24,.12,doorX,1.43,wz-.04,C.creamDark,.02);
+  box(g,doorWidth-.12,.012,.14,doorX,.045,minZ+.02,C.gold,.002).castShadow=false;
+  for(let i=0;i<6;i++){const stripe=box(g,.09,.008,.16,doorL+.22+i*(doorWidth-.44)/5,.052,minZ+.02,C.dark,.001);stripe.rotation.y=.5;stripe.castShadow=false;}
+  // A pair of practical lights on the back wall.
+  for(const x of [doorR+(x1-doorR)*.3,doorR+(x1-doorR)*.75]){box(g,1.2,.12,.18,x,wallH-.18,wz+.15,C.navy,.02);box(g,1.06,.05,.2,x,wallH-.22,wz+.17,C.creamLight,.012,glow(0xd8f6e7,.75));}
+  // Gold safety line around the walkable floor.
+  for(const z of [minZ+.05,maxZ-.05])box(g,maxX-minX,.008,.055,(minX+maxX)/2,.048,z,C.gold,.002).castShadow=false;
+  for(const x of [minX+.05,maxX-.05])box(g,.055,.008,maxZ-minZ,x,.048,(minZ+maxZ)/2,C.gold,.002).castShadow=false;
+  return batchStatic(g);
+}
 // Staff share the machinist's build in their own colors. Materials are cloned
 // so recoloring a hire never touches the player or the shared cache.
 export function createWorker(coverall=0x4f8fd6,cap=0x183441) {

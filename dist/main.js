@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig, createHangar, createLaunchComplex, createAssembly, LAUNCH_SITE } from './assets/models.js';
+import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig, createHangar, createLaunchComplex, createAssembly, createPocketShop, LAUNCH_SITE } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS, shiftRuleset, PROGRAM_DURATION, stockType, isPlayableShift, nextShiftIndex } from './core.js';
 import { ShopAudio } from './audio.js';
 import { LaunchGame, launchOp } from './launch.js';
@@ -12,19 +12,35 @@ import { orderWorkflow, stockIcon } from './workflow.js';
 import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, INSTALL_SECONDS, rentFor, opInfo, boardId, POLICY_STEPS } from './manager.js';
 import { deviceInterface, isPhoneDevice } from './device.js';
 import { createTapNavigation } from './tap-navigation.js';
+import { PocketGame, POCKET_MODE, readPocketBest, recordPocketRun } from './pocket.js';
+import { createStationQueue } from './pocket-queue.js';
+import { POCKET_BADGES, pocketBadgeIcon, pocketShortName, pocketRemainingStations, pocketTapTarget, pocketAbsentStations } from './pocket-floor.js';
 
 const speedRecords=(()=>{try{return readSpeedRecords(localStorage,SHIFTS);}catch{return {};}})();
 let homeView='challenges',titleFrame=null;
 let beaconEnding=null,beaconFinaleTime=0;
-const interfaceMode=deviceInterface(navigator);
+// The device picks the interface. Pocket Shift is the exception: it is a phone
+// layout wherever it runs, so a desktop browser gets the touch interface (taps
+// are mouse clicks) while that route is open, and its own interface back after.
+const deviceMode=deviceInterface(navigator);
+let interfaceMode=deviceMode;
 document.documentElement.dataset.interface=interfaceMode;
 const phoneDevice=isPhoneDevice(navigator);
 document.documentElement.dataset.phone=String(phoneDevice);
 const $=id=>document.getElementById(id);
-if(interfaceMode==='mobile'){$('scene').setAttribute('aria-label','3D workshop. Tap a station to walk over and use it. Tap Dash while walking to move faster.');$('briefing-touch').hidden=false;$('touch-help').hidden=false;$('mobile-tap-hint').hidden=false;$('mobile-dash').hidden=false;document.querySelector('.help-keys').hidden=true;}
+const desktopSceneLabel=$('scene').getAttribute('aria-label');
+function syncInterface(){
+  const mode=document.documentElement.dataset.mode==='pocket'?'mobile':deviceMode,touch=mode==='mobile';
+  interfaceMode=mode;document.documentElement.dataset.interface=mode;
+  $('scene').setAttribute('aria-label',touch?'3D workshop. Tap a station to walk over and use it. Tap Dash while walking to move faster.':desktopSceneLabel);
+  for(const id of ['briefing-touch','touch-help','mobile-tap-hint','mobile-dash'])$(id).hidden=!touch;document.querySelector('.help-keys').hidden=touch;
+}
+if(interfaceMode==='mobile')syncInterface();
 const mobileTaps=createTapNavigation();
+// Pocket Shift's plan of up to three stations (see pocketTap).
+const pocketQueue=createStationQueue({limit:3});
 // Shifts and Open for Business share one renderer; game points at the active rules.
-const classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),audio=new ShopAudio();let game=classicGame;
+const classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),pocketGame=new PocketGame(),audio=new ShopAudio();let game=classicGame;
 const launching=()=>game===launchGame&&!menuMode;
 let challengeRun=false;
 const sourceCard=$('source-card');
@@ -75,7 +91,7 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
-  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop']},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop','pocket-shop']},
   {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:['night-shop','dawn-shop']},
   // Launch Window's robot cell, mid-floor between the machines and Inspection.
   {id:'assemble',name:'ASSEMBLY',x:1.55,z:.2,height:1.75,w:2.86,d:1.6,map:'launch-pad'},
@@ -130,12 +146,36 @@ const MAPS={
   'owner-shop':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}}},
   'owner-wing':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}},bounds:{maxX:16.65},
     obstacles:[{minX:16.0,maxX:16.75,minZ:-2.6,maxZ:-1.5}]},
+  // Pocket Shift (hidden #/pocket mode): a full-bleed room for a portrait phone,
+  // read from the bottom of the screen to the top as the part's journey: the
+  // three stock bins, Lathe and Mill, Deburr and the Hold bench, then Inspect
+  // and Shipping, with the Covari crate spot by the back door. Machines face the
+  // camera. The bins are used from the aisle behind them, which they share with
+  // the machines. Stations are drawn at or below their usual size, with aisles
+  // deep enough that no machine's top reaches the station behind it; taps are
+  // generous instead (dist/pocket-floor.js). Deburr arrives before the deburr
+  // parts and the crate spot shows only while a delivery is due (absentStations).
+  'pocket-shop':{theme:'day',shell:'pocket',hide:['office'],fixed:[],
+    bounds:{minX:-4.2,maxX:4.2,minZ:-5,maxZ:6.1},spawn:{x:0,z:4},place:{
+    'material-round':{x:-2.8,z:5.09,access:{x:-2.8,z:4.09}},
+    'material-plate':{x:0,z:5.09,access:{x:0,z:4.09}},
+    'material-block':{x:2.8,z:5.09,access:{x:2.8,z:4.09}},
+    lathe:{x:-2.3,z:2.42,scale:.78,w:2.106,d:1.404,height:2.262},
+    mill:{x:2.15,z:2.42,scale:.78,w:2.496,d:1.443,height:2.418},
+    deburr:{x:-2.45,z:-1.05,scale:.8,w:1.728,d:1.048,height:1.64},
+    buffer:{x:2.4,z:-1.05,scale:.8,w:1.88,d:1.16,height:1.12},
+    receiving:{name:'COVARI CRATE',x:-3,z:-4.2,w:1.3,d:1.05,height:1.05,access:{x:-3,z:-3.04}},
+    inspect:{x:-.25,z:-4.25,rotationY:0,scale:.8,w:1.92,d:1.28,height:1.64,access:{x:-.25,z:-2.98}},
+    ship:{x:2.6,z:-4.17,rotationY:0,scale:.8,w:2.16,d:1.44,height:1.48,access:{x:2.6,z:-2.82}},
+  }},
 };
 const mapHas=(def,mapId)=>(!def.hall||openHalls.has(def.hall))&&(def.map?[].concat(def.map).includes(mapId):!MAPS[mapId].hide?.includes(def.id));
 const placed=(def,mapId)=>({...def,...MAPS[mapId].place?.[def.id]});
+// Stations some map draws at another size; only these have their scale reset on a map change.
+const MAP_SCALED=new Set(Object.values(MAPS).flatMap(map=>Object.entries(map.place??{}).filter(([,p])=>p.scale!==undefined).map(([id])=>id)));
 const accessOf=def=>def.access||{x:def.x,z:def.z+def.d/2+.63};
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,harbor,lighting,appliedTheme=null,lightningFlash=0;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,harbor,pocketShop,lighting,appliedTheme=null,lightningFlash=0;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
 let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
@@ -151,9 +191,12 @@ const fixedObstacles=[{minX:-8.55,maxX:-5.77,minZ:-5.5,maxZ:-4.02},{minX:-5.83,m
   // Perimeter packing and plants are physical props, outside the working aisle.
   {minX:6.05,maxX:7.85,minZ:-5.58,maxZ:-4.30},{minX:6.98,maxX:7.98,minZ:-4.46,maxZ:-3.46},{minX:-8.82,maxX:-7.80,minZ:2.37,maxZ:3.39}];
 let obstacles=[];
+// Stations a map keeps off its floor for now (Pocket Shift's Deburr before it
+// arrives, its crate spot between deliveries): no model, no label, no obstacle.
+const absentStations=new Set();
 function activateMap(mapId){
   Object.assign(bounds,BASE_BOUNDS,MAPS[mapId].bounds);
-  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)).map(s=>placed(s,mapId)).map(s=>({id:s.id,bay:Boolean(s.bay||s.baseBay),minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...(MAPS[mapId].fixed??fixedObstacles),...hallObstacles(mapId)];
+  obstacles=[...(MAPS[mapId].obstacles??[]),...STATION_LAYOUT.filter(s=>s.collidable!==false&&mapHas(s,mapId)&&!absentStations.has(s.id)).map(s=>placed(s,mapId)).map(s=>({id:s.id,bay:Boolean(s.bay||s.baseBay),minX:s.x-s.w/2-.25,maxX:s.x+s.w/2+.25,minZ:s.z-s.d/2-.25,maxZ:s.z+s.d/2+.25})),...(MAPS[mapId].fixed??fixedObstacles),...hallObstacles(mapId)];
 }
 // Open halls stretch the floor south. Closed plots inside that span are
 // solid, and partitions block everything but their doorways.
@@ -221,7 +264,8 @@ function smoothRoute(origin,points){
 }
 function dashStep(dt,remaining,normalSpeed){const active=Math.min(dt,remaining);return {distance:11*active+normalSpeed*(dt-active),remaining:Math.max(0,remaining-active)};}
 function findPath(tx,tz,from=player){
-  if(openHalls.size)return findPathWide(tx,tz,from);
+  // The fixed grid below ends at z 5.5; deeper rooms (south halls, Pocket Shift) use the wide search.
+  if(openHalls.size||bounds.maxZ>5.4)return findPathWide(tx,tz,from);
   const cell=.32,ox=-8.5,oz=-5.4,nx=Math.max(54,Math.ceil((bounds.maxX-ox)/cell)+2),nz=35,budget=nx>54?6000:2200;
   const point=(ix,iz)=>({x:ox+ix*cell,z:oz+iz*cell});
   const nearest=(x,z)=>{let best=null,dist=Infinity;for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){const p=point(ix,iz);if(!safeSpot(p.x,p.z))continue;const d=(p.x-x)**2+(p.z-z)**2;if(d<dist){dist=d;best={ix,iz};}}return best;};
@@ -272,7 +316,7 @@ function findPathWide(tx,tz,from){
   }return [];
 }
 function onPhone(){return ['answering','offer'].includes(game.call?.state);}
-function useStation(id){game.setOfficePresence(atOffice());game.interact(id==='office'&&game.call?.state==='ringing'?'phone':id);}
+function useStation(id){game.setOfficePresence(atOffice());return game.interact(id==='office'&&game.call?.state==='ringing'?'phone':id);}
 function atOffice(){const s=stations.office;return !!s&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<.78;}
 function goToStation(id){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=stations[id];if(!s||!s.model.visible||id==='receiving'&&!game.config.sourcing)return;path=findPath(s.access.x,s.access.z);pathStation=id;targetRing.position.set(s.access.x,.08,s.access.z);targetRing.visible=true;if(!path.length&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.3){useStation(id);pathStation=null;processEvents();}}
 function tapStation(id,event){
@@ -282,6 +326,7 @@ function tapStation(id,event){
     const action=mobileTaps.consume({target:id,x:event?.clientX,y:event?.clientY,time:performance.now()});
     if(action==='ignore')return;
   }
+  if(pocketing())return pocketTap(id);
   goToStation(id);
   if(interfaceMode==='mobile')updateMobileDash();
 }
@@ -292,6 +337,7 @@ function tapFloor(point,event){
     const action=mobileTaps.consume({x:event.clientX,y:event.clientY,time:performance.now()});
     if(action==='ignore')return;
   }
+  if(pocketing())return pocketFloor();
   path=findPath(point.x,point.z);pathStation=null;targetRing.position.set(point.x,.08,point.z);targetRing.visible=true;
   if(interfaceMode==='mobile')updateMobileDash();
 }
@@ -307,19 +353,193 @@ function updateMobileDash(){
   button.querySelector('i').style.width=`${Math.max(0,1-dashCooldown/1.3)*100}%`;
   button.setAttribute('aria-label',calling?'Dash unavailable during a customer call':dashCooldown>0?'Dash recharging':!path.length?'Tap a destination, then Dash':'Dash');
 }
+// Pocket Shift (hidden #/pocket mode) ----------------------------------------
+// You plan, the machinist runs: each station tap adds a stop (at most three);
+// he walks to the first, uses it through the normal interaction on arrival and
+// carries on. A rejected interaction drops the rest of the plan. Bare floor
+// clears it. The plan itself lives in dist/pocket-queue.js.
+function pocketRoute(){return document.documentElement.dataset.mode==='pocket';}
+function pocketing(){return game===pocketGame&&!menuMode;}
+// The explicit hook CSS and JS share: html[data-mode="pocket"] while the route is open.
+function setPocketMode(on){const root=document.documentElement;if(on)root.dataset.mode='pocket';else delete root.dataset.mode;if(deviceMode!=='mobile')syncInterface();titleFrame=null;layoutDirty=true;syncPhoneOrientation();}
+function syncPocketMarkers(){for(const [id,s] of Object.entries(stations)){const n=pocketing()?pocketQueue.position(id):0;if(n){if(s.label.dataset.queue!==String(n))s.label.dataset.queue=String(n);}else if(s.label.dataset.queue)delete s.label.dataset.queue;s.label.classList.toggle('queue-head',n===1);}}
+function pocketStop(){path=[];pathStation=null;if(targetRing)targetRing.visible=false;}
+function pocketTap(id){
+  const s=stations[id];if(game.mode!=='playing'||!s||!s.model.visible)return;
+  const result=pocketQueue.tap(id);
+  if(result.action==='full'){toast(`Plan full · ${pocketQueue.limit} stops. Tap a numbered station to drop it.`,1.6);s.label.classList.remove('queue-full');void s.label.offsetWidth;s.label.classList.add('queue-full');}
+  audio.event(result.action==='full'?'hint':'select');
+  if(result.action==='removed'&&result.head)pocketStop();
+  syncPocketMarkers();
+}
+function pocketFloor(){if(game.mode!=='playing')return;pocketQueue.clear();pocketStop();syncPocketMarkers();}
+// Generous taps: a canvas tap goes to the station whose drawn footprint or badge
+// is nearest, within POCKET_TAP_RADIUS px (rule and tests in dist/pocket-floor.js).
+function pocketTapTargets(){
+  const targets=[];
+  for(const [id,s] of Object.entries(stations)){
+    if(!s.model.visible||s.label.hidden||!POCKET_BADGES[id])continue;
+    const d=s.def,xs=[],ys=[];
+    for(const x of [d.x-d.w/2,d.x+d.w/2])for(const y of [0,d.height])for(const z of [d.z-d.d/2,d.z+d.d/2]){const p=screenPoint(new THREE.Vector3(x,y,z));xs.push(p.x);ys.push(p.y);}
+    const r=s.label.getBoundingClientRect();
+    targets.push({id,boxes:[{left:Math.min(...xs),right:Math.max(...xs),top:Math.min(...ys),bottom:Math.max(...ys)},{left:r.left,right:r.right,top:r.top,bottom:r.bottom}]});
+  }
+  return targets;
+}
+// The run's next step: what the held part needs, else the most urgent order's next station.
+function pocketNextTarget(){
+  const held=game.heldOrder;if(held)return held.route[held.index];
+  const o=[...game.orders].sort((a,b)=>a.remaining-b.remaining)[0];if(!o)return null;
+  if(!o.started)return `material-${stockType(o)}`;
+  return o.location==='buffer'?'buffer':stations[o.location]?o.location:o.route[o.index];
+}
+// The phone column: the whole width on a phone, a centred phone-width column in a large window.
+const POCKET_COLUMN=460;
+function pocketColumn(){const w=Math.min(viewport.w,POCKET_COLUMN),left=(viewport.w-w)/2;return {left,right:left+w};}
+// Fixtures that come and go on the pocket floor. Deburr's arrival gets a short
+// moment (toast, sparks and a quick grow; with reduced motion, the toast only).
+let absentKey='',pocketArrival=null;
+function syncAbsentStations(mapId){
+  const want=MAPS[mapId].shell==='pocket'?pocketAbsentStations(game===pocketGame&&!menuMode?game:{}):[],key=want.join();
+  if(key===absentKey)return null;
+  const before=new Set(absentStations);absentKey=key;absentStations.clear();for(const id of want)absentStations.add(id);
+  return before;
+}
+function pocketFixturesChanged(before){
+  for(const id of before){
+    if(absentStations.has(id))continue;
+    const s=stations[id],box=obstacles.find(o=>o.id===id);
+    // Nobody is left standing inside a fixture that has just arrived.
+    if(box&&insideFootprint(box,player.x,player.z)){const spot=nearestWalkableOutside(box,player);if(spot){player.x=spot.x;player.z=spot.z;character.position.set(player.x,0,player.z);}}
+    s.label.classList.remove('arriving');void s.label.offsetWidth;s.label.classList.add('arriving');
+    if(id==='deburr'&&pocketing()&&game.mode==='playing'){
+      toast('New machine · Deburr is on the floor',2.6);audio.event('ready');spawnParticles(s.def.x,1.2,s.def.z,0xffbf7d,reduced?0:16);
+      if(!reduced)pocketArrival={id,start:clockTime};
+    }
+  }
+  if(pathStation){const s=stations[pathStation];path=findPath(s.access.x,s.access.z);}else path=[];
+}
+function animatePocketArrival(){
+  if(!pocketArrival)return;const s=stations[pocketArrival.id],t=Math.min(1,(clockTime-pocketArrival.start)/.6);
+  // Ease out with a small overshoot, from flat to full size.
+  const k=1+2.2*(t-1)**3+1.2*(t-1)**2;s.model.scale.setScalar((s.def.scale??1)*Math.max(.01,k));
+  if(t>=1){s.model.scale.setScalar(s.def.scale??1);pocketArrival=null;}
+}
+// Station badges: icon and word in the station's colour, a nameplate at the
+// front-left foot of each station (bins: under the front edge). State changes
+// the word (countdown, READY) and the frame; the plan adds a number.
+function positionPocketBadges(){
+  const target=menuMode?null:pocketNextTarget(),job=game.sourcing;
+  for(const [id,s] of Object.entries(stations)){
+    const b=POCKET_BADGES[id],d=s.def;
+    if(!b||!mapHas(d,'pocket-shop')||absentStations.has(id)){s.label.hidden=true;continue;}
+    s.label.hidden=false;
+    const p=screenPoint(new THREE.Vector3(d.x,0,d.z+d.d/2));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
+    const st=game.stations?.[id],crate=id==='receiving';
+    const busy=!menuMode&&(crate?job?.state==='sourcing':!!st?.part&&!st.ready),ready=!menuMode&&(crate?!!game.receiving:!!st?.ready);
+    const left=busy?(crate?job.remaining:st.remaining):0,full=crate?22:st?.duration||OPS[id]?.duration||1;
+    const word=busy?`${Math.ceil(left)}s`:ready?'READY':b.word;
+    const el=s.label.querySelector('.pb-word');if(el.textContent!==word)el.textContent=word;
+    s.label.querySelector('.pb-bar').style.transform=`scaleX(${busy?Math.max(0,Math.min(1,1-left/full)):0})`;
+    s.label.classList.toggle('busy',busy);s.label.classList.toggle('ready',ready);s.label.classList.toggle('target',target===id);
+    for(const name of ['nearby','locked'])s.label.classList.remove(name);
+    const n=s.label.dataset.queue,label=`${b.name}${crate?' (Receiving)':''}${busy?`, ${crate?'delivery in':'running'} ${Math.ceil(left)} seconds`:ready?(crate?', crate waiting':', ready to collect'):''}${target===id?', next step':''}${n?`, plan stop ${n}`:''}`;
+    if(s.label.getAttribute('aria-label')!==label)s.label.setAttribute('aria-label',label);
+    s.label.style.opacity='';
+  }
+}
+const partColor=color=>'#'+(color>>>0).toString(16).padStart(6,'0');
+function pocketChip(id,extra=''){const b=POCKET_BADGES[id];return `<span class="pt-chip${extra}" style="--c:${b.color}">${pocketBadgeIcon(id)}${extra.includes('next')?`<b>${b.word}</b>`:''}</span>`;}
+function pocketArrived(id,accepted){if(pocketQueue.arrived(id,accepted).action!=='ignored')syncPocketMarkers();}
+// Each frame: walk toward the first stop when idle, or use it at once if already there.
+function updatePocketQueue(){
+  if(!pocketing()||game.mode!=='playing')return;
+  const head=pocketQueue.head();if(!head||pathStation===head)return;
+  const s=stations[head];path=findPath(s.access.x,s.access.z);pathStation=head;
+  targetRing.position.set(s.access.x,.08,s.access.z);targetRing.visible=true;
+  if(path.length)return;
+  pathStation=null;targetRing.visible=false;
+  if(Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.3){player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);const ok=useStation(head);processEvents();pocketArrived(head,ok);syncParts();updateUI(true);}
+  else{toast('No clear way there. Plan cleared.',1.8);pocketArrived(head,false);}
+}
+// The run's local best lives under its own key (dist/pocket.js); nothing else is saved.
+function pocketClock(seconds){const t=Math.max(0,Math.floor(seconds));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;}
+function pocketBestLine(best){return best.runs?`Best ${best.bestPoints.toLocaleString()} points · ${best.bestShipped} shipped · ${pocketClock(best.longestSeconds)} survived`:'Your best run is kept on this device.';}
+let pocketResult=null,pocketFinaleTimer=0;
+function showPocketPanel(state){
+  const result=state==='result';hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pocket-panel').hidden=false;
+  $('pocket-result').hidden=!result;$('pocket-how').hidden=result;
+  if(result){const r=pocketResult??{newBest:false,best:readPocketBest(localStorage)};$('pocket-shipped').textContent=game.shipped;$('pocket-points').textContent=game.score.toLocaleString();$('pocket-time').textContent=pocketClock(game.elapsed);$('pocket-new-best').hidden=!r.newBest;$('pocket-outcome').textContent=pocketBestLine(r.best);}
+  else $('pocket-best').textContent=pocketBestLine(readPocketBest(localStorage));
+  $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-play').focus({preventScroll:true});
+}
+// Endless pocket-v1 rules on their own game object; never a server run or a shared save.
+function startPocket(){clearTimeout(pocketFinaleTimer);pocketResult=null;beaconFinaleTime=0;endBeaconEnding();audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent='POCKET SHIFT · BETA';$('shift-name').textContent=POCKET_MODE.name;$('pocket-flash').className='pocket-flash';resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
+function showPocketResults(){clearTimeout(pocketFinaleTimer);resultShown=true;audio.update(false);clearMovement();pocketQueue.clear();syncPocketMarkers();pocketResult=recordPocketRun(localStorage,{score:game.score,shipped:game.shipped,elapsed:game.elapsed});showPocketPanel('result');$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');}
+// A miss must be unmistakable: the marker fills, the screen flashes, and a short
+// buzz where the browser allows it (never with reduced motion).
+function pocketBuzz(pattern){if(reduced||typeof navigator.vibrate!=='function')return;try{navigator.vibrate(pattern);}catch{}}
+function pocketStrike(ev){
+  const flash=$('pocket-flash');flash.className='pocket-flash';void flash.offsetWidth;flash.className=`pocket-flash ${ev.final?'final':'hit'}`;
+  if(reduced&&!ev.final)setTimeout(()=>{if(flash.className==='pocket-flash hit')flash.className='pocket-flash';},800);
+  const marker=$('pocket-strikes').children[ev.strikes-1];if(marker){marker.classList.remove('struck');void marker.offsetWidth;marker.classList.add('struck');}
+  updatePocketHUD();shake=Math.max(shake,ev.final?1:.6);
+  toast(ev.final?'Third miss. Run over.':`Order missed · ${ev.strikes} of ${game.config.strikes}`,ev.final?2:2.4);
+  pocketBuzz(ev.final?[90,60,220]:70);
+}
+// The third strike shows for a moment before the result card.
+function pocketFinale(){clearMovement();pocketQueue.clear();syncPocketMarkers();$('pause-button').hidden=true;clearTimeout(pocketFinaleTimer);pocketFinaleTimer=setTimeout(()=>{if(game===pocketGame&&game.mode==='results'&&!menuMode)showResults();},1500);}
+function updatePocketHUD(){
+  $('pocket-hud').hidden=$('pocket-band').hidden=!pocketing();if(!pocketing())return;
+  const n=game.strikes,max=game.config.strikes;[...$('pocket-strikes').children].forEach((marker,i)=>marker.classList.toggle('on',i<n));
+  $('pocket-strikes').setAttribute('aria-label',n?`${n} of ${max} misses`:'No misses yet');
+  $('pocket-hud-shipped').textContent=game.shipped;$('pocket-hud-points').textContent=game.score.toLocaleString();
+}
+// Every active order at once, four across: the part, its seconds and deadline
+// bar, the next station as a chip with its word, then the stations after it
+// as icons. Chips use the station badges' icons, colours and words.
+let renderedPocketTickets='';
+function updatePocketTickets(force){
+  const list=$('orders'),held=game.heldOrder?.id;
+  const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.started}:${o.location}:${game.stations[o.location]?.ready}:${held===o.id}`).join('|')+`/${game.orders.length}`;
+  if(force||signature!==renderedPocketTickets){
+    renderedPocketTickets=signature;list.replaceChildren();
+    for(const o of game.orders){
+      const [next,...later]=pocketRemainingStations(o),working=!!game.stations[o.location]&&!game.stations[o.location].ready&&o.location===next;
+      const el=document.createElement('article');el.className='pocket-ticket'+(held===o.id?' carried-job':'');el.id='ticket-'+o.id;el.style.setProperty('--part',partColor(o.color));
+      el.setAttribute('aria-label',`${o.name}. Next: ${POCKET_BADGES[next].name}${working?', running':''}.${later.length?` Then ${later.map(id=>POCKET_BADGES[id].name).join(', ')}.`:''}`);
+      el.innerHTML=`<div class="pt-top"><span class="pt-part">${stockIcon(stockType(o))}</span><b class="pt-name">${pocketShortName(o.name)}</b><span class="due">${Math.ceil(o.remaining)}s</span></div><div class="pt-next">${pocketChip(next,' next'+(working?' working':''))}</div><div class="pt-later">${later.map(id=>pocketChip(id)).join('')}</div><div class="pt-bar"><i></i></div>`;
+      list.appendChild(el);
+      // A name is shown only where it fits whole; the part icon and colour stay.
+      const name=el.querySelector('.pt-name');if(name.scrollWidth>name.clientWidth+.5)name.hidden=true;
+    }
+    for(let i=game.orders.length;i<game.config.maxActive;i++){const slot=document.createElement('div');slot.className='pocket-slot';slot.innerHTML=i===game.orders.length?'<small>NEXT</small><b class="pocket-next"></b>':'';list.appendChild(slot);}
+    list.appendChild(sourceCard);
+  }
+  for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;const urgent=o.remaining<Math.max(12,o.deadline*.25);el.classList.toggle('urgent',urgent);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.pt-bar i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
+  const next=list.querySelector('.pocket-next');if(next)next.textContent=`${Math.max(0,Math.ceil(game.nextArrival-game.elapsed))}s`;
+}
 function screenPoint(v){const p=v.clone().project(camera);return {x:(p.x*.5+.5)*viewport.w,y:(-p.y*.5+.5)*viewport.h};}
-function floatText(text,station,small=false){const d=stations[station]?.def;if(!d)return;const p=screenPoint(new THREE.Vector3(d.x,d.height+.3,d.z));const el=document.createElement('div');el.className=`float-text${small?' small':''}`;el.textContent=text;el.style.left=p.x+'px';el.style.top=p.y+'px';$('floating-text').appendChild(el);el.addEventListener('animationend',()=>el.remove(),{once:true});setTimeout(()=>el.remove(),1800);}
+function floatText(text,station,small=false){const d=stations[station]?.def;if(!d)return;const p=screenPoint(new THREE.Vector3(d.x,d.height+.3,d.z));const el=document.createElement('div');el.className=`float-text${small?' small':''}`;el.textContent=text;el.style.left=p.x+'px';el.style.top=p.y+'px';$('floating-text').appendChild(el);if(pocketing()){const half=el.offsetWidth/2+6,col=pocketColumn();el.style.left=Math.min(Math.max(p.x,col.left+half),col.right-half)+'px';}el.addEventListener('animationend',()=>el.remove(),{once:true});setTimeout(()=>el.remove(),1800);}
 function createReceivingDock(){
   const g=new THREE.Group();g.name='receiving-dock';
+  // The Receiving bench every shift uses; Pocket Shift swaps it for the pallet below.
+  const bench=new THREE.Group();g.add(bench);
   const steel=new THREE.MeshStandardMaterial({color:0x214a4b,roughness:.8});
-  const top=new THREE.Mesh(new THREE.BoxGeometry(2,.13,.8),new THREE.MeshStandardMaterial({color:0xd9d9c4,roughness:.75}));top.position.y=.96;top.castShadow=true;top.receiveShadow=true;g.add(top);
-  for(const x of [-.86,.86])for(const z of [-.29,.29]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.92,.1),steel);leg.position.set(x,.46,z);leg.castShadow=true;g.add(leg);}
-  const shelf=new THREE.Mesh(new THREE.BoxGeometry(1.8,.07,.62),steel);shelf.position.y=.26;shelf.receiveShadow=true;g.add(shelf);
-  const rail=new THREE.Mesh(new THREE.BoxGeometry(2,.2,.06),steel);rail.position.set(0,1.06,.38);g.add(rail);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(2,.13,.8),new THREE.MeshStandardMaterial({color:0xd9d9c4,roughness:.75}));top.position.y=.96;top.castShadow=true;top.receiveShadow=true;bench.add(top);
+  for(const x of [-.86,.86])for(const z of [-.29,.29]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.92,.1),steel);leg.position.set(x,.46,z);leg.castShadow=true;bench.add(leg);}
+  const shelf=new THREE.Mesh(new THREE.BoxGeometry(1.8,.07,.62),steel);shelf.position.y=.26;shelf.receiveShadow=true;bench.add(shelf);
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(2,.2,.06),steel);rail.position.set(0,1.06,.38);bench.add(rail);
+  // A low pallet with a painted landing square, attached only in Pocket Shift (applyMap).
+  const pallet=new THREE.Group();
+  const wood=new THREE.MeshStandardMaterial({color:0xa87946,roughness:.85}),paint=new THREE.MeshStandardMaterial({color:0x72e8cf,roughness:.6});
+  for(const x of [-.42,0,.42]){const runner=new THREE.Mesh(new THREE.BoxGeometry(.14,.09,.9),wood);runner.position.set(x,.045,0);runner.castShadow=true;pallet.add(runner);}
+  for(const z of [-.34,-.11,.11,.34]){const slat=new THREE.Mesh(new THREE.BoxGeometry(1.06,.05,.17),wood);slat.position.set(0,.115,z);slat.castShadow=true;slat.receiveShadow=true;pallet.add(slat);}
+  for(const [x,z,w,d] of [[0,-.62,1.3,.05],[0,.62,1.3,.05],[-.62,0,.05,1.29],[.62,0,.05,1.29]]){const line=new THREE.Mesh(new THREE.BoxGeometry(w,.012,d),paint);line.position.set(x,.03,z);pallet.add(line);}
   const crate=new THREE.Mesh(new THREE.BoxGeometry(.58,.48,.52),new THREE.MeshStandardMaterial({color:0xb77845,roughness:.82}));crate.position.set(0,.3,0);crate.castShadow=true;const crateGroup=new THREE.Group();g.add(crateGroup);crateGroup.position.y=1.01;crateGroup.add(crate);
   for(const x of [-.19,.19]){const band=new THREE.Mesh(new THREE.BoxGeometry(.035,.5,.54),new THREE.MeshStandardMaterial({color:0xefd078,roughness:.6}));band.position.set(x,.31,0);crateGroup.add(band);}
   const mark=new THREE.Mesh(new THREE.BoxGeometry(.18,.12,.012),new THREE.MeshStandardMaterial({color:0x17333b,roughness:.7}));mark.position.set(0,.43,.267);crateGroup.add(mark);g.userData.brandMark=mark;
-  g.userData.workPoint=new THREE.Vector3(0,1.63,0);g.userData.crate=crateGroup;return g;
+  g.userData.workPoint=new THREE.Vector3(0,1.63,0);g.userData.crate=crateGroup;g.userData.bench=bench;g.userData.pallet=pallet;return g;
 }
 function createMaterialBin(type){
   const g=new THREE.Group();g.name=`material-bin-${type}`;
@@ -352,7 +572,7 @@ const THEMES={
   predawn:{sky:0x0c1a2c,backdrop:0x13223a,hemi:[0xb4c6f2,0x2c3648,2.2],sun:[0xdbe3ff,3.3],fill:[0x6a86e0,1.8],exposure:1.2},
   sunrise:{sky:0x3b2a3d,backdrop:0x3a2c3c,hemi:[0xffd6b4,0x3a3247,2.05],sun:[0xffab6a,3.5],fill:[0x8c8fe2,1.6],exposure:1.22},
 };
-function activeMapId(){return menuMode?'first-shop':game.config.mapId;}
+function activeMapId(){return menuMode?(pocketRoute()?'pocket-shop':'first-shop'):game.config.mapId;}
 const themeColor=new THREE.Color(),themeOther=new THREE.Color();
 function mixColor(target,a,b,t){target.set(themeColor.set(a).lerp(themeOther.set(b),t));}
 function applyTheme(a,b=a,t=0){
@@ -364,20 +584,25 @@ function applyTheme(a,b=a,t=0){
 function applyMap(){
   const mapId=activeMapId(),managing=!!game.manager&&!menuMode,halls=managing&&mapId==='owner-wing'?game.halls:[];
   const mapKey=halls.length?`${mapId}+${halls.join('+')}`:mapId;
+  const absentBefore=syncAbsentStations(mapId);
   if(appliedTheme!==mapKey){
     appliedTheme=mapKey;openHalls.clear();for(const id of halls)openHalls.add(id);
     applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
-    for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;}s.label.querySelector('.station-name').textContent=s.def.name;}
-    const launchMap=MAPS[mapId].shell==='hangar',harborMap=MAPS[mapId].shell==='harbor';world.visible=!launchMap&&!harborMap;hangar.visible=launchSite.visible=launchMap;harbor.visible=harborMap;lighting.backdrop.visible=!harborMap;
+    const launchMap=MAPS[mapId].shell==='hangar',harborMap=MAPS[mapId].shell==='harbor',pocketMap=MAPS[mapId].shell==='pocket';
+    for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;if(MAP_SCALED.has(s.def.id))s.model.scale.setScalar(s.def.scale??1);}s.label.querySelector('.station-name').textContent=s.def.name;if(!pocketMap)s.label.setAttribute('aria-label','Walk to '+s.def.name);}
+    world.visible=!launchMap&&!harborMap&&!pocketMap;pocketShop.visible=pocketMap;hangar.visible=launchSite.visible=launchMap;harbor.visible=harborMap;lighting.backdrop.visible=!harborMap;
+    // Pocket Shift's crate arrives on a pallet by the back door instead of the Receiving bench.
+    const dockModel=stations.receiving.model,dock=dockModel.userData;dockModel.remove(dock.bench,dock.pallet);dockModel.add(pocketMap?dock.pallet:dock.bench);dock.pallet.visible=true;dock.crate.position.y=pocketMap?.14:1.01;dock.crate.scale.setScalar(pocketMap?1.45:1);
+    if(!pocketMap)pocketArrival=null;
     // The east wing widens the room: refit the camera and stretch the sun's shadows over it.
     const wing=mapId==='owner-wing';annex.visible=wing;if(stormRig)stormRig.visible=mapId==='dawn-shop';for(const [id,shell] of hallShells)shell.built.visible=openHalls.has(id);fitLights(wing);
     shopFrame=measureShopFrame();layoutDirty=true;resetView();
-  }
+  }else if(absentBefore){activateMap(mapId);routeCache.clear();pocketFixturesChanged(absentBefore);}
   for(const [id,shell] of hallShells)shell.plot.visible=managing&&mapId==='owner-wing'&&!openHalls.has(id)&&(game.hallBuyable(id)||game.hallsPending.includes(id));
   if(managing){const t=game.mode==='evening'||game.mode==='results'?1:Math.min(1,game.elapsed/DAY_SECONDS);applyTheme(THEMES.morning,THEMES.dusk,t*t);}
   if(beaconing())applyTheme(THEMES.harbor,THEMES.harborDusk,Math.min(1,game.elapsed/game.config.duration));
   if(launching()){const t=Math.min(1,game.elapsed/game.config.duration);applyTheme(THEMES.predawn,THEMES.sunrise,pad.cinematic?Math.min(1,.75+pad.cinematic.t/14):t*.75);}
-  for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
+  for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&!absentStations.has(s.def.id)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
   for(const [id,bay] of Object.entries(bays)){const def=stations[id].def;bay.visible=managing&&mapHas(def,mapId)&&!game.stations[id];bay.position.set(def.x,0,def.z);bay.rotation.y=def.baseBay?0:def.rotationY??0;}
 }
 // Shadows and fog cover the floor in use. Released maps keep their original light.
@@ -403,7 +628,7 @@ function boot(){
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
   world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);stormRig=createStormRig();stormRig.visible=false;scene.add(stormRig);
-  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);harbor=createHarbor();harbor.visible=false;scene.add(harbor);
+  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);harbor=createHarbor();harbor.visible=false;scene.add(harbor);pocketShop=createPocketShop(MAPS['pocket-shop'].bounds,{doorX:MAPS['pocket-shop'].place.receiving.x});pocketShop.visible=false;scene.add(pocketShop);
   for(const h of HALL_PLOTS){const shell=createHall(h);shell.built.visible=shell.plot.visible=false;scene.add(shell.built,shell.plot);hallShells.set(h.id,shell);
     const sign=$('wing-sign').cloneNode(true);sign.id='hall-sign-'+h.id;sign.classList.add('hall-sign');sign.setAttribute('aria-label',`Expand the shop with ${h.name}`);sign.querySelector('.station-name').textContent=`BUILD ${h.name.toUpperCase()}`;sign.onclick=()=>openPopover('hall',h.id);$('wing-sign').after(sign);hallSigns.set(h.id,sign);}
   scene.add(sun.target);
@@ -412,7 +637,7 @@ function boot(){
   new THREE.TextureLoader().load($('covari-logo').src,texture=>{texture.colorSpace=THREE.SRGBColorSpace;texture.repeat.set(.52,.52);texture.offset.set(.24,.24);const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff});stations.receiving.model.userData.brandMark.material=material;});
   for(const def of STATION_LAYOUT){
     const model=def.id==='office'?world.userData.office:def.id==='receiving'?createReceivingDock():def.stock?createMaterialBin(def.stock):def.bay?new THREE.Group():createMachine(def.id);if(def.id!=='office'){model.position.set(def.x,0,def.z);model.rotation.y=def.rotationY??0;model.scale.setScalar(def.scale??1);scene.add(model);}
-    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);const machine=def.bay||OPS[def.id]&&def.id!=='ship';label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span class="station-name">${def.name}</span><span class="station-time"></span><i class="station-progress"></i>${machine?'<i class="station-wear" hidden></i>':''}${def.bay||def.baseBay?'<span class="label-more" role="button" tabindex="-1" aria-label="Machine options" hidden>⋯</span>':''}`;label.onclick=e=>{if(e.target.closest('.label-more'))return openPopover('machine',def.id);stationClick(def.id,e);};$('station-labels').appendChild(label);
+    const label=document.createElement('button');label.className='station-label'+(def.stock?' stock-label':'');label.id='station-'+def.id;label.setAttribute('aria-label','Walk to '+def.name);const machine=def.bay||OPS[def.id]&&def.id!=='ship';label.innerHTML=`<span class="station-dot"></span>${def.stock?stockIcon(def.stock):['lathe','mill'].includes(def.id)?technologyIcon(def.id):''}<span class="station-name">${def.name}</span><span class="station-time"></span><i class="station-progress"></i>${machine?'<i class="station-wear" hidden></i>':''}${def.bay||def.baseBay?'<span class="label-more" role="button" tabindex="-1" aria-label="Machine options" hidden>⋯</span>':''}${POCKET_BADGES[def.id]?`<span class="pocket-badge" style="--c:${POCKET_BADGES[def.id].color}" aria-hidden="true">${pocketBadgeIcon(def.id)}<span class="pb-word">${POCKET_BADGES[def.id].word}</span><i class="pb-bar"></i></span>`:''}`;label.onclick=e=>{if(e.target.closest('.label-more'))return openPopover('machine',def.id);stationClick(def.id,e);};$('station-labels').appendChild(label);
     stations[def.id]={def,base:def,model,label,access:accessOf(def),op:def.bay?null:def.id,height:def.height};if(def.bay||def.baseBay){bays[def.id]=createBay(def);scene.add(bays[def.id]);}
     if(model.userData.spindle)model.userData.spindle.userData.baseY=model.userData.spindle.position.y;
   }
@@ -421,10 +646,13 @@ function boot(){
   targetRing=new THREE.Mesh(new THREE.RingGeometry(.25,.31,32),new THREE.MeshBasicMaterial({color:0x92f4db,side:THREE.DoubleSide,transparent:true,opacity:.7}));targetRing.rotation.x=-Math.PI/2;targetRing.visible=false;scene.add(targetRing);
   shopFrame=measureShopFrame();
   const layoutObserver=new ResizeObserver(()=>{layoutDirty=true;});
-  for(const id of ['live-hud','orders','game-footer','shop-sidebar'])layoutObserver.observe($(id));
+  for(const id of ['live-hud','orders','game-footer','shop-sidebar','pocket-hud','pocket-band'])layoutObserver.observe($(id));
   resize();bindControls();applyHomeRoute();updateCamera(0,true);renderer.render(scene,camera);$('loading').hidden=true;
   requestAnimationFrame(frame);
-  window.__chipRush={snapshot:()=>({...game.snapshot(),player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),version:'2.5.0'};
+  window.__chipRush={snapshot:()=>({...game.snapshot(),player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),
+    // QA: each visible station's model box projected to CSS pixels, at its placed position on the current map.
+    floorBox:()=>{const xs=[],ys=[];for(const x of [bounds.minX,bounds.maxX])for(const z of [bounds.minZ,bounds.maxZ]){const p=screenPoint(new THREE.Vector3(x,0,z));xs.push(p.x);ys.push(p.y);}return {left:Math.min(...xs),right:Math.max(...xs),top:Math.min(...ys),bottom:Math.max(...ys)};},
+    footprints:()=>Object.values(stations).filter(s=>s.model.visible).map(s=>{const box=new THREE.Box3().setFromObject(s.model),xs=[],ys=[];for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const p=screenPoint(new THREE.Vector3(x,y,z));xs.push(p.x);ys.push(p.y);}const l=s.label.getBoundingClientRect();return {id:s.def.id,left:Math.min(...xs),right:Math.max(...xs),top:Math.min(...ys),bottom:Math.max(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys),label:{left:l.left,right:l.right,top:l.top,bottom:l.bottom,hidden:s.label.hidden||!l.width},queue:s.label.dataset.queue??null};}),version:'2.5.0'};
   registerTools();
 }
 function measureShopFrame(){
@@ -433,8 +661,10 @@ function measureShopFrame(){
   const frame={left:Infinity,right:-Infinity,bottom:Infinity,top:-Infinity};
   const include=p=>{const x=p.dot(right),y=p.dot(cameraUp);frame.left=Math.min(frame.left,x);frame.right=Math.max(frame.right,x);frame.bottom=Math.min(frame.bottom,y);frame.top=Math.max(frame.top,y);};
   for(const x of [bounds.minX,bounds.maxX])for(const z of [bounds.minZ,bounds.maxZ])include(new THREE.Vector3(x,0,z));
+  // Pocket Shift fits only its own room and the stations it shows.
+  const pocketMap=MAPS[activeMapId()].shell==='pocket';
   for(const s of Object.values(stations)){
-    if(s.def.map)continue;
+    if(s.def.map||pocketMap&&!mapHas(s.def,'pocket-shop'))continue;
     // An emptied starting bay holds no model, so it has no box to fit.
     const box=new THREE.Box3().setFromObject(s.model);if(box.isEmpty())continue;
     for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z])include(new THREE.Vector3(x,y,z));
@@ -444,7 +674,7 @@ function measureShopFrame(){
   for(const h of HALL_PLOTS)if(!openHalls.has(h.id)&&game.manager&&!menuMode&&game.hallBuyable?.(h.id)&&(h.row===1||HALL_PLOTS.some(o=>openHalls.has(o.id)&&hallAdjacent(o,h))))include(new THREE.Vector3(h.cx,0,h.z0+2));
   if(launchSite?.visible)for(const point of launchSite.userData.framePoints)include(point);
   // The player works in the shop. Offshore scenery never widens its play camera.
-  for(const shellObject of [...(harbor?.visible?[]:hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
+  for(const shellObject of [...(pocketMap?[pocketShop]:harbor?.visible?[]:hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
     const shell=new THREE.Box3().setFromObject(shellObject);
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
   }
@@ -476,9 +706,25 @@ function measurePlayFrame(){
   if(beaconing())look.addScaledVector(right,Math.min(1.8,Math.max(0,((rightEdge-left)*scale-(shopFrame.right-shopFrame.left))/2)));
   return {halfHeight:viewport.h*scale/2,look};
 }
+// Pocket Shift's floor spans the phone column, between the ticket row and the
+// thin bottom strip. The strip is always there while playing, so a Covari card
+// coming or going never moves the floor.
+function measurePocketFrame(){
+  const col=pocketColumn(),top=Math.max($('pocket-hud').getBoundingClientRect().bottom,$('orders').getBoundingClientRect().bottom)+4,strip=$('pocket-band').getBoundingClientRect();
+  return pocketFit(col.left,col.right,top,(strip.height?strip.top:viewport.h-64)-2);
+}
+function pocketFit(left,rightEdge,top,bottom){
+  const scale=Math.max((shopFrame.right-shopFrame.left)/Math.max(120,rightEdge-left),(shopFrame.top-shopFrame.bottom)/Math.max(100,bottom-top));
+  const cx=(left+rightEdge)/2,cy=(top+bottom)/2;
+  const look=right.clone().multiplyScalar((shopFrame.left+shopFrame.right)/2-(cx-viewport.w/2)*scale).addScaledVector(cameraUp,(shopFrame.top+shopFrame.bottom)/2+(cy-viewport.h/2)*scale);
+  return {halfHeight:viewport.h*scale/2,look};
+}
+// Pocket Shift's start card shows its whole room behind the card.
+function pocketCardFrame(){return pocketFit(10,viewport.w-10,70,viewport.h-20);}
 // Browsers on iPhone cannot reliably lock orientation. Require landscape
 // in the game itself and freeze an active shift as soon as it rotates back.
-function phonePortrait(){return phoneDevice&&innerHeight>innerWidth;}
+// Pocket Shift is built for portrait, so it never shows the rotate prompt.
+function phonePortrait(){return phoneDevice&&innerHeight>innerWidth&&!pocketRoute();}
 function syncPhoneOrientation(){
   const blocked=phonePortrait();
   $('phone-rotate-screen').hidden=!blocked;
@@ -489,7 +735,7 @@ function syncPhoneOrientation(){
 function resize(){
   viewport={w:innerWidth,h:innerHeight};
   syncPhoneOrientation();
-  shopFrame=measureShopFrame();layoutDirty=true;renderer.setSize(viewport.w,viewport.h);if(!menuMode)revealSelectedTicket();updateCamera(0,true);
+  shopFrame=measureShopFrame();layoutDirty=true;renderedPocketTickets='';renderer.setSize(viewport.w,viewport.h);if(!menuMode)revealSelectedTicket();updateCamera(0,true);
 }
 function updateCamera(dt,instant=false){
   const desired=menuMode?0:1;cameraBlend=instant?desired:THREE.MathUtils.damp(cameraBlend,desired,4,dt);
@@ -500,8 +746,9 @@ function updateCamera(dt,instant=false){
   const offset=mobile?0:-4.0;
   const look=new THREE.Vector3(right.x*offset,0,right.z*offset);
   look.y=mobile?-7.2:.25;
-  if(menuMode){if(!$('welcome').hidden||!titleFrame)titleFrame=measureMenuFrame();halfHeight=titleFrame.halfHeight;look.copy(titleFrame.look);}
-  if(!menuMode&&(layoutDirty||!playFrame)){playFrame=measurePlayFrame();layoutDirty=false;}
+  if(menuMode&&pocketRoute()){const f=pocketCardFrame();halfHeight=f.halfHeight;look.copy(f.look);}
+  else if(menuMode){if(!$('welcome').hidden||!titleFrame)titleFrame=measureMenuFrame();halfHeight=titleFrame.halfHeight;look.copy(titleFrame.look);}
+  if(!menuMode&&(layoutDirty||!playFrame)){playFrame=pocketing()?measurePocketFrame():measurePlayFrame();layoutDirty=false;}
   if(playFrame&&!menuMode){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
   if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
@@ -569,8 +816,10 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='shipped'){floatText(`+${ev.points}${ev.combo>1?'  ×'+ev.combo+' streak':''}`,'ship');spawnParticles(6,1.2,1.2,0xffd76c,28);shake=.7;if(launching()&&game.stack.length)queueSection(game.stack.at(-1),game.stack.length);}
   if(ev.type==='kitted'){floatText(ev.waiting?`KIT · ${ev.waiting} TO GO`:'KIT COMPLETE','assemble',true);const s=stations.assemble;spawnParticles(s.def.x+.8,1.0,s.def.z,0x9fe0ff,5);}
   if(ev.type==='assembling'){floatText('ASSEMBLING','assemble',true);}
-  if(ev.type==='expired')toast(`#${ev.orderId} expired`,3.3);
-  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else showResults();}
+  if(ev.type==='expired'&&!pocketing())toast(`#${ev.orderId} expired`,3.3);
+  if(ev.type==='strike'&&pocketing())pocketStrike(ev);
+  if(ev.type==='stage'&&pocketing())toast(ev.stage===1?'New part: Bearing housing · block stock':'Deburr work joins: Dial knob and Valve body',2.6);
+  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else if(pocketing())pocketFinale();else showResults();}
   if(ev.type==='quayLoaded')floatText(`${ev.count} / 3 ON QUAY`,'ship',true);
   if(ev.type==='tenderDeparted')toast(`Tender away · ${ev.count} part${ev.count===1?'':'s'} · 12s crossing`,2.5);
   if(ev.type==='beaconLit'){floatText(`${ev.installed} / ${game.config.passTarget} LANTERN PARTS`,'ship',true);toast(ev.lit?'Beacon restored. The fleet is coming home.':`Lighthouse restored: ${ev.installed} / ${game.config.passTarget}`,2.4);}
@@ -600,12 +849,12 @@ function updateMovement(dt){
   let sx=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
   let sy=(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0);
   const move=new THREE.Vector3();let speed=4.4,pathGoal=null;
-  if(Math.hypot(sx,sy)>.1){path=[];pathStation=null;targetRing.visible=false;move.copy(right).multiplyScalar(sx).addScaledVector(down,sy);if(move.length()>1)move.normalize();}
+  if(Math.hypot(sx,sy)>.1){if(pocketing()&&pocketQueue.size){pocketQueue.clear();syncPocketMarkers();}path=[];pathStation=null;targetRing.visible=false;move.copy(right).multiplyScalar(sx).addScaledVector(down,sy);if(move.length()>1)move.normalize();}
   else if(path.length){
     let goal=path[0],dist=Math.hypot(goal.x-player.x,goal.z-player.z);
     while(path.length&&dist<.13){path.shift();dashTime=0;goal=path[0];if(goal)dist=Math.hypot(goal.x-player.x,goal.z-player.z);}
     if(goal){pathGoal=goal;move.set(goal.x-player.x,0,goal.z-player.z).normalize();speed=Math.min(speed,dist/Math.max(.001,dt));}
-    else if(pathStation){const id=pathStation;pathStation=null;targetRing.visible=false;const s=stations[id];player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);if(Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.4){useStation(id);processEvents();}}
+    else if(pathStation){const id=pathStation;pathStation=null;targetRing.visible=false;const s=stations[id];player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);if(Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.4){const ok=useStation(id);processEvents();if(pocketing())pocketArrived(id,ok);}else if(pocketing())pocketArrived(id,false);}
   }
   dashCooldown=Math.max(0,dashCooldown-dt);let distance=speed*dt;
   if(dashTime>0){const step=dashStep(dt,dashTime,speed*move.length());dashTime=step.remaining;distance=step.distance;if(!pathGoal)move.copy(dashDirection);}
@@ -695,7 +944,7 @@ function animateShop(dt){
       lighting.sun.intensity=THEMES.dawn.sun[1];
     }
   }
-  targetRing.scale.setScalar(1+Math.sin(clockTime*6)*.09);updateParticles(dt);shake=Math.max(0,shake-dt*2);
+  animatePocketArrival();targetRing.scale.setScalar(1+Math.sin(clockTime*6)*.09);updateParticles(dt);shake=Math.max(0,shake-dt*2);
 }
 function ticketState(o){if(!o.programmed)return game.office.orderId===o.id?`CAD ${game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)?'':'paused · '}${Math.ceil(o.programRemaining)}s`:'Complete CAD at the office';if(o.location==='material')return `Collect ${stockType(o)} stock`;if(o.location==='hands')return `In your hands · ${opInfo(o.route[o.index]).name} next`;if(o.location==='buffer')return 'Parked on Hold bench';const s=game.stations[o.location];return s?.ready?`${opInfo(o.location).name} ready · collect part`:`${opInfo(o.location)?.name||'Machine'} working…`;}
 function revealSelectedTicket(){
@@ -737,12 +986,13 @@ function updateUI(force=false){
   }
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);
   if(launching()){const count=launchCount();$('timer-label').textContent='COUNTDOWN';$('timer').textContent=`T−${Math.floor(count/60)}:${String(count%60).padStart(2,'0')}`;}
-  if(game.manager)updateManagerTickets(force);else if(launching())updateKitTickets(force);else updateTickets(force);
+  if(game.manager)updateManagerTickets(force);else if(launching())updateKitTickets(force);else if(pocketing())updatePocketTickets(force);else updateTickets(force);
+  updatePocketHUD();
   updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
   for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
   const next=nextTarget(),target=nearby?.def.id;
-  $('mobile-tap-hint').textContent=onPhone()?'Finish the customer call':next?`Next: ${stations[next]?.def.name||'station'}`:'Tap a station to walk and use it';
+  $('mobile-tap-hint').textContent=pocketing()?(pocketQueue.size?`Plan ${pocketQueue.size} of ${pocketQueue.limit} · tap open floor to clear`:'Tap up to 3 stations in order'):onPhone()?'Finish the customer call':next?`Next: ${stations[next]?.def.name||'station'}`:'Tap a station to walk and use it';
   updateMobileDash();
 
 }
@@ -757,7 +1007,11 @@ function updateSourceUI(){
   $('source-partner').hidden=offered;
   $('source-detail').textContent=job.state==='sourcing'?`· Delivery ${Math.ceil(job.remaining)}s`:job.location==='receiving'?'· Delivered':job.location==='inspect'?(qc.ready?'· QC approved':`· QC ${Math.ceil(qc.remaining)}s`):job.location==='buffer'?'· On bench':job.location==='quay'?'· On quay':job.location==='tender'?'· Crossing to the light':job.index>0?'· Ready to ship':'· Ready for QC';
   const route=$('source-route');route.hidden=!delivered;
-  if(delivered){const stage=job.location==='receiving'?0:job.index===0?1:2;const signature=String(stage);if(route.dataset.stage!==signature){route.dataset.stage=signature;route.innerHTML=['RECEIVE','QC','SHIP'].map((label,i)=>`<span class="route-step${i<stage?' done':i===stage?' active':''}">${i<stage?'✓ ':''}${label}</span>`).join('<span class="route-arrow">›</span>');}}
+  if(delivered){const stage=job.location==='receiving'?0:job.index===0?1:2;const signature=`${stage}${pocketing()?'p':''}`;if(route.dataset.stage!==signature){route.dataset.stage=signature;
+    // Pocket Shift shows the crate's remaining stations in the ticket chips' language.
+    if(pocketing()){const [next,...later]=['receiving','inspect','ship'].slice(stage);route.innerHTML=pocketChip(next,' next')+later.map(id=>pocketChip(id)).join('');route.setAttribute('aria-label',`Next: ${POCKET_BADGES[next].name}`);}
+    else{route.innerHTML=['RECEIVE','QC','SHIP'].map((label,i)=>`<span class="route-step${i<stage?' done':i===stage?' active':''}">${i<stage?'✓ ':''}${label}</span>`).join('<span class="route-arrow">›</span>');route.removeAttribute('aria-label');}}}
+  const decline=$('source-decline'),declineText=pocketing()?'No':'Say no';if(decline.textContent!==declineText){decline.textContent=declineText;if(pocketing())decline.setAttribute('aria-label','Say no to this job');else decline.removeAttribute('aria-label');}
   $('source-accept').hidden=!offered;$('source-decline').hidden=!offered;
   $('source-accept').disabled=onPhone();
   const collect=$('source-collect');collect.hidden=!delivered;
@@ -791,6 +1045,7 @@ function positionLabels(){
     const anchor=carryAnchor.getWorldPosition(new THREE.Vector3());anchor.y+=.75;
     const point=screenPoint(anchor);carried.style.left=point.x+'px';carried.style.top=point.y+'px';
   }
+  if(MAPS[activeMapId()].shell==='pocket'){positionPocketBadges();positionStaffTags();positionPopover();return;}
   const target=nextTarget(),managing=!!game.manager&&!menuMode;for(const [id,s] of Object.entries(stations)){
   const p=screenPoint(new THREE.Vector3(s.def.x,(managing?s.height:s.def.height)+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
   if(managing){const bayEmpty=bayOf(id)&&!game.stations[id],hideEmptyBay=game.mode==='playing'&&bayEmpty&&!moveFits(id);s.label.hidden=!mapHas(s.def,activeMapId())||(id==='material-block'&&!game.config.stock.includes('block'))||hideEmptyBay;s.label.classList.toggle('target',target===id||nearby?.def.id===id);s.label.style.opacity='';managerLabel(id,s);continue;}
@@ -829,7 +1084,7 @@ function frame(now){
   const planning=isPlanning();
   const renderDt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;
   const dt=planning?0:renderDt;if(!planning)clockTime+=dt;
-  updateMovement(dt);if(game.manager)syncBays();
+  updatePocketQueue();updateMovement(dt);if(game.manager)syncBays();
   if(game.mode==='playing'&&!planning){
     game.setOfficePresence(atOffice());
     if(game.manager)game.setPlayerStation(nearby?.def.id??null);
@@ -874,14 +1129,17 @@ function navigateHome(route=''){
   if(location.hash===hash)applyHomeRoute();else location.hash=hash;
 }
 function applyHomeRoute(){
-  const route=location.hash.replace(/^#\/?/,'');showMenu();
+  const route=location.hash.replace(/^#\/?/,'');
+  // Hidden route: no picker entry, home tab or board. It skips the board refresh too.
+  if(route==='pocket'){showMenu(false);setPocketMode(true);applyMap();showPocketPanel('start');return;}
+  showMenu();
   if(route==='open-for-business'){showHomeView('business');return;}
   if(route.startsWith('challenges')){
     showHomeView('challenges');const id=route.split('/')[1],index=SHIFTS.findIndex(s=>s.id===id);if(isPlayableShift(index))showBriefing(index);
   }else showHomeView('home');
 }
 
-function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;}
+function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel','pocket-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
 function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / SHIP ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
@@ -903,7 +1161,7 @@ function resumeManager(){
   $('shift-number').textContent=managerHeading();$('shift-name').textContent=MANAGER_MODE.name;processEvents();syncParts();updateUI(true);
   if(mode==='evening')showEvening();else{game.mode='playing';pause();}
 }
-function restartRun(){if(game.manager)startManager();else startShift(game.shiftIndex);}
+function restartRun(){if(game.manager)startManager();else if(game===pocketGame)startPocket();else startShift(game.shiftIndex);}
 // Open for Business keeps one run in progress in local storage.
 const RUN_KEY='chip-rush-manager-run-v1';let lastRunSave=0;
 function saveRun(){
@@ -918,8 +1176,8 @@ function savedRunSummary(){
   try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
-function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();player.x=SPAWN.x;player.z=SPAWN.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
-function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();const spawn=MAPS[activeMapId()].spawn??SPAWN;player.x=spawn.x;player.z=spawn.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':pocketing()?'Restart this run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
@@ -932,7 +1190,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(){endBeaconEnding();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);social.refreshBoard();}
+function showMenu(refreshBoard=true){if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -968,7 +1226,7 @@ function buildModeCard(){
   $('manager-summary').textContent=run?`Day ${run.day} · ${money(run.cash)}`:best?`Endless · Best ${money(best)}`:'Endless';
 }
 function showResults(){
-  if(resultShown)return;if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)));
+  if(resultShown)return;if(game===pocketGame)return showPocketResults();if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)));
   // Finishing a First Shift run, pass or fail, opens every shift. Friend challenges unlock nothing.
   const opensAll=!challengeRun&&game.shiftIndex===0&&unlocked<SHIFTS.length-1;if(!challengeRun&&game.shiftIndex===0)unlocked=SHIFTS.length-1;
   const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
@@ -1061,6 +1319,7 @@ function moveFits(id){const st=moving&&game.stations[moving];return !!st&&id!==m
 function startMove(id){moving=id;closePopover();toast(`Click an empty bay for the ${machineLabel(id).toLowerCase()}. It reinstalls there. Esc cancels.`,4);if(game.manager&&game.mode==='playing')updateUI(true);}
 function cancelMove(){if(!moving)return;moving=null;$('toast').classList.remove('visible');last=performance.now();if(game.manager&&game.mode==='playing')updateUI(true);}
 function stationClick(id){
+  if(pocketing())return pocketTap(id);
   const s=stations[id];
   if(moving&&game.manager&&['playing','evening'].includes(game.mode)){
     if(id===moving)return cancelMove();
@@ -1738,7 +1997,7 @@ function bindControls(){
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
-  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('launch-skip').onclick=skipTerminalCount;
+  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>navigateHome();$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});
@@ -1765,7 +2024,9 @@ function bindControls(){
   addEventListener('pagehide',saveRun);
   addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){if(interfaceMode==='mobile')e.preventDefault();tapStation(chosen.def.id,e);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){if(interfaceMode==='mobile')e.preventDefault();tapFloor(p,e);}};
+  const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;
+    if(pocketing()){const id=pocketTapTarget({x:e.clientX,y:e.clientY},pocketTapTargets());if(interfaceMode==='mobile')e.preventDefault();if(id)tapStation(id,e);else tapFloor(null,e);return;}
+    const mouse=new THREE.Vector2(e.clientX/viewport.w*2-1,-e.clientY/viewport.h*2+1);raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObjects(Object.values(stations).filter(s=>s.model.visible).map(s=>s.model),true);if(hits.length){let obj=hits[0].object;let chosen;while(obj){chosen=Object.values(stations).find(s=>s.model===obj);if(chosen)break;obj=obj.parent;}if(chosen){if(interfaceMode==='mobile')e.preventDefault();tapStation(chosen.def.id,e);return;}}const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(ground,p)&&p.x>bounds.minX&&p.x<bounds.maxX&&p.z>bounds.minZ&&p.z<bounds.maxZ){if(interfaceMode==='mobile')e.preventDefault();tapFloor(p,e);}};
   // Shifts act on press, as they always have. In Open for Business a press
   // becomes a click only if it does not drag: dragging pans, two fingers pinch.
   const pointers=new Map();let drag=null,pinch=null;
