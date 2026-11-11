@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { ShopGame, SHIFTS, stockType } from '../dist/core.js';
 import { PocketGame, POCKET_MODE } from '../dist/pocket.js';
+import { pocketAbsentStations } from '../dist/pocket-floor.js';
 import { navigation, Driver } from './balance.mjs';
 
 const BASE_SPEED = 4.4, DT = .05;
@@ -31,6 +32,8 @@ class RoomDriver extends Driver {
   pathTo(id) {
     const access = navigation.accessesFor(this.mapId)[id];
     assert.ok(access, `Known destination ${id}`);
+    // Deburr and the crate spot are on the pocket floor only part of the run.
+    navigation.setAbsent(this.mapId === 'pocket-shop' ? pocketAbsentStations(this.game) : []);
     navigation.activate(this.mapId);
     const points = navigation.route(this.position, access);
     assert.ok(points.length || Math.hypot(this.position.x - access.x, this.position.z - access.z) < 1.4, `Reachable ${id}`);
@@ -119,6 +122,7 @@ export function compareRooms(walk = 1) {
     const run = new RoomDriver(game, strategy, {reaction:.5, walk:scale, mapId}).run();
     rows.push({rules:'First Shift', room:mapId, walk:scale, strategy, shipped:run.shipped, missed:run.missed, walkingSeconds:run.walkingSeconds, walkingShare:+(run.walkingSeconds / run.elapsed).toFixed(3)});
   }
+  navigation.setAbsent();
   navigation.activate('first-shop');
   return rows;
 }
@@ -143,5 +147,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   if (process.argv.includes('--rooms')) console.table(compareRooms());
   if (process.argv.includes('--trace')) for (const row of rows) { console.log(`\n${row.player}`); console.table(row.log); }
   if (process.argv.includes('--assert')) { checkTargets(rows); console.log('pocket-v1 simulation targets hold'); }
+  navigation.setAbsent();
   navigation.activate('first-shop');
 }

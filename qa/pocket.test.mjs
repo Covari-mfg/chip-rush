@@ -9,6 +9,8 @@ import {SHIFTS, RECIPES, FINISHING_SOURCE_JOBS, isPlayableShift, scoreShipment} 
 import {PocketGame, POCKET_MODE, POCKET_ROLE, POCKET_RULESET, POCKET_PACE, POCKET_STAGES, POCKET_SAVE_KEY,
   pocketRecipeIndex, pocketStage, pocketInterval, pocketDeadline, readPocketBest, recordPocketRun} from '../dist/pocket.js';
 import {createStationQueue} from '../dist/pocket-queue.js';
+import {POCKET_BADGES, POCKET_TAP_RADIUS, POCKET_DEBURR_ORDER, POCKET_DEBURR_LEAD, pocketTapTarget, pocketDeburrInstalled, pocketCrateShown,
+  pocketAbsentStations, pocketRemainingStations, pocketShortName, pocketBadgeIcon} from '../dist/pocket-floor.js';
 import {MANAGER_ROLE} from '../dist/manager.js';
 import {navigation} from './balance.mjs';
 import {simulatePocket, checkTargets, STRATEGIES, CEILING} from './pocket-balance.mjs';
@@ -57,6 +59,70 @@ test('arrival advances on success and drops the rest of the plan on rejection', 
   assert.equal(createStationQueue({limit:2}).limit, 2);
 });
 
+
+// Generous taps: nearest footprint or badge within the radius, never a further neighbour.
+test('a near-miss tap resolves to the nearest station, and bare floor stays bare', () => {
+  const box = (left, top, w, h) => ({left, top, right:left + w, bottom:top + h});
+  // Two close neighbours, 20 px apart, each with a badge under its front-left foot.
+  const targets = [
+    {id:'lathe', boxes:[box(40, 300, 90, 110), box(30, 395, 40, 36)]},
+    {id:'mill', boxes:[box(150, 300, 100, 115), box(140, 400, 40, 36)]},
+  ];
+  assert.equal(pocketTapTarget({x:80, y:350}, targets), 'lathe', 'Inside a footprint');
+  assert.equal(pocketTapTarget({x:136, y:350}, targets), 'lathe', '6 px from the lathe, 14 px from the mill');
+  assert.equal(pocketTapTarget({x:144, y:350}, targets), 'mill', '14 px from the lathe, 6 px from the mill');
+  assert.equal(pocketTapTarget({x:160, y:450}, targets), 'mill', 'Near the mill’s badge');
+  assert.equal(pocketTapTarget({x:85, y:300 - POCKET_TAP_RADIUS + 2}, targets), 'lathe', 'Just inside the radius above the lathe');
+  assert.equal(pocketTapTarget({x:85, y:300 - POCKET_TAP_RADIUS - 2}, targets), null, 'Just outside it: a bare-floor tap');
+  assert.equal(pocketTapTarget({x:400, y:350}, targets), null);
+  // Overlapping boxes: the tap belongs to the box whose centre is nearer.
+  const overlap = [{id:'a', boxes:[box(0, 0, 100, 100)]}, {id:'b', boxes:[box(80, 0, 100, 100)]}];
+  assert.equal(pocketTapTarget({x:85, y:50}, overlap), 'a');
+  assert.equal(pocketTapTarget({x:95, y:50}, overlap), 'b');
+  // Across the gap the answer switches at the midline (a tie there goes to the nearer centre), never to the further station.
+  for (let x = 131; x < 150; x++) assert.equal(pocketTapTarget({x, y:350}, targets), x <= 140 ? 'lathe' : 'mill', `x ${x}`);
+  assert.ok(POCKET_TAP_RADIUS >= 44 && POCKET_TAP_RADIUS <= 56);
+  assert.equal(pocketTapTarget({x:0, y:0}, [{id:'x', boxes:[null, {left:5, right:5, top:0, bottom:10}]}]), null, 'Empty boxes are ignored');
+});
+
+test('stations and ticket chips share one badge language', () => {
+  for (const id of ['material-round','material-plate','material-block','lathe','mill','deburr','inspect','ship','buffer','receiving']) {
+    const b = POCKET_BADGES[id];
+    assert.ok(b && /^[A-Z]{3,7}$/.test(b.word) && /^#[0-9a-f]{6}$/i.test(b.color) && b.name, `${id} has a word, colour and name`);
+    assert.match(pocketBadgeIcon(id), /^<svg[^>]*aria-hidden="true"/);
+  }
+  assert.equal(POCKET_BADGES.lathe.word, 'LATHE', 'The ticket says what the station says (no more TURN / QC)');
+  assert.equal(POCKET_BADGES.inspect.word, 'INSPECT');
+  const valve = {...RECIPES[3], route:[...RECIPES[3].route, 'ship'], index:0, started:false};
+  assert.deepEqual(pocketRemainingStations(valve), ['material-block','lathe','mill','deburr','inspect','ship'], 'A five-step route and its stock');
+  assert.deepEqual(pocketRemainingStations({...valve, started:true, index:2}), ['deburr','inspect','ship']);
+  assert.deepEqual([0, 1, 2, 3, 6].map(i => pocketShortName(RECIPES[i].name)), ['Spacer','Plate','Knob','Valve','Housing']);
+});
+
+test('Deburr arrives shortly before the first deburr order; the crate spot shows only for a delivery', () => {
+  assert.equal(POCKET_DEBURR_ORDER, POCKET_STAGES[2].from, 'Deburr is first needed by the stage that brings the deburr parts');
+  assert.equal(pocketDeburrInstalled({spawnIndex:0, nextArrival:0, elapsed:0}), false);
+  assert.equal(pocketDeburrInstalled({spawnIndex:POCKET_DEBURR_ORDER, nextArrival:150, elapsed:150 - POCKET_DEBURR_LEAD - 1}), false);
+  assert.equal(pocketDeburrInstalled({spawnIndex:POCKET_DEBURR_ORDER, nextArrival:150, elapsed:150 - POCKET_DEBURR_LEAD}), true);
+  assert.equal(pocketDeburrInstalled({spawnIndex:POCKET_DEBURR_ORDER + 1}), true);
+  // In a run (orders cleared so none expire), Deburr is on the floor before order 11 arrives, and stays.
+  const game = fresh();
+  let installedAt = null;
+  for (let t = 0; t < 400 && game.mode === 'playing'; t += .1) {
+    game.orders.forEach(o => { o.remaining = 99; }); if (game.orders.length > 2) game.orders.shift();
+    game.tick(.1); game.drain();
+    if (installedAt === null && pocketDeburrInstalled(game)) installedAt = {spawnIndex:game.spawnIndex, lead:game.nextArrival - game.elapsed};
+    if (installedAt) assert.equal(pocketDeburrInstalled(game), true, 'Deburr never leaves');
+  }
+  assert.equal(installedAt.spawnIndex, POCKET_DEBURR_ORDER);
+  assert.ok(installedAt.lead > 0 && installedAt.lead <= POCKET_DEBURR_LEAD);
+  assert.equal(pocketCrateShown({sourcing:null}), false);
+  assert.equal(pocketCrateShown({sourcing:{state:'offer'}}), false);
+  assert.equal(pocketCrateShown({sourcing:{state:'sourcing'}}), true, 'On its way');
+  assert.equal(pocketCrateShown({sourcing:{state:'delivered', location:'receiving'}}), true, 'Waiting');
+  assert.equal(pocketCrateShown({sourcing:{state:'delivered', location:'hands'}}), false, 'Collected');
+  assert.deepEqual(pocketAbsentStations({}), ['deburr','receiving']);
+});
 
 const name = index => RECIPES[index].name;
 function run(game, seconds, dt = .1) { const events = []; for (let t = 0; t < seconds && game.mode === 'playing'; t += dt) { game.tick(dt); events.push(...game.drain()); } return events; }
@@ -258,6 +324,19 @@ test('the pocket-shop floor holds this mode’s stations, each reachable from th
     let at = a;
     for (const point of route) { assert.ok(navigation.clear(at, point), `${from} → ${to} stays collision-free`); at = point; }
   }
+  // Before Deburr arrives and between deliveries, their spots are open floor and every route still works.
+  navigation.setAbsent(['deburr', 'receiving']);
+  navigation.activate('pocket-shop');
+  const deburr = layout.find(def => def.id === 'deburr');
+  assert.ok(navigation.safe(deburr.x, deburr.z), 'Deburr’s spot is walkable before it arrives');
+  for (const from of ['material-round', 'lathe', 'mill', 'buffer', 'inspect', 'ship']) for (const to of ['material-block', 'inspect', 'ship', 'lathe']) {
+    if (from !== to) assert.ok(navigation.route(accesses[from], accesses[to]).length, `${from} → ${to} without the late fixtures`);
+  }
+  navigation.setAbsent();
+  navigation.activate('pocket-shop');
+  assert.equal(navigation.safe(deburr.x, deburr.z), false, 'Once there, Deburr blocks its footprint');
+  // Drawn at or below their usual size: no per-map enlargement.
+  for (const def of layout) assert.ok((def.scale ?? 1) <= 1, `${def.id} is not enlarged`);
   // Every other map keeps its own floor; the deeper search applies only past the old grid.
   navigation.activate('first-shop');
   assert.equal(navigation.layoutFor('first-shop').find(def => def.id === 'ship').rotationY, -Math.PI / 2);

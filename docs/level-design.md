@@ -355,9 +355,14 @@ third expired order ends the run; there is no timer. Shipments score with
 `scoreShipment`. Covari offers heat treatment, powder coating or laser marking
 (the floor has none) after two shipments and again 60 s after each offer
 resolves; a Covari job is never a strike. Controls are a plan of up to three
-tapped stations, with no Dash, on the `pocket-shop` floor (stock bins in front,
-then Lathe and Mill, Deburr and the Hold bench, then Receiving, Inspect and
-Shipping). The only save is a local best under `chip-rush-pocket-v1`; no server
+tapped stations, with no Dash, on the full-width `pocket-shop` floor (stock
+bins in front, then Lathe and Mill, Deburr and the Hold bench, then Inspect and
+Shipping, with the Covari crate spot by the back door). Deburr arrives shortly
+before order 11 and the crate spot shows only while a delivery is due
+(`dist/pocket-floor.js`); stations carry small icon badges whose words match the
+order tickets, and a tap near a station counts for the nearest one. The route
+always uses the touch layout, in a centred phone-width column on a wide desktop
+window. The only save is a local best under `chip-rush-pocket-v1`; no server
 runs, challenge links or analytics. See
 [experiments/pocket-shift.md](experiments/pocket-shift.md).
 
