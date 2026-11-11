@@ -386,3 +386,25 @@ test('the unified board retains first-edition Last Light stars and accepts revis
   assert.equal(entries.find(row=>row.score===2500).stars,1);
   assert.equal((await f.send('/api/runs',{method:'POST',data:{role:6,ruleset:RULESET}})).status,400);
 });
+
+test('Last Light early completion accounts for tender return time, 72h run retention, and malformed role rows',async t=>{
+  // At t=170 on Last Light (duration 220, remaining=50), spawnIndex=10 (Dial knob: round/lathe/10s + inspect/7s + 12s crossing + 6s buffer = 35s)
+  // is only ineligible when the tender just delivered at the lighthouse and needs 12s to return plus the swell wait.
+  const run={role:6,ruleset:shiftRuleset(6),started_at:START};
+  const early={role:6,score:4200,shipped:10,missed:0,sourced:0,calls:0,elapsed:170,spawned:10,finishReason:'work-complete'};
+  assert.equal(validateResult(early,run,START+175_000),null,'Tender returning from lighthouse makes the 11th arrival ineligible');
+
+  const f=fixture(t);
+  const first=await f.start(2,{now:START});
+  // Starting another run 36 hours later must keep the 36-hour-old run (within the 72h manager window).
+  await f.start(2,{now:START+36*3600_000});
+  assert.ok(f.sqlite.prepare('SELECT id FROM runs WHERE id=?').get(first.id),'Runs younger than 72 hours are retained');
+  await f.start(2,{now:START+73*3600_000});
+  assert.equal(f.sqlite.prepare('SELECT id FROM runs WHERE id=?').get(first.id),undefined,'Runs older than 72 hours are pruned');
+
+  // Out-of-range role values in DB rows do not crash GET /api/leaderboard.
+  f.sqlite.prepare('INSERT INTO scores(id,role,ruleset,name,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('bad-role',99,RULESET,'Ghost',1000,1000,4,0,0,0,START);
+  const board=await f.send('/api/leaderboard');
+  assert.equal(board.status,200);
+});
+

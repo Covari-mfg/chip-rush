@@ -1774,13 +1774,19 @@ function tube(parent,points,r,color) {
   const m=new THREE.Mesh(new THREE.TubeGeometry(curve,12,r,6,false),mat(color,.6,.2));
   parent.add(m);m.castShadow=true;return m;
 }
+const plateCache=new Map();
 function textPlate(parent,text,w,h,x,y,z,{color='#dcfff4',bg='#164552',size=45}={}) {
   if(typeof document==='undefined') return box(parent,w,h,.018,x,y,z,C.tealDark,.002);
-  const c=document.createElement('canvas');c.width=512;c.height=128;
-  const ctx=c.getContext('2d');ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle=color;ctx.font=`700 ${size}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,68,490);
-  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex}));
+  const pKey=`p/${w}/${h}`,mKey=`t/${text}/${color}/${bg}/${size}`;
+  if(!geometryCache.has(pKey))geometryCache.set(pKey,new THREE.PlaneGeometry(w,h));
+  if(!plateCache.has(mKey)){
+    const c=document.createElement('canvas');c.width=512;c.height=128;
+    const ctx=c.getContext('2d');ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle=color;ctx.font=`700 ${size}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,68,490);
+    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+    plateCache.set(mKey,new THREE.MeshBasicMaterial({map:tex}));
+  }
+  const m=new THREE.Mesh(geometryCache.get(pKey),plateCache.get(mKey));
   m.position.set(x,y,z);parent.add(m);return m;
 }
 function feet(g,w=2.25,d=1.25) {
@@ -2878,14 +2884,16 @@ function createLaunchComplex() {
     lamp.userData.bulb=bulb;lamps.push(lamp);
   }
   const sectionHeight=S.sectionHeight,scale=S.sectionScale;
+  const ghostRingGeo=new THREE.CylinderGeometry(.5,.5,sectionHeight*.92,24,1,true);
+  const ghostEdgeGeo=new THREE.CylinderGeometry(.51,.51,.035,24,1,true);
   const place=(height)=>{nose.position.y=S.baseTop-S.padTop+height;};
   // Rebuild the stack from shipped sections; ghosts show the three-star stack.
   const setStack=(sections,target=0,stars=[])=>{
     stack.clear();ghosts.clear();
     sections.forEach((entry,i)=>{const s=createAssembly(entry.section,entry.color);s.scale.setScalar(scale);s.position.y=i*sectionHeight;stack.add(s);});
     for(let i=sections.length;i<target;i++){
-      const ring=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,sectionHeight*.92,24,1,true),ghostMat);ring.position.y=S.baseTop-S.padTop+i*sectionHeight+sectionHeight/2;ghosts.add(ring);
-      const edge=new THREE.Mesh(new THREE.CylinderGeometry(.51,.51,.035,24,1,true),ghostEdge);edge.position.y=S.baseTop-S.padTop+(i+1)*sectionHeight-.02;ghosts.add(edge);
+      const ring=new THREE.Mesh(ghostRingGeo,ghostMat);ring.position.y=S.baseTop-S.padTop+i*sectionHeight+sectionHeight/2;ghosts.add(ring);
+      const edge=new THREE.Mesh(ghostEdgeGeo,ghostEdge);edge.position.y=S.baseTop-S.padTop+(i+1)*sectionHeight-.02;ghosts.add(edge);
     }
     place(sections.length*sectionHeight);
     stars.forEach((count,i)=>{const lamp=lamps[i];if(!lamp)return;lamp.position.y=S.baseTop-S.padTop+count*sectionHeight-sectionHeight/2;const lit=sections.length>=count;const m=lamp.userData.bulb.material;m.color.set(lit?0xffd36b:0x5a4a2a);m.emissive.set(lit?0xffc23a:0x3a2a10);m.emissiveIntensity=lit?1.4:.4;});
@@ -3138,7 +3146,7 @@ const LAUNCH_SOURCE_JOBS = [
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
 // Future levels may evolve mechanics; preserve earlier scenarios and their data.
 // Append levels: ids and array positions are permanent save/challenge identities.
-// mapId documents the current layout; loading different maps is not implemented.
+// mapId selects the shop floor layout from MAPS in dist/main.js.
 const SHIFTS = [
   {
     id:'first-shift',mapId:'first-shop',name:'First Shift',author:'GPT-6 Astra',harness:'Codex',
@@ -3256,6 +3264,7 @@ class ShopGame {
     this.office = {present:false,orderId:null};
     this.surgeRemaining = this.config.overdrive ? 12 : 0;
     this.surgeCooldown = 0;
+    this.lastOfficeSurgeAt = -Infinity;
     this.overdriveActive = false;
     this.stormStrikes = this.config.overdrive ? [50, 105, 148] : [];
     this.stormIndex = 0;
@@ -3337,7 +3346,7 @@ class ShopGame {
   triggerSurge(source = 'office', duration = 16) {
     if (!this.config.overdrive) return false;
     this.surgeRemaining = Math.max(this.surgeRemaining, duration);
-    if (source === 'office') this.surgeCooldown = 22;
+    if (source === 'office') { this.surgeCooldown = 22; this.lastOfficeSurgeAt = this.elapsed; }
     this.emit('surge', {source, duration:this.surgeRemaining, multiplier:2});
     return true;
   }
@@ -3506,9 +3515,9 @@ class ShopGame {
       // Only an actual offer advances the cosmetic rotation. Preserve this
       // cursor through resets, so retries can show every outside capability.
       const jobs=this.config.sourceJobs??SOURCE_JOBS;
-      this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
+      this.nextSourceKind ??= this.shiftIndex % jobs.length;
       const job=jobs[this.nextSourceKind%jobs.length];
-      this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
+      this.nextSourceKind=(this.nextSourceKind+1)%jobs.length;
       this.sourcing = {id:201,...job,kind:'block',route:['inspect','ship'],index:0,programmed:true,programRemaining:0,started:false,location:'supplier',value:300,color:0xffab8c,state:'offer',offerRemaining:30,remaining:22,points:300};
       this.emit('sourceOffer', {orderId:201});
     }
@@ -3673,12 +3682,12 @@ class ShopGame {
       if (this.call?.state === 'ringing') return this.interact('phone');
       if (this.config.overdrive) {
         if (!this.office.present) return this.fail('Walk to the Office Governor Console to trigger a 2× Generator Surge.');
+        if (this.elapsed - this.lastOfficeSurgeAt <= 1) return true;
         if (this.surgeRemaining > 0) return this.fail(`Generator Surge is active (2.0× speed · ${Math.ceil(this.surgeRemaining)}s left).`);
         if (this.surgeCooldown > 0) return this.fail(`Capacitors recharging (${Math.ceil(this.surgeCooldown)}s). Run 2+ machines for 1.5× Overdrive!`);
         return this.triggerSurge('office', 16);
       }
       if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
-      if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
       const order = this.nextCAD();
       if (!order) return this.fail('There is no CAD work waiting.');
@@ -3706,7 +3715,7 @@ class ShopGame {
         returned.index = 0;
         returned.location = 'material';
         this.hand = null;
-        this.selectedId = returned.id;
+        this.selectedId = returned.parentId ?? returned.id;
         this.emit('recycle', {orderId:returned.id});
         return true;
       }
@@ -4381,7 +4390,7 @@ class ManagerGame extends ShopGame {
   // Covari takes work the floor cannot make (the shared capability-gap rule,
   // expressed per quote) and, when the owner sets a limit, small jobs listed under it.
   smallJob(quote) { return quote.type !== 'contract' && this.policy.covariBelow > 0 && quote.basePrice < this.policy.covariBelow; }
-  covariEligible(quote) { return !!this.covariPartner && quote.type !== 'contract' && (this.gapsFor(quote.route).length > 0 || this.smallJob(quote)); }
+  covariEligible(quote) { return !!this.covariPartner && quote.type !== 'contract' && (this.gapsFor(quote.route.filter(op => op !== 'inspect')).length > 0 || this.smallJob(quote)); }
   covariOpen(quote) { return this.covariEligible(quote) && this.covariOrders().length < COVARI_SLOTS && this.cash >= quote.covariCost; }
   covariCharge(quote) { return round10((quote?.covariCost ?? 0) * (1 + (this.policy.covariMargin ?? 0))); }
   // The shop switch. On sends missing processes to Covari. Off turns them away again.
@@ -4415,7 +4424,7 @@ class ManagerGame extends ShopGame {
     }
     this.spend('covari', quote.covariCost);
     const order = {...quote, route:['inspect', 'ship'], index:0, remaining:quote.deadline, started:true, location:'supplier',
-      programmed:true, programRemaining:0, programDuration:0, gaps:[], outsourced:true, materialPaid:true, deliveryRemaining:COVARI_DELIVERY};
+      programmed:true, programRemaining:0, programDuration:0, gaps:this.gapsFor(['inspect', 'ship']), outsourced:true, materialPaid:true, deliveryRemaining:COVARI_DELIVERY};
     this.orders.push(order);
     this.emit('outsourced', {orderId:order.id, cost:quote.covariCost, bySales});
     return true;
@@ -4544,10 +4553,10 @@ class ManagerGame extends ShopGame {
     delete this.installing[from];
     this.stations[to] = station;
     Object.assign(station, {part:null, remaining:0, ready:false, duration:0});
+    if (this.mode === 'playing') this.installing[to] = INSTALL_SECONDS;
     this.config.unlocks = this.config.unlocks.filter(op => this.hasMachine(op));
     this.dropTasksAt(from);
     this.moves++;
-    if (this.mode === 'playing') this.installing[to] = INSTALL_SECONDS;
     this.emit('moved', {from, to, op:station.op});
     if (this.mode !== 'playing') this.install(to);
     return true;
@@ -4628,8 +4637,8 @@ class ManagerGame extends ShopGame {
     member.carry = null;
     member.task = null;
     if (!order) return;
-    if (!this.buffer) { this.buffer = {orderId:order.id}; order.location = 'buffer'; }
-    else if (order.outsourced) { this.receivingQueue.unshift(order.id); order.location = 'receiving'; this.syncReceiving(); }
+    if (order.outsourced) { if (!this.receivingQueue.includes(order.id)) this.receivingQueue.unshift(order.id); order.location = 'receiving'; this.syncReceiving(); }
+    else if (!this.buffer) { this.buffer = {orderId:order.id}; order.location = 'buffer'; }
     else { order.started = false; order.index = 0; order.location = 'material'; }
   }
 
@@ -4646,10 +4655,11 @@ class ManagerGame extends ShopGame {
   nextCAD() {
     const current = this.office.orderId !== null ? this.order(this.office.orderId) : null;
     if (current && !current.programmed) return current;
-    return this.cadQueue()[0];
+    const taken = new Set(this.staff.filter(member => member.role === 'programmer' && member.orderId).map(member => member.orderId));
+    return this.cadQueue(taken)[0];
   }
   cadQueue(except = new Set()) {
-    const seen = new Set();
+    const seen = new Set([...except].map(id => this.order(id)?.contractId).filter(Boolean));
     return this.orders.filter(order => !order.programmed && !order.outsourced && !except.has(order.id))
       .sort((a, b) => this.byPriority(a, b))
       .filter(order => !order.contractId || (!seen.has(order.contractId) && seen.add(order.contractId)));
@@ -7271,6 +7281,7 @@ function syncBays(){
   for(const id of Object.keys(bays)){
     const s=stations[id],op=game.manager?game.stations[id]?.op??null:s.def.baseBay?id:null;
     if(s.op!==op){
+      s.model.traverse(node=>{if(node.name==='batched-shop-detail')node.geometry?.dispose();});
       s.model.removeFromParent();
       const model=op?createMachine(op):new THREE.Group();
       model.position.set(s.def.x,0,s.def.z);model.rotation.y=s.def.rotationY??0;model.scale.setScalar(op==='lathe'||op==='mill'?1.14:1);
@@ -7420,7 +7431,7 @@ function contractState(c){
 const customerName=index=>game.customers[index]?.name??'';
 function clock(seconds){const t=Math.max(0,Math.ceil(seconds));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;}
 // The sales strip: the rules your sales manager follows, and your standing bid.
-const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Turn away'},contracts:{true:'Take',false:'Skip'}};
+const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Take anyway'},contracts:{true:'Take',false:'Skip'}};
 const amountOrOff=n=>n?money(n):'Off';
 function policyStepper(key, label, shown = ''){
   return `<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}">${shown}</output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
@@ -7458,6 +7469,7 @@ function policyAction(b){
   if(!list)return;
   const along=list[Math.max(0,Math.min(list.length-1,list.indexOf(p[key])+Number(b.dataset.step)))];
   const next=key==='gaps'?(p.gaps==='decline'?'covari':'decline'):key==='reserve'?(p.reserve+1)%3:key==='contracts'?!p.contracts:along;
+  if(key==='gaps'&&next==='covari'&&!game.covariPartner)game.partnerCovari();
   game.setPolicy(key,next);processEvents();updateUI(true);
 }
 let renderedManagerTickets='';

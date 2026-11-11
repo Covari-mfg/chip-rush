@@ -524,7 +524,7 @@ export class ManagerGame extends ShopGame {
   // Covari takes work the floor cannot make (the shared capability-gap rule,
   // expressed per quote) and, when the owner sets a limit, small jobs listed under it.
   smallJob(quote) { return quote.type !== 'contract' && this.policy.covariBelow > 0 && quote.basePrice < this.policy.covariBelow; }
-  covariEligible(quote) { return !!this.covariPartner && quote.type !== 'contract' && (this.gapsFor(quote.route).length > 0 || this.smallJob(quote)); }
+  covariEligible(quote) { return !!this.covariPartner && quote.type !== 'contract' && (this.gapsFor(quote.route.filter(op => op !== 'inspect')).length > 0 || this.smallJob(quote)); }
   covariOpen(quote) { return this.covariEligible(quote) && this.covariOrders().length < COVARI_SLOTS && this.cash >= quote.covariCost; }
   covariCharge(quote) { return round10((quote?.covariCost ?? 0) * (1 + (this.policy.covariMargin ?? 0))); }
   // The shop switch. On sends missing processes to Covari. Off turns them away again.
@@ -558,7 +558,7 @@ export class ManagerGame extends ShopGame {
     }
     this.spend('covari', quote.covariCost);
     const order = {...quote, route:['inspect', 'ship'], index:0, remaining:quote.deadline, started:true, location:'supplier',
-      programmed:true, programRemaining:0, programDuration:0, gaps:[], outsourced:true, materialPaid:true, deliveryRemaining:COVARI_DELIVERY};
+      programmed:true, programRemaining:0, programDuration:0, gaps:this.gapsFor(['inspect', 'ship']), outsourced:true, materialPaid:true, deliveryRemaining:COVARI_DELIVERY};
     this.orders.push(order);
     this.emit('outsourced', {orderId:order.id, cost:quote.covariCost, bySales});
     return true;
@@ -687,10 +687,10 @@ export class ManagerGame extends ShopGame {
     delete this.installing[from];
     this.stations[to] = station;
     Object.assign(station, {part:null, remaining:0, ready:false, duration:0});
+    if (this.mode === 'playing') this.installing[to] = INSTALL_SECONDS;
     this.config.unlocks = this.config.unlocks.filter(op => this.hasMachine(op));
     this.dropTasksAt(from);
     this.moves++;
-    if (this.mode === 'playing') this.installing[to] = INSTALL_SECONDS;
     this.emit('moved', {from, to, op:station.op});
     if (this.mode !== 'playing') this.install(to);
     return true;
@@ -771,8 +771,8 @@ export class ManagerGame extends ShopGame {
     member.carry = null;
     member.task = null;
     if (!order) return;
-    if (!this.buffer) { this.buffer = {orderId:order.id}; order.location = 'buffer'; }
-    else if (order.outsourced) { this.receivingQueue.unshift(order.id); order.location = 'receiving'; this.syncReceiving(); }
+    if (order.outsourced) { if (!this.receivingQueue.includes(order.id)) this.receivingQueue.unshift(order.id); order.location = 'receiving'; this.syncReceiving(); }
+    else if (!this.buffer) { this.buffer = {orderId:order.id}; order.location = 'buffer'; }
     else { order.started = false; order.index = 0; order.location = 'material'; }
   }
 
@@ -789,10 +789,11 @@ export class ManagerGame extends ShopGame {
   nextCAD() {
     const current = this.office.orderId !== null ? this.order(this.office.orderId) : null;
     if (current && !current.programmed) return current;
-    return this.cadQueue()[0];
+    const taken = new Set(this.staff.filter(member => member.role === 'programmer' && member.orderId).map(member => member.orderId));
+    return this.cadQueue(taken)[0];
   }
   cadQueue(except = new Set()) {
-    const seen = new Set();
+    const seen = new Set([...except].map(id => this.order(id)?.contractId).filter(Boolean));
     return this.orders.filter(order => !order.programmed && !order.outsourced && !except.has(order.id))
       .sort((a, b) => this.byPriority(a, b))
       .filter(order => !order.contractId || (!seen.has(order.contractId) && seen.add(order.contractId)));

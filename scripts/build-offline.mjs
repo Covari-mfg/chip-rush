@@ -34,8 +34,10 @@ const strip=content=>content.replace(/^import .*?;\s*$/gm,'');
 let bundle=three;
 for(const [file,name] of modules){
   const content=await embedMusic(await read('dist/'+file));
-  const names=[...content.matchAll(/export (?:function|class|const) (\w+)/g)].map(m=>m[1]);
-  const clean=strip(content).replace(/export (?=function|class|const)/g,'');
+  const names=[...content.matchAll(/export (?:function|class|const|let) (\w+)/g)].map(m=>m[1]);
+  for(const [,list] of content.matchAll(/export\s*\{([^}]+)\};?/g))for(const item of list.split(',').map(s=>s.trim()).filter(Boolean)){const [local,exported]=item.split(/\s+as\s+/);names.push(exported?`${exported}:${local}`:local);}
+  const clean=strip(content).replace(/export (?=function|class|const|let)/g,'').replace(/export\s*\{[^}]+\};?/g,'');
+  if(/\bexport\b/.test(clean))throw new Error(`Standalone build: unhandled export syntax in ${file}`);
   bundle+=`\nconst ${name}=(()=>{${bindImports(content,file)}\n${clean}\nreturn {${names.join(',')}};})();`;
 }
 const main=await read('dist/main.js');

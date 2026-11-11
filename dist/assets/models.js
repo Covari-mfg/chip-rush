@@ -53,13 +53,19 @@ function tube(parent,points,r,color) {
   const m=new THREE.Mesh(new THREE.TubeGeometry(curve,12,r,6,false),mat(color,.6,.2));
   parent.add(m);m.castShadow=true;return m;
 }
+const plateCache=new Map();
 function textPlate(parent,text,w,h,x,y,z,{color='#dcfff4',bg='#164552',size=45}={}) {
   if(typeof document==='undefined') return box(parent,w,h,.018,x,y,z,C.tealDark,.002);
-  const c=document.createElement('canvas');c.width=512;c.height=128;
-  const ctx=c.getContext('2d');ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle=color;ctx.font=`700 ${size}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,68,490);
-  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex}));
+  const pKey=`p/${w}/${h}`,mKey=`t/${text}/${color}/${bg}/${size}`;
+  if(!geometryCache.has(pKey))geometryCache.set(pKey,new THREE.PlaneGeometry(w,h));
+  if(!plateCache.has(mKey)){
+    const c=document.createElement('canvas');c.width=512;c.height=128;
+    const ctx=c.getContext('2d');ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle=color;ctx.font=`700 ${size}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,68,490);
+    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+    plateCache.set(mKey,new THREE.MeshBasicMaterial({map:tex}));
+  }
+  const m=new THREE.Mesh(geometryCache.get(pKey),plateCache.get(mKey));
   m.position.set(x,y,z);parent.add(m);return m;
 }
 function feet(g,w=2.25,d=1.25) {
@@ -1157,14 +1163,16 @@ export function createLaunchComplex() {
     lamp.userData.bulb=bulb;lamps.push(lamp);
   }
   const sectionHeight=S.sectionHeight,scale=S.sectionScale;
+  const ghostRingGeo=new THREE.CylinderGeometry(.5,.5,sectionHeight*.92,24,1,true);
+  const ghostEdgeGeo=new THREE.CylinderGeometry(.51,.51,.035,24,1,true);
   const place=(height)=>{nose.position.y=S.baseTop-S.padTop+height;};
   // Rebuild the stack from shipped sections; ghosts show the three-star stack.
   const setStack=(sections,target=0,stars=[])=>{
     stack.clear();ghosts.clear();
     sections.forEach((entry,i)=>{const s=createAssembly(entry.section,entry.color);s.scale.setScalar(scale);s.position.y=i*sectionHeight;stack.add(s);});
     for(let i=sections.length;i<target;i++){
-      const ring=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,sectionHeight*.92,24,1,true),ghostMat);ring.position.y=S.baseTop-S.padTop+i*sectionHeight+sectionHeight/2;ghosts.add(ring);
-      const edge=new THREE.Mesh(new THREE.CylinderGeometry(.51,.51,.035,24,1,true),ghostEdge);edge.position.y=S.baseTop-S.padTop+(i+1)*sectionHeight-.02;ghosts.add(edge);
+      const ring=new THREE.Mesh(ghostRingGeo,ghostMat);ring.position.y=S.baseTop-S.padTop+i*sectionHeight+sectionHeight/2;ghosts.add(ring);
+      const edge=new THREE.Mesh(ghostEdgeGeo,ghostEdge);edge.position.y=S.baseTop-S.padTop+(i+1)*sectionHeight-.02;ghosts.add(edge);
     }
     place(sections.length*sectionHeight);
     stars.forEach((count,i)=>{const lamp=lamps[i];if(!lamp)return;lamp.position.y=S.baseTop-S.padTop+count*sectionHeight-sectionHeight/2;const lit=sections.length>=count;const m=lamp.userData.bulb.material;m.color.set(lit?0xffd36b:0x5a4a2a);m.emissive.set(lit?0xffc23a:0x3a2a10);m.emissiveIntensity=lit?1.4:.4;});
