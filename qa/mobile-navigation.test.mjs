@@ -40,7 +40,7 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
     reset(){events.push('reset');throw new Error('An allowed start needs the full game fixture');}};
   const context = vm.createContext({versionLevelRecords,Math,Number,isPlayableShift,performance:{now:()=>time},$,game,player,
     interfaceMode,phoneDevice,innerWidth:portrait?390:844,innerHeight:portrait?844:390,
-    mobileTaps:createTapNavigation(),keys:new Set(),path:[],pathStation:null,
+    mobileTaps:createTapNavigation(),keys:new Set(),path:[],pathStation:null,tossTo:()=>false,
     dashTime:0,dashCooldown:0,last:0,helpReturn:null,
     stations:{mill:{model:{visible:true},access:{x:5,z:1}},
       ship:{model:{visible:true},access:{x:6,z:2}}},
@@ -50,7 +50,7 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
     audio:{event:name=>events.push(name),update:value=>events.push(`audio:${value}`),init:()=>events.push('audio:init')},
     hidePanels(){for(const id of ['welcome','pause-panel','help-panel','results-panel','briefing-panel','evening-panel'])$(id).hidden=true;},
     // Open for Business hooks that pause() calls; none matter for phone navigation.
-    closeStore(){},closePopover(){},cancelMove(){},saveRun(){},endBeaconEnding(){},
+    closeStore(){},closePopover(){},cancelMove(){},saveRun(){},endBeaconEnding(){},endFirstLight(){},flightOrigins:new Map(),partTags:new Map(),
     document:{body:{classList:classes()}},
     // Pocket Shift hooks (hidden #/pocket mode); off unless a test turns the route on.
     pocketRoute:()=>pocketOpen,pocketing:()=>false,

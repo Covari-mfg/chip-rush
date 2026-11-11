@@ -1,10 +1,11 @@
 import { OPS, stockType } from './core.js';
-export function orderWorkflow(order, programming=false) {
+// ops names the stations of the level in play; First Light passes its own.
+export function orderWorkflow(order, programming=false, ops=OPS) {
   const steps=[];
   if(programming)steps.push({key:'cad',label:'CAD',title:'Complete CAD at the office',done:order.programmed,active:!order.programmed});
   const stock=stockType(order),materialKey=`material-${stock}`;
   steps.push({key:materialKey,label:stock.toUpperCase(),title:`Collect ${stock} stock`,done:order.started,active:order.programmed&&!order.started});
-  for(const [index,key] of order.route.entries())steps.push({key,label:OPS[key].short,title:OPS[key].name,done:index<order.index,active:order.programmed&&order.started&&index===order.index});
+  for(const [index,key] of order.route.entries())steps.push({key,label:ops[key].short,title:ops[key].name,done:index<order.index,active:order.programmed&&order.started&&index===order.index});
   return steps;
 }
 

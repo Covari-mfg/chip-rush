@@ -1,5 +1,16 @@
 # CHIP RUSH verification
 
+## First Light, second edition · 2026-11-10 (local source, final submission, not released)
+
+Full record: [docs/experiments/first-light.md](../docs/experiments/first-light.md).
+
+- The creator played the first edition twice: the pack flickered, parts seemed to vanish from the hands, the mirror had no clear hand-in, and the ring forced one long lap with nothing to optimize. Revised by the model: E tosses (and hands over at the part's own station), an aim line and order tags show where every part is going, the well can be floated across, the mirror has its own ring and takes a hand-in from anywhere beside it, the pack's faces no longer touch, and the opening is calmer (second order at 12 s, then every 14 s, 90 s deadlines, 220 s clock).
+- 436 automated tests pass (31 in `qa/first-light.test.mjs`), plus `node qa/balance.mjs --rush --ignore-calls --expert --assert`, `node qa/first-light-balance.mjs --assert`, `pnpm build`, `pnpm deploy:dry-run` and `git diff --check`.
+- Simulation (not player data, every driver floats at the game's speed): carrying by hand sets 2 (slow serial) or 7 (0.5 s); tossing sets 7 at 1.0 s, 10 at 0.5 s (2 stars) and 12 of 12 for an expert dash route (3 stars, 7,274). Accepting Covari at 0.5 s sets 9 plus the sunshield for exactly 300.
+- Browser (headless Chromium, software WebGL; an accelerated review controller that is not in the repository): a full shift through station labels set 11 segments with 0 missed for 6,577 points and 2 stars (clear 2:17.1, end 3:26.4), took the sunshield, and ran the ending and results with no page errors. With real key events and no mouse: walk to a bin, E takes stock, the button reads "Toss → LATHE", E tosses, and walking off the deck floats. Picker credit, briefing, pause/resume, 860×540 and the `file://` standalone were checked.
+- Earlier levels: rules, layouts, timing and score bounds unchanged. Their interact key is covered by a test that runs the production function outside First Light.
+- Untested: human play of this edition, listening to the score, a real GPU, touch and phones, hosted D1.
+
 ## Launch Window (level 6, on Blackout Shift) · 2026-10-14 (local source, not released)
 
 Full record: [docs/experiments/launch-window.md](../docs/experiments/launch-window.md).

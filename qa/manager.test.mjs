@@ -89,7 +89,7 @@ function assertIntegrity(game) {
 test('Open for Business is a separate mode outside the shift catalog', () => {
   const level = MANAGER_MODE;
   assert.deepEqual(SHIFTS.slice(0, 5).map(shift => shift.id), ['first-shift', 'mixed-orders', 'rush-hour', 'night-shift', 'dawn-shift'], 'Earlier shifts keep their positions');
-  assert.equal(SHIFTS.length, 7, 'Launch Window and Last Light append after Blackout Shift');
+  assert.equal(SHIFTS.length, 8, 'Launch Window, Last Light and First Light append after Blackout Shift');
   assert.ok(!SHIFTS.some(shift => shift.id === level.id || shift.mode), 'The mode is not a level');
   assert.ok(MANAGER_ROLE < 0, 'Its server role can never collide with a level index');
   assert.equal(new ManagerGame().start().shiftIndex, MANAGER_ROLE);

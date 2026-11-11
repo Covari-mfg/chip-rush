@@ -9,7 +9,7 @@ assert.ok(start>0&&end>start);
 function controls(){
   const nodes=new Map(),actions=[];
   const $=id=>{if(!nodes.has(id))nodes.set(id,{style:{},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:92,height:92})});return nodes.get(id);};
-  const context=vm.createContext({$,Math,interact:()=>actions.push('interact'),dash:()=>actions.push('dash'),mobileDash:()=>actions.push('dash')});
+  const context=vm.createContext({$,Math,interact:()=>actions.push('interact'),dash:()=>actions.push('dash'),mobileDash:()=>actions.push('dash'),tossNext:()=>actions.push('toss')});
   vm.runInContext(main.slice(start,end),context);
   const pointer=(id,x=76,y=46)=>({pointerId:id,clientX:x,clientY:y,button:0,preventDefault(){}});
   return {$,context,actions,pointer};

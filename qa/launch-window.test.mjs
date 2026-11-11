@@ -362,7 +362,7 @@ test('Launch Window opens with the rest once First Shift has been played', async
     vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){}${migration};this.result={unlocked,bests,grades};`, context);
     return JSON.parse(JSON.stringify(context.result));
   };
-  assert.deepEqual(load({ unlocked:0, bests:[640], grades:[0] }), { unlocked:SHIFTS.length-1, bests:[640,0,0,0,0,0,0], grades:[0,0,0,0,0,0,0] }, 'A failed First Shift run still counts');
+  assert.deepEqual(load({ unlocked:0, bests:[640], grades:[0] }), { unlocked:SHIFTS.length-1, bests:[640,0,0,0,0,0,0,0], grades:[0,0,0,0,0,0,0,0] }, 'A failed First Shift run still counts');
   assert.equal(load({ unlocked:0, bests:[], grades:[] }).unlocked, 0, 'A new player starts at First Shift');
   assert.equal(load({ unlocked:0, bests:[0,0,9000], grades:[0,0,3] }).unlocked, 0, 'Friend-challenge stars elsewhere open nothing');
 });

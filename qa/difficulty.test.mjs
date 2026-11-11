@@ -174,13 +174,13 @@ function movementProbe({position={...navigation.spawn},route=[],dash=.2,directio
     character:{userData:{},position:new Vector3(),rotation:{y:0},scale:{y:1}},
     playerRing:{position:new Vector3()},targetRing:{visible:true},
     right:new Vector3(17,0,-11).normalize(),down:new Vector3(11,0,17).normalize(),
-    nearestStation:()=>null,processEvents(){},
+    nearestStation:()=>null,processEvents(){},floating:()=>false,FLOAT_SPEED:3.3,
   });
   vm.runInContext(`${section('const STATION_LAYOUT=','\nlet renderer')}
     ${section('const BASE_BOUNDS=','\nfunction save')}
     const player=${JSON.stringify({...position,angle:0})};
     let path=${JSON.stringify(route)},pathStation=null,dashTime=${dash},dashCooldown=1.3,
-      dashDirection=new THREE.Vector3(${direction.x},0,${direction.z}),walkPhase=0,clockTime=0,nearby=null;
+      dashDirection=new THREE.Vector3(${direction.x},0,${direction.z}),walkPhase=0,clockTime=0,nearby=null,tossSwing=0;
     const stations=Object.fromEntries(STATION_LAYOUT.map(def=>[def.id,{def,access:def.access||{x:def.x,z:def.z+def.d/2+.63}}]));
     ${section('function safeSpot(','\n// A* routing')}
     ${section('function routeSegmentClear(','\nfunction goToStation(')}

@@ -14,6 +14,8 @@ export const TECHNOLOGIES = {
   am:{name:'Metal 3D printing',drawing:'<path d="M4 27h24M6 27V9h20v18M10 9V5h12v4M12 13h8M16 13v4M11 23h10M12 21h8M13 19h6"/>'},
   cf:{name:'Carbon fiber layup',drawing:'<path d="M4 20l12-6 12 6-12 6zM4 15l12-6 12 6M4 10l12-6 12 6M10 23l12-6M10 17l12 6"/>'},
   optics:{name:'Precision optical grinding',drawing:'<circle cx="16" cy="16" r="11"/><ellipse cx="16" cy="16" rx="5" ry="11"/><path d="M3 16h26M9 7l14 18"/>'},
+  // First Light: a roll of film passing between two laminating rollers.
+  film:{name:'Thin-film lamination',drawing:'<circle cx="9" cy="10" r="5"/><circle cx="9" cy="22" r="5"/><path d="M14 16h15M21 12l8 4-8 4M3 16h3"/>'},
   fsw:{name:'Friction stir welding',drawing:'<path d="M3 24h26M3 28h26M16 24v-6M12 18h8v-6h-8zM14 12V4h4v8M7 21c2-1 4 1 6 0m6 0c2-1 4 1 6 0"/>'},
 };
 
