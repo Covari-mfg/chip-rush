@@ -344,7 +344,22 @@ starts with $1,500, a lathe, a mill and QC.
   briefing offer Continue, mid-day saves resume paused, and a finished run
   clears it.
 
-Pocket Shift (`#/pocket`, hidden, no scores) is a portrait phone prototype on First Shift's rules, not a level; see [experiments/pocket-shift.md](experiments/pocket-shift.md).
+Pocket Shift (`#/pocket`, hidden, beta) is a portrait phone mode, not a level:
+it has no `SHIFTS` entry (game role −2) and is not on the home screen, picker,
+tabs or leaderboard. Ruleset `pocket-v1` (`dist/pocket.js`, `PocketGame`) is
+endless: a fixed-seed order stream grows from Pocket spacer and Mounting plate
+to Bearing housing (order 5) and the deburr parts Dial knob and Valve body
+(order 11); arrivals ease from every 18 s to every 9 s over six minutes and
+deadlines from 82 s to 48 s over 90 s (+10 s per route step beyond two). The
+third expired order ends the run; there is no timer. Shipments score with
+`scoreShipment`. Covari offers heat treatment, powder coating or laser marking
+(the floor has none) after two shipments and again 60 s after each offer
+resolves; a Covari job is never a strike. Controls are a plan of up to three
+tapped stations, with no Dash, on the `pocket-shop` floor (stock bins in front,
+then Lathe and Mill, Deburr and the Hold bench, then Receiving, Inspect and
+Shipping). The only save is a local best under `chip-rush-pocket-v1`; no server
+runs, challenge links or analytics. See
+[experiments/pocket-shift.md](experiments/pocket-shift.md).
 
 ## Design and release rules
 

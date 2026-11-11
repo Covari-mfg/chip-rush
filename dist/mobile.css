@@ -1168,3 +1168,341 @@ html[data-mode="pocket"] .station-label.queue-full {
   font-size: 10px;
   letter-spacing: 1.4px;
 }
+
+/* Pocket Shift, pocket-v1 HUD: strikes, shipped and points on one line; every
+   active order in a two-by-two grid; a band kept free at the bottom for the
+   Covari card and the plan hint, so neither covers a station. */
+html[data-mode="pocket"] {
+  --pocket-band: calc(120px + env(safe-area-inset-bottom, 0px));
+}
+html[data-mode="pocket"] body.playing #live-hud,
+html[data-mode="pocket"] #source-collect {
+  display: none !important;
+}
+.pocket-hud:not([hidden]) {
+  position: absolute;
+  top: calc(3px + env(safe-area-inset-top, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  right: calc(58px + env(safe-area-inset-right, 0px));
+  height: 44px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: #0b2530eb;
+  pointer-events: none;
+}
+.pocket-strikes {
+  display: flex;
+  gap: 6px;
+  margin-right: auto;
+}
+.pocket-strikes i {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #ff8a7a99;
+  border-radius: 50%;
+  background: #ffffff0d;
+  transition: background .2s, border-color .2s;
+}
+.pocket-strikes i.on {
+  border-color: #ff6b5b;
+  background: #e5483b;
+}
+.pocket-strikes i.on::before,
+.pocket-strikes i.on::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 10px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: #fff4ea;
+  transform: rotate(45deg);
+}
+.pocket-strikes i.on::after {
+  transform: rotate(-45deg);
+}
+.pocket-strikes i.struck {
+  animation: pocket-struck .5s ease-out;
+}
+@keyframes pocket-struck { 0% { transform: scale(1.9); box-shadow: 0 0 0 6px #ff6b5b66; } 100% { transform: scale(1); box-shadow: none; } }
+.pocket-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+.pocket-stat small {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #a8c3c0;
+}
+.pocket-stat b {
+  margin-top: 3px;
+  font: 700 17px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--paper);
+}
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders {
+  top: calc(53px + var(--mobile-safe-top));
+  height: auto !important;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 58px;
+  align-items: stretch;
+  gap: 5px;
+  padding: 0;
+  overflow: visible;
+  touch-action: manipulation;
+  pointer-events: none;
+}
+.pocket-ticket,
+.pocket-slot {
+  position: relative;
+  min-width: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pocket-ticket {
+  padding: 5px 7px 7px;
+  border: 1px solid #3c6a70;
+  background: #102e37f2;
+  color: var(--paper);
+  box-shadow: 0 3px 10px #0004;
+}
+.pocket-ticket.carried-job {
+  border-color: #7af0c0;
+  box-shadow: 0 0 0 1px #7af0c0, 0 3px 10px #0004;
+}
+.pocket-ticket.urgent {
+  border-color: #ff6b5b;
+  background: #3a1f25f2;
+}
+.pocket-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px dashed #4f7a7e88;
+  color: #8fb0ae;
+  font-size: 11px;
+}
+.pocket-slot b {
+  font: 700 12px ui-monospace, monospace;
+  color: #cfe3dc;
+}
+.pt-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 15px;
+}
+.pt-top .stock-icon {
+  flex: none;
+  display: flex;
+  color: #9fd8cc;
+}
+.pt-top .stock-pictogram {
+  width: 15px;
+  height: 15px;
+}
+.pt-top b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 800;
+  letter-spacing: -.2px;
+}
+.pt-top .due {
+  flex: none;
+  font: 700 12px ui-monospace, monospace;
+  color: #cfe3dc;
+}
+.pocket-ticket.urgent .due {
+  color: #ffb3a8;
+  animation: urgent 1s infinite;
+}
+.pt-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 2px;
+  margin-top: 3px;
+  font: 800 10px/13px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.pt-step {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #ffffff12;
+  color: #a7c1bd;
+  white-space: nowrap;
+}
+.pt-step.next {
+  background: #ffd36b;
+  color: #102a32;
+}
+.pt-step.next.working {
+  background: #7af0c0;
+}
+.pt-arrow {
+  color: #6f8f8f;
+  font-size: 10px;
+}
+.pt-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: #ffffff14;
+}
+.pt-bar i {
+  display: block;
+  height: 100%;
+  background: #7af0c0;
+  transform-origin: left;
+  transition: transform .25s linear;
+}
+.pocket-ticket.urgent .pt-bar i {
+  background: #ff6b5b;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pocket-ticket.urgent .due,
+  .pocket-strikes i.struck { animation: none; }
+}
+.pocket-band:not([hidden]) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--pocket-band);
+  z-index: 3;
+  background: linear-gradient(#0b253000, #0b2530cc 40%);
+  pointer-events: none;
+}
+/* The Covari card sits in the band, thumb height, never over the floor. */
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card {
+  position: fixed;
+  left: calc(8px + var(--mobile-safe-left));
+  right: calc(8px + var(--mobile-safe-right));
+  bottom: calc(8px + var(--mobile-safe-bottom));
+  width: auto;
+  height: auto !important;
+  max-height: calc(var(--pocket-band) - 12px);
+  min-height: 0;
+  gap: 3px;
+  padding: 6px 9px 7px;
+  z-index: 22;
+  pointer-events: auto;
+  opacity: 1;
+}
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card .source-actions button {
+  min-height: 46px;
+}
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card #source-decline {
+  min-width: 96px;
+}
+html[data-mode="pocket"][data-interface="mobile"] body:has(#source-card:not([hidden])) #mobile-tap-hint {
+  display: none;
+}
+html[data-mode="pocket"][data-interface="mobile"] body.playing #mobile-tap-hint {
+  right: calc(12px + var(--mobile-safe-right));
+  bottom: calc(16px + var(--mobile-safe-bottom));
+}
+html[data-mode="pocket"][data-interface="mobile"] #toast {
+  bottom: calc(52px + var(--mobile-safe-bottom));
+}
+html[data-mode="pocket"][data-interface="mobile"] body:has(#source-card:not([hidden])) #toast {
+  bottom: calc(var(--pocket-band) + 6px);
+}
+/* A miss flashes the screen edge red; the third miss holds longer. */
+.pocket-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 6px #ff5a4a, inset 0 0 90px 30px #ff3b2f88;
+}
+.pocket-flash.hit { animation: pocket-flash .7s ease-out; }
+.pocket-flash.final { animation: pocket-flash-final 1.5s ease-out forwards; background: #6b0f0a33; }
+@keyframes pocket-flash { 0%, 25% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pocket-flash-final { 0%, 60% { opacity: 1; } 100% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  /* Shown without animating: the script clears a normal miss after 0.8 s. */
+  .pocket-flash.hit { animation: none; opacity: .85; }
+  .pocket-flash.final { animation: none; opacity: .85; }
+}
+/* Start and result cards. */
+.pocket-panel .pocket-rules {
+  margin: 14px 0 12px;
+  padding-left: 18px;
+  color: #c4d6d4;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.pocket-panel .pocket-rules li + li {
+  margin-top: 6px;
+}
+.pocket-panel .pocket-best,
+.pocket-panel .pocket-outcome {
+  margin: 10px 0 18px;
+  color: var(--teal);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.pocket-panel .pocket-kicker {
+  margin: 16px 0 0;
+  color: #ff9d8f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+}
+.pocket-panel .pocket-stats {
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.45fr) minmax(0, 1fr);
+}
+.pocket-panel .pocket-stats strong {
+  font-size: clamp(19px, 6vw, 26px);
+  white-space: nowrap;
+}
+.pocket-panel .pocket-new-best {
+  margin: 12px 0 0;
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.pocket-panel #pocket-play {
+  min-height: 56px;
+  font-size: 15px;
+}
+.pocket-panel #pocket-home {
+  min-height: 44px;
+}
+/* Compact Covari card: the order number gives way so the buttons stay whole. */
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card > .source-ticket-top {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  font-size: 12px;
+}
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card > .source-ticket-top > span:first-child {
+  display: none;
+}
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card > .source-heading {
+  min-height: 22px;
+  padding-right: 40px;
+}
+html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-card .source-actions {
+  margin-top: 2px;
+}

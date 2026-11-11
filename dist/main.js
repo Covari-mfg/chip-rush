@@ -12,7 +12,7 @@ import { orderWorkflow, stockIcon } from './workflow.js';
 import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, INSTALL_SECONDS, rentFor, opInfo, boardId, POLICY_STEPS } from './manager.js';
 import { deviceInterface, isPhoneDevice } from './device.js';
 import { createTapNavigation } from './tap-navigation.js';
-import { PocketGame, POCKET_MODE } from './pocket.js';
+import { PocketGame, POCKET_MODE, readPocketBest, recordPocketRun } from './pocket.js';
 import { createStationQueue } from './pocket-queue.js';
 
 const speedRecords=(()=>{try{return readSpeedRecords(localStorage,SHIFTS);}catch{return {};}})();
@@ -79,7 +79,7 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
-  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop']},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop','pocket-shop']},
   {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:['night-shop','dawn-shop']},
   // Launch Window's robot cell, mid-floor between the machines and Inspection.
   {id:'assemble',name:'ASSEMBLY',x:1.55,z:.2,height:1.75,w:2.86,d:1.6,map:'launch-pad'},
@@ -134,19 +134,24 @@ const MAPS={
   'owner-shop':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}}},
   'owner-wing':{theme:'morning',place:{inspect:{z:-2.6,access:{x:4.32,z:-2.6}},ship:{z:1.2,access:{x:4.27,z:1.2}}},bounds:{maxX:16.65},
     obstacles:[{minX:16.0,maxX:16.75,minZ:-2.6,maxZ:-1.5}]},
-  // Pocket Shift (hidden #/pocket mode): a narrow, deep room for a portrait
-  // phone. Two stations per row, read from the bottom of the screen to the top
-  // as the part's journey: stock, machines, Hold bench, Inspect and Shipping.
-  // Every station faces the camera; small ones are scaled up for a thumb.
-  'pocket-shop':{theme:'day',shell:'pocket',hide:['office','material-block','receiving'],fixed:[],
-    bounds:{minX:-4.45,maxX:4.45,minZ:-5.3,maxZ:9.85},spawn:{x:0,z:6.2},place:{
-    'material-round':{x:-2.4,z:8.1,scale:1.8,w:2.97,d:1.44,height:2.07,access:{x:-2.4,z:9.45}},
-    'material-plate':{x:2.4,z:8.1,scale:1.8,w:2.97,d:1.44,height:2.07,access:{x:2.4,z:9.45}},
-    lathe:{x:-2.5,z:3.55},
-    mill:{x:2.3,z:3.55},
-    buffer:{x:0,z:-.15,scale:1.6,w:3.76,d:2.32,height:2.24},
-    inspect:{x:-2.3,z:-3.7,rotationY:0,scale:1.22,w:2.93,d:1.95,height:2.5,access:{x:-2.3,z:-2.1}},
-    ship:{x:2.3,z:-3.7,rotationY:0,scale:1.2,w:3.24,d:2.16,height:2.22,access:{x:2.3,z:-1.99}},
+  // Pocket Shift (hidden #/pocket mode): a narrow room for a portrait phone,
+  // read from the bottom of the screen to the top as the part's journey: the
+  // three stock bins, Lathe and Mill, Deburr and the Hold bench, then
+  // Receiving, Inspect and Shipping. Machines face the camera. The bins are used
+  // from the aisle behind them, which they share with the machines, so the room
+  // needs one aisle fewer. Small stations are drawn larger for a thumb.
+  'pocket-shop':{theme:'day',shell:'pocket',hide:['office'],fixed:[],
+    bounds:{minX:-4.45,maxX:4.45,minZ:-5.3,maxZ:6.5},spawn:{x:0,z:4.4},place:{
+    'material-round':{x:-2.85,z:5.72,scale:1.55,w:2.56,d:1.24,height:1.78,access:{x:-2.85,z:4.47}},
+    'material-plate':{x:0,z:5.72,scale:1.55,w:2.56,d:1.24,height:1.78,access:{x:0,z:4.47}},
+    'material-block':{x:2.85,z:5.72,scale:1.55,w:2.56,d:1.24,height:1.78,access:{x:2.85,z:4.47}},
+    lathe:{x:-2.55,z:2.53},
+    mill:{x:2.3,z:2.56},
+    deburr:{x:-2.75,z:-.78,scale:1.25,w:2.7,d:1.64,height:2.56},
+    buffer:{x:2.65,z:-.73,scale:1.45,w:3,d:1.9,height:2.03},
+    receiving:{x:-2.9,z:-3.8,scale:1.35,w:2.7,d:1.08,height:2.36,access:{x:-2.9,z:-2.63}},
+    inspect:{x:0,z:-4.12,rotationY:0,scale:1.1,w:2.64,d:1.76,height:2.26,access:{x:0,z:-2.61}},
+    ship:{x:2.9,z:-4.06,rotationY:0,scale:1.05,w:2.84,d:1.89,height:1.94,access:{x:2.9,z:-2.49}},
   }},
 };
 const mapHas=(def,mapId)=>(!def.hall||openHalls.has(def.hall))&&(def.map?[].concat(def.map).includes(mapId):!MAPS[mapId].hide?.includes(def.id));
@@ -362,17 +367,63 @@ function updatePocketQueue(){
   if(Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.3){player.angle=Math.atan2(s.def.x-player.x,s.def.z-player.z);const ok=useStation(head);processEvents();pocketArrived(head,ok);syncParts();updateUI(true);}
   else{toast('No clear way there. Plan cleared.',1.8);pocketArrived(head,false);}
 }
+// The run's local best lives under its own key (dist/pocket.js); nothing else is saved.
+function pocketClock(seconds){const t=Math.max(0,Math.floor(seconds));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;}
+function pocketBestLine(best){return best.runs?`Best ${best.bestPoints.toLocaleString()} points · ${best.bestShipped} shipped · ${pocketClock(best.longestSeconds)} survived`:'Your best run is kept on this device.';}
+let pocketResult=null,pocketFinaleTimer=0;
 function showPocketPanel(state){
   const result=state==='result';hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pocket-panel').hidden=false;
   $('pocket-result').hidden=!result;$('pocket-how').hidden=result;
-  if(result){$('pocket-shipped').textContent=game.shipped;$('pocket-missed').textContent=game.missed;$('pocket-outcome').textContent=game.passed()?`Cleared · ${game.config.passTarget} shipped is the target.`:`Clear target: ${game.config.passTarget} shipped.`;}
+  if(result){const r=pocketResult??{newBest:false,best:readPocketBest(localStorage)};$('pocket-shipped').textContent=game.shipped;$('pocket-points').textContent=game.score.toLocaleString();$('pocket-time').textContent=pocketClock(game.elapsed);$('pocket-new-best').hidden=!r.newBest;$('pocket-outcome').textContent=pocketBestLine(r.best);}
+  else $('pocket-best').textContent=pocketBestLine(readPocketBest(localStorage));
   $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-play').focus({preventScroll:true});
 }
-// Same rules as First Shift, its own game object; never a server run, score or save.
-function startPocket(){beaconFinaleTime=0;endBeaconEnding();audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent=`PROTOTYPE · SHIP ${POCKET_MODE.passTarget} TO CLEAR`;$('shift-name').textContent=POCKET_MODE.name;resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
-function showPocketResults(){resultShown=true;audio.update(false);clearMovement();pocketQueue.clear();syncPocketMarkers();showPocketPanel('result');$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');}
+// Endless pocket-v1 rules on their own game object; never a server run or a shared save.
+function startPocket(){clearTimeout(pocketFinaleTimer);pocketResult=null;beaconFinaleTime=0;endBeaconEnding();audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent='POCKET SHIFT · BETA';$('shift-name').textContent=POCKET_MODE.name;$('pocket-flash').className='pocket-flash';resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
+function showPocketResults(){clearTimeout(pocketFinaleTimer);resultShown=true;audio.update(false);clearMovement();pocketQueue.clear();syncPocketMarkers();pocketResult=recordPocketRun(localStorage,{score:game.score,shipped:game.shipped,elapsed:game.elapsed});showPocketPanel('result');$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');}
+// A miss must be unmistakable: the marker fills, the screen flashes, and a short
+// buzz where the browser allows it (never with reduced motion).
+function pocketBuzz(pattern){if(reduced||typeof navigator.vibrate!=='function')return;try{navigator.vibrate(pattern);}catch{}}
+function pocketStrike(ev){
+  const flash=$('pocket-flash');flash.className='pocket-flash';void flash.offsetWidth;flash.className=`pocket-flash ${ev.final?'final':'hit'}`;
+  if(reduced&&!ev.final)setTimeout(()=>{if(flash.className==='pocket-flash hit')flash.className='pocket-flash';},800);
+  const marker=$('pocket-strikes').children[ev.strikes-1];if(marker){marker.classList.remove('struck');void marker.offsetWidth;marker.classList.add('struck');}
+  updatePocketHUD();shake=Math.max(shake,ev.final?1:.6);
+  toast(ev.final?'Third miss. Run over.':`Order missed · ${ev.strikes} of ${game.config.strikes}`,ev.final?2:2.4);
+  pocketBuzz(ev.final?[90,60,220]:70);
+}
+// The third strike shows for a moment before the result card.
+function pocketFinale(){clearMovement();pocketQueue.clear();syncPocketMarkers();$('pause-button').hidden=true;clearTimeout(pocketFinaleTimer);pocketFinaleTimer=setTimeout(()=>{if(game===pocketGame&&game.mode==='results'&&!menuMode)showResults();},1500);}
+function updatePocketHUD(){
+  $('pocket-hud').hidden=$('pocket-band').hidden=!pocketing();if(!pocketing())return;
+  const n=game.strikes,max=game.config.strikes;[...$('pocket-strikes').children].forEach((marker,i)=>marker.classList.toggle('on',i<n));
+  $('pocket-strikes').setAttribute('aria-label',n?`${n} of ${max} misses`:'No misses yet');
+  $('pocket-hud-shipped').textContent=game.shipped;$('pocket-hud-points').textContent=game.score.toLocaleString();
+}
+// Every active order at once, two by two: the part, its remaining route with the
+// next step marked, and a draining deadline bar.
+let renderedPocketTickets='';
+function updatePocketTickets(force){
+  const list=$('orders'),held=game.heldOrder?.id;
+  const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${game.stations[o.location]?.ready}:${held===o.id}`).join('|');
+  if(force||signature!==renderedPocketTickets){
+    renderedPocketTickets=signature;list.replaceChildren();
+    for(const o of game.orders){
+      const el=document.createElement('article'),stock=stockType(o),working=!!game.stations[o.location]&&!game.stations[o.location].ready;
+      el.className='pocket-ticket'+(held===o.id?' carried-job':'');el.id='ticket-'+o.id;
+      const steps=orderWorkflow(o,false).filter(step=>!step.done);
+      el.setAttribute('aria-label',`${o.name}. Next: ${steps[0]?.title??'Ship'}`);
+      el.innerHTML=`<div class="pt-top"><span class="stock-icon" role="img" aria-label="${stock} stock">${stockIcon(stock)}</span><b>${o.name}</b><span class="due"></span></div><div class="pt-route">${steps.map((step,i)=>`<span class="pt-step${i===0?' next':''}${i===0&&working?' working':''}" title="${step.title}">${step.label}</span>`).join('<span class="pt-arrow" aria-hidden="true">›</span>')}</div><div class="pt-bar"><i></i></div>`;
+      list.appendChild(el);
+    }
+    for(let i=game.orders.length;i<game.config.maxActive;i++){const slot=document.createElement('div');slot.className='pocket-slot';slot.innerHTML=i===game.orders.length?'Next order <b class="pocket-next"></b>':'';list.appendChild(slot);}
+    list.appendChild(sourceCard);
+  }
+  for(const o of game.orders){const el=$('ticket-'+o.id);if(!el)continue;const urgent=o.remaining<Math.max(12,o.deadline*.25);el.classList.toggle('urgent',urgent);el.querySelector('.due').textContent=Math.ceil(o.remaining)+'s';el.querySelector('.pt-bar i').style.transform=`scaleX(${Math.max(0,o.remaining/o.deadline)})`;}
+  const next=list.querySelector('.pocket-next');if(next)next.textContent=`${Math.max(0,Math.ceil(game.nextArrival-game.elapsed))}s`;
+}
 function screenPoint(v){const p=v.clone().project(camera);return {x:(p.x*.5+.5)*viewport.w,y:(-p.y*.5+.5)*viewport.h};}
-function floatText(text,station,small=false){const d=stations[station]?.def;if(!d)return;const p=screenPoint(new THREE.Vector3(d.x,d.height+.3,d.z));const el=document.createElement('div');el.className=`float-text${small?' small':''}`;el.textContent=text;el.style.left=p.x+'px';el.style.top=p.y+'px';$('floating-text').appendChild(el);el.addEventListener('animationend',()=>el.remove(),{once:true});setTimeout(()=>el.remove(),1800);}
+function floatText(text,station,small=false){const d=stations[station]?.def;if(!d)return;const p=screenPoint(new THREE.Vector3(d.x,d.height+.3,d.z));const el=document.createElement('div');el.className=`float-text${small?' small':''}`;el.textContent=text;el.style.left=p.x+'px';el.style.top=p.y+'px';$('floating-text').appendChild(el);if(pocketing()){const half=el.offsetWidth/2+6;el.style.left=Math.min(Math.max(p.x,half),viewport.w-half)+'px';}el.addEventListener('animationend',()=>el.remove(),{once:true});setTimeout(()=>el.remove(),1800);}
 function createReceivingDock(){
   const g=new THREE.Group();g.name='receiving-dock';
   const steel=new THREE.MeshStandardMaterial({color:0x214a4b,roughness:.8});
@@ -485,7 +536,7 @@ function boot(){
   targetRing=new THREE.Mesh(new THREE.RingGeometry(.25,.31,32),new THREE.MeshBasicMaterial({color:0x92f4db,side:THREE.DoubleSide,transparent:true,opacity:.7}));targetRing.rotation.x=-Math.PI/2;targetRing.visible=false;scene.add(targetRing);
   shopFrame=measureShopFrame();
   const layoutObserver=new ResizeObserver(()=>{layoutDirty=true;});
-  for(const id of ['live-hud','orders','game-footer','shop-sidebar'])layoutObserver.observe($(id));
+  for(const id of ['live-hud','orders','game-footer','shop-sidebar','pocket-hud','pocket-band'])layoutObserver.observe($(id));
   resize();bindControls();applyHomeRoute();updateCamera(0,true);renderer.render(scene,camera);$('loading').hidden=true;
   requestAnimationFrame(frame);
   window.__chipRush={snapshot:()=>({...game.snapshot(),player:{...player},target:pathStation,pathLength:path.length,nearby:nearby?.def.id??null,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,stationsLayout:STATION_LAYOUT.map(s=>({...s,access:{...stations[s.id].access},screen:screenPoint(new THREE.Vector3(s.x,s.height,s.z))}))}),
@@ -544,14 +595,19 @@ function measurePlayFrame(){
   if(beaconing())look.addScaledVector(right,Math.min(1.8,Math.max(0,((rightEdge-left)*scale-(shopFrame.right-shopFrame.left))/2)));
   return {halfHeight:viewport.h*scale/2,look};
 }
-// Pocket Shift's start card shows its whole room behind the card.
-function pocketCardFrame(){
-  const left=10,rightEdge=viewport.w-10,top=70,bottom=viewport.h-20;
+// Pocket Shift's floor fits between its HUD and the band kept free for Covari at the bottom.
+function measurePocketFrame(){
+  const top=Math.max($('pocket-hud').getBoundingClientRect().bottom,$('orders').getBoundingClientRect().bottom)+10,band=$('pocket-band').getBoundingClientRect();
+  return pocketFit(8,viewport.w-8,top,(band.height?band.top:viewport.h-120)-4);
+}
+function pocketFit(left,rightEdge,top,bottom){
   const scale=Math.max((shopFrame.right-shopFrame.left)/Math.max(120,rightEdge-left),(shopFrame.top-shopFrame.bottom)/Math.max(100,bottom-top));
   const cx=(left+rightEdge)/2,cy=(top+bottom)/2;
   const look=right.clone().multiplyScalar((shopFrame.left+shopFrame.right)/2-(cx-viewport.w/2)*scale).addScaledVector(cameraUp,(shopFrame.top+shopFrame.bottom)/2+(cy-viewport.h/2)*scale);
   return {halfHeight:viewport.h*scale/2,look};
 }
+// Pocket Shift's start card shows its whole room behind the card.
+function pocketCardFrame(){return pocketFit(10,viewport.w-10,70,viewport.h-20);}
 // Browsers on iPhone cannot reliably lock orientation. Require landscape
 // in the game itself and freeze an active shift as soon as it rotates back.
 // Pocket Shift is built for portrait, so it never shows the rotate prompt.
@@ -579,7 +635,7 @@ function updateCamera(dt,instant=false){
   look.y=mobile?-7.2:.25;
   if(menuMode&&pocketRoute()){const f=pocketCardFrame();halfHeight=f.halfHeight;look.copy(f.look);}
   else if(menuMode){if(!$('welcome').hidden||!titleFrame)titleFrame=measureMenuFrame();halfHeight=titleFrame.halfHeight;look.copy(titleFrame.look);}
-  if(!menuMode&&(layoutDirty||!playFrame)){playFrame=measurePlayFrame();layoutDirty=false;}
+  if(!menuMode&&(layoutDirty||!playFrame)){playFrame=pocketing()?measurePocketFrame():measurePlayFrame();layoutDirty=false;}
   if(playFrame&&!menuMode){halfHeight=THREE.MathUtils.lerp(halfHeight,playFrame.halfHeight,cameraBlend);look.lerp(playFrame.look,cameraBlend);}
   if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
@@ -647,8 +703,10 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='shipped'){floatText(`+${ev.points}${ev.combo>1?'  ×'+ev.combo+' streak':''}`,'ship');spawnParticles(6,1.2,1.2,0xffd76c,28);shake=.7;if(launching()&&game.stack.length)queueSection(game.stack.at(-1),game.stack.length);}
   if(ev.type==='kitted'){floatText(ev.waiting?`KIT · ${ev.waiting} TO GO`:'KIT COMPLETE','assemble',true);const s=stations.assemble;spawnParticles(s.def.x+.8,1.0,s.def.z,0x9fe0ff,5);}
   if(ev.type==='assembling'){floatText('ASSEMBLING','assemble',true);}
-  if(ev.type==='expired')toast(`#${ev.orderId} expired`,3.3);
-  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else showResults();}
+  if(ev.type==='expired'&&!pocketing())toast(`#${ev.orderId} expired`,3.3);
+  if(ev.type==='strike'&&pocketing())pocketStrike(ev);
+  if(ev.type==='stage'&&pocketing())toast(ev.stage===1?'New part: Bearing housing · block stock':'Deburr work joins: Dial knob and Valve body',2.6);
+  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else if(pocketing())pocketFinale();else showResults();}
   if(ev.type==='quayLoaded')floatText(`${ev.count} / 3 ON QUAY`,'ship',true);
   if(ev.type==='tenderDeparted')toast(`Tender away · ${ev.count} part${ev.count===1?'':'s'} · 12s crossing`,2.5);
   if(ev.type==='beaconLit'){floatText(`${ev.installed} / ${game.config.passTarget} LANTERN PARTS`,'ship',true);toast(ev.lit?'Beacon restored. The fleet is coming home.':`Lighthouse restored: ${ev.installed} / ${game.config.passTarget}`,2.4);}
@@ -815,7 +873,8 @@ function updateUI(force=false){
   }
   const t=Math.ceil(game.time);$('timer').textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;$('timer').parentElement.classList.toggle('urgent',t<=30);
   if(launching()){const count=launchCount();$('timer-label').textContent='COUNTDOWN';$('timer').textContent=`T−${Math.floor(count/60)}:${String(count%60).padStart(2,'0')}`;}
-  if(game.manager)updateManagerTickets(force);else if(launching())updateKitTickets(force);else updateTickets(force);
+  if(game.manager)updateManagerTickets(force);else if(launching())updateKitTickets(force);else if(pocketing())updatePocketTickets(force);else updateTickets(force);
+  updatePocketHUD();
   updateOfficeUI();updateSourceUI();
   const action=nearby?stationAction(nearby.def.id):'Move closer to a station';
   for(const id of ['action-interact']){$(id).title=action;$(id).setAttribute('aria-label',`Interact: ${action}`);}
@@ -1000,7 +1059,7 @@ function savedRunSummary(){
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
 function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();const spawn=MAPS[activeMapId()].spawn??SPAWN;player.x=spawn.x;player.z=spawn.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
-function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':pocketing()?'Restart this run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
@@ -1013,7 +1072,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(refreshBoard=true){if(pocketRoute())setPocketMode(false);pocketQueue.clear();endBeaconEnding();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
+function showMenu(refreshBoard=true){if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
