@@ -77,7 +77,7 @@ export const ORBIT_SOURCE_JOBS = [
 // docs/level-design.md. These are shop scenarios, not a ranking of jobs or people.
 // Future levels may evolve mechanics; preserve earlier scenarios and their data.
 // Append levels: ids and array positions are permanent save/challenge identities.
-// mapId documents the current layout; loading different maps is not implemented.
+// mapId selects the shop floor layout from MAPS in dist/main.js.
 export const SHIFTS = [
   {
     id:'first-shift',mapId:'first-shop',name:'First Shift',author:'GPT-6 Astra',harness:'Codex',
@@ -208,6 +208,7 @@ export class ShopGame {
     this.office = {present:false,orderId:null};
     this.surgeRemaining = this.config.overdrive ? 12 : 0;
     this.surgeCooldown = 0;
+    this.lastOfficeSurgeAt = -Infinity;
     this.overdriveActive = false;
     this.stormStrikes = this.config.overdrive ? [50, 105, 148] : [];
     this.stormIndex = 0;
@@ -289,7 +290,7 @@ export class ShopGame {
   triggerSurge(source = 'office', duration = 16) {
     if (!this.config.overdrive) return false;
     this.surgeRemaining = Math.max(this.surgeRemaining, duration);
-    if (source === 'office') this.surgeCooldown = 22;
+    if (source === 'office') { this.surgeCooldown = 22; this.lastOfficeSurgeAt = this.elapsed; }
     this.emit('surge', {source, duration:this.surgeRemaining, multiplier:2});
     return true;
   }
@@ -458,9 +459,9 @@ export class ShopGame {
       // Only an actual offer advances the cosmetic rotation. Preserve this
       // cursor through resets, so retries can show every outside capability.
       const jobs=this.config.sourceJobs??SOURCE_JOBS;
-      this.nextSourceKind ??= this.shiftIndex % SOURCE_JOBS.length;
+      this.nextSourceKind ??= this.shiftIndex % jobs.length;
       const job=jobs[this.nextSourceKind%jobs.length];
-      this.nextSourceKind=(this.nextSourceKind+1)%SOURCE_JOBS.length;
+      this.nextSourceKind=(this.nextSourceKind+1)%jobs.length;
       this.sourcing = {id:201,...job,kind:'block',route:['inspect','ship'],index:0,programmed:true,programRemaining:0,started:false,location:'supplier',value:300,color:0xffab8c,state:'offer',offerRemaining:30,remaining:22,points:300};
       this.emit('sourceOffer', {orderId:201});
     }
@@ -625,12 +626,12 @@ export class ShopGame {
       if (this.call?.state === 'ringing') return this.interact('phone');
       if (this.config.overdrive) {
         if (!this.office.present) return this.fail('Walk to the Office Governor Console to trigger a 2× Generator Surge.');
+        if (this.elapsed - this.lastOfficeSurgeAt <= 1) return true;
         if (this.surgeRemaining > 0) return this.fail(`Generator Surge is active (2.0× speed · ${Math.ceil(this.surgeRemaining)}s left).`);
         if (this.surgeCooldown > 0) return this.fail(`Capacitors recharging (${Math.ceil(this.surgeCooldown)}s). Run 2+ machines for 1.5× Overdrive!`);
         return this.triggerSurge('office', 16);
       }
       if (!this.office.present) return this.fail('Walk to the office to complete CAD for this job.');
-      if (this.sourcing?.state === 'approving') return true;
       if (!this.config.programming) return this.fail('CAD is already complete for this shift.');
       const order = this.nextCAD();
       if (!order) return this.fail('There is no CAD work waiting.');
@@ -658,7 +659,7 @@ export class ShopGame {
         returned.index = 0;
         returned.location = 'material';
         this.hand = null;
-        this.selectedId = returned.id;
+        this.selectedId = returned.parentId ?? returned.id;
         this.emit('recycle', {orderId:returned.id});
         return true;
       }

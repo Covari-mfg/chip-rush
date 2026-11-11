@@ -345,6 +345,28 @@ starts with $1,500, a lathe, a mill and QC.
   briefing offer Continue, mid-day saves resume paused, and a finished run
   clears it.
 
+Pocket Shift (`#/pocket`, hidden, beta) is a portrait phone mode, not a level:
+it has no `SHIFTS` entry (game role −2) and is not on the home screen, picker,
+tabs or leaderboard. Ruleset `pocket-v1` (`dist/pocket.js`, `PocketGame`) is
+endless: a fixed-seed order stream grows from Pocket spacer and Mounting plate
+to Bearing housing (order 5) and the deburr parts Dial knob and Valve body
+(order 11); arrivals ease from every 18 s to every 9 s over six minutes and
+deadlines from 82 s to 48 s over 90 s (+10 s per route step beyond two). The
+third expired order ends the run; there is no timer. Shipments score with
+`scoreShipment`. Covari offers heat treatment, powder coating or laser marking
+(the floor has none) after two shipments and again 60 s after each offer
+resolves; a Covari job is never a strike. Controls are a plan of up to three
+tapped stations, with no Dash, on the full-width `pocket-shop` floor (stock
+bins in front, then Lathe and Mill, Deburr and the Hold bench, then Inspect and
+Shipping, with the Covari crate spot by the back door). Deburr arrives shortly
+before order 11 and the crate spot shows only while a delivery is due
+(`dist/pocket-floor.js`); stations carry small icon badges whose words match the
+order tickets, and a tap near a station counts for the nearest one. The route
+always uses the touch layout, in a centred phone-width column on a wide desktop
+window. The only save is a local best under `chip-rush-pocket-v1`; no server
+runs, challenge links or analytics. See
+[experiments/pocket-shift.md](experiments/pocket-shift.md).
+
 ## Design and release rules
 
 - Describe each new level's implemented design and verification in its experiment
@@ -352,7 +374,8 @@ starts with $1,500, a lathe, a mill and QC.
   and ending conditions. Document machines, recipes, timers, or stars if the
   level uses them; these are not mandatory ingredients.
 - Map identity is separate from scenario identity. `MAPS` in `dist/main.js`
-  currently holds `first-shop` and `night-shop`: a map picks which stations exist
+  holds `first-shop`, `night-shop`, `dawn-shop`, `launch-pad`, `harbor-pier`,
+  `owner-shop`, and `owner-wing`: a map picks which stations exist
   (adding or hiding stations relative to the shared layout), its collision
   obstacles, and its lighting theme. Other geometry (the room shell, office and
   props) is shared. Do not describe an unimplemented map as available or invent

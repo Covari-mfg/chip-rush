@@ -210,7 +210,7 @@ test('wrong stations explain the next step instead of crashing', () => {
   assert.equal(part.location, 'buffer');
   use(game, 'buffer');
   use(game, `material-${stockType(part)}`);
-  assert.deepEqual([part.started, part.index, part.location, game.hand], [false, 0, 'material', null]);
+  assert.deepEqual([part.started, part.index, part.location, game.hand, game.selectedId], [false, 0, 'material', null, kit.id]);
 });
 
 test('an expired kit takes every part with it, wherever they are, and counts one miss', () => {

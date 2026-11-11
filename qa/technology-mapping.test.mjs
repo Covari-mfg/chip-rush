@@ -27,7 +27,7 @@ function setup({beacon=false}={}) {
       scrollTop:0,scrollLeft:0,hidden:false,innerHTMLWrites:0,
       get id(){return id;},set id(value){id=value;nodes.set(value,this);},
       get innerHTML(){return html;},set innerHTML(value){html=value;this.innerHTMLWrites++;},
-      setAttribute(){},focus(){},scrollIntoView(){},
+      setAttribute(){},removeAttribute(){},focus(){},scrollIntoView(){},
       appendChild(child){this.children.push(child);},
       replaceChildren(){this.children=[];},
       querySelector(selector){if(!children.has(selector))children.set(selector,element());return children.get(selector);},
@@ -36,7 +36,7 @@ function setup({beacon=false}={}) {
   const $=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
   const game=beacon?new BeaconGame():new ShopGame();if(beacon){game.reset();for(let i=0;i<200;i++)game.tick(.1);}else game.reset(0);
   const context=vm.createContext({
-    game,OPS,stockType,stockIcon,orderWorkflow,$,beaconing:()=>beacon,orbiting:()=>false,opOf:key=>OPS[key],sourceCard:$('source-card'),
+    game,OPS,stockType,stockIcon,orderWorkflow,$,beaconing:()=>beacon,orbiting:()=>false,pocketing:()=>false,opOf:key=>OPS[key],sourceCard:$('source-card'),
     document:{activeElement:null,createElement:element},
     renderedTickets:'',renderedSelection:null,pendingSource:false,selectedByPlayer:false,
     sourceReveal:false,reduced:false,

@@ -39,6 +39,7 @@ export function validateResult(value,run,now=Date.now()){
       if(nextScheduled<=value.elapsed&&probe.spawnRecipe(config.duration-nextScheduled))return 'Those scheduled orders are missing from this result.';
     }
     probe.nextArrival=value.elapsed+Math.max(config.firstArrival,config.interval,2);
+    if(probe.tender&&value.shipped>0)probe.tender={...probe.tender,phase:'returning',remaining:12};
     if(probe.hasEligibleFutureArrival())return 'There is still work scheduled for this shift.';
     if(value.calls>config.callTimes.filter(at=>at+3<=value.elapsed).length)return 'Those calls have not finished yet.';
   }else{
@@ -96,18 +97,18 @@ export default {
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
         const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6)).all();
-        return json({ruleset:RULESET,entries:(data.results||[]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':role===6&&edition!==shiftRuleset(6)?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:(role===6&&edition!==shiftRuleset(6)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
+        return json({ruleset:RULESET,entries:(data.results||[]).filter(({role})=>SHIFTS[role]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':role===6&&edition!==shiftRuleset(6)?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:(role===6&&edition!==shiftRuleset(6)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
         const value=await body(request);
         const managerRun=value.role===MANAGER_ROLE&&parseBoard(value.ruleset)!==null;
         if(!managerRun&&(!validRole(value.role)||value.ruleset!==shiftRuleset(value.role)))return fail('Reload the game to start a current shift.');
-        const player=playerId(request)||crypto.randomUUID(),now=Date.now();
-        const recent=await env.DB.prepare('SELECT COUNT(*) AS count FROM runs WHERE player=? AND started_at>?').bind(player,now-60000).first();
-        if(recent.count>=10)return fail('Too many restarts. Try again in a minute.',429);
+        const existingPlayer=playerId(request),player=existingPlayer||crypto.randomUUID(),now=Date.now();
+        const recent=await env.DB.prepare(existingPlayer?'SELECT COUNT(*) AS count FROM runs WHERE player=? AND started_at>?':'SELECT COUNT(*) AS count FROM runs WHERE started_at>?').bind(...(existingPlayer?[player,now-60000]:[now-60000])).first();
+        if((recent?.count??0)>=(existingPlayer?10:60))return fail('Too many restarts. Try again in a minute.',429);
         const id=crypto.randomUUID();
         await env.DB.batch([
-          env.DB.prepare('DELETE FROM runs WHERE started_at<?').bind(now-86400000),
+          env.DB.prepare('DELETE FROM runs WHERE started_at<?').bind(now-3*86400000),
           env.DB.prepare('INSERT INTO runs(id,player,role,ruleset,started_at) VALUES(?,?,?,?,?)').bind(id,player,value.role,value.ruleset,now),
         ]);
         return json({id},201,{'set-cookie':`chip_player=${player}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${url.protocol==='https:'?'; Secure':''}`});

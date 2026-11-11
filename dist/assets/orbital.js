@@ -407,7 +407,7 @@ export function createOrbitalDock(){
   const rings=new Map(),ringGeo=new THREE.TorusGeometry(.38,.045,10,40),mastGeo=new THREE.CylinderGeometry(.022,.022,.5,6),mastMaterial=mat(0x2a3d49,.6,.3),guides=[];
   const guideMaterial=new THREE.LineDashedMaterial({color:0x9ff5e8,transparent:true,opacity:.55,dashSize:.14,gapSize:.12});
   function setStations(list){
-    for(const ring of rings.values()){ring.mesh.removeFromParent();ring.mast.removeFromParent();}rings.clear();
+    for(const ring of rings.values()){ring.mesh.removeFromParent();ring.mesh.material.dispose();ring.mast.removeFromParent();}rings.clear();
     for(const {id,x,z,height,w=2} of list){
       const mesh=new THREE.Mesh(ringGeo,new THREE.MeshStandardMaterial({color:0x7df0e2,emissive:0x45d8c8,emissiveIntensity:.5,roughness:.4}));
       mesh.castShadow=false;mesh.receiveShadow=false;mesh.rotation.x=Math.PI/2-.62;

@@ -198,4 +198,14 @@ test('the hosted score board and challenge links accept Blackout Shift results',
 
   const challenge = { role: DAWN, score: result.score, shipped: result.shipped };
   assert.deepEqual(parseChallenge(new URL(challengeURL(challenge, 'https://play.example/')).search), { ...challenge, stars: 3 });
+
+  const game = new ShopGame();
+  game.reset(DAWN);
+  game.surgeRemaining = 0;
+  game.surgeCooldown = 0;
+  game.setOfficePresence(true);
+  game.drain();
+  assert.equal(game.interact('office'), true, 'Interacting with the office console right as presence triggers Generator Surge succeeds cleanly');
+  assert.equal(game.drain().some(e => e.type === 'hint'), false, 'No false error toast on arrival interaction');
 });
+

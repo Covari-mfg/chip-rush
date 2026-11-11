@@ -34,7 +34,7 @@ const walkingSpeed = Number(source.match(/let speed=([\d.]+)/)?.[1]);
 assert.equal(walkingSpeed, 4.4, 'Revisit balance if production walking speed changes');
 // The owner layout lays its south halls out from the engine's hall list.
 const context = vm.createContext({ Math, HALLS });
-vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,placed,accessOf,MAPS,openHalls,hallPlots:HALL_PLOTS};`, context);
+vm.runInContext(`${layoutCode}\n${boundsCode}\nconst player={...SPAWN};\n${safeCode}\n${moveCode}\n${pathCode}\nthis.nav={layout:STATION_LAYOUT,spawn:SPAWN,player,findPath,safeSpot,moveBy,routeSegmentClear,dashStep,activateMap,mapHas,placed,accessOf,MAPS,openHalls,absentStations,hallPlots:HALL_PLOTS};`, context);
 const nav = context.nav;
 const accesses = Object.fromEntries(nav.layout.map(s => [s.id, s.access ?? { x:s.x, z:s.z+s.d/2+.63 }]));
 assert.ok(accesses.office, 'Office must have a production access point');
@@ -50,6 +50,8 @@ export const navigation = {
   activate:nav.activateMap,
   // Open for Business south halls: which are open changes the owner-wing floor.
   setHalls(ids = []) { nav.openHalls.clear(); for (const id of ids) nav.openHalls.add(id); },
+  // Stations a map keeps off its floor for now (Pocket Shift's late Deburr and crate spot).
+  setAbsent(ids = []) { nav.absentStations.clear(); for (const id of ids) nav.absentStations.add(id); },
   hallPlots:nav.hallPlots,
   has:nav.mapHas,
   maps:nav.MAPS,

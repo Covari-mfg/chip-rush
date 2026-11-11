@@ -9,7 +9,7 @@ if(!match)throw new Error('Expected pinned Three.js named exports.');
 const exports=match[1].split(',').map(s=>{const [local,name]=s.trim().split(/\s+as\s+/);return `${name||local}:${local}`;}).join(',');
 const three=`const THREE=(()=>{${source.slice(0,match.index)}\nreturn {${exports}};})();`;
 // Dependency order: each module is evaluated after the modules it imports.
-const modules=[['assets/models.js','Models'],['assets/harbor.js','Harbor'],['assets/orbital.js','Orbital'],['core.js','Core'],['manager.js','Manager'],['beacon.js','Beacon'],['orbit.js','Orbit'],['launch.js','Launch'],['firstlight.js','FirstLight'],['audio.js','Audio'],['analytics.js','Analytics'],['records.js','Records'],['social.js','Social'],['technology.js','Technology'],['workflow.js','Workflow'],['device.js','Device'],['tap-navigation.js','TapNavigation']];
+const modules=[['assets/models.js','Models'],['assets/harbor.js','Harbor'],['assets/orbital.js','Orbital'],['core.js','Core'],['manager.js','Manager'],['beacon.js','Beacon'],['orbit.js','Orbit'],['launch.js','Launch'],['firstlight.js','FirstLight'],['audio.js','Audio'],['analytics.js','Analytics'],['records.js','Records'],['social.js','Social'],['technology.js','Technology'],['workflow.js','Workflow'],['device.js','Device'],['tap-navigation.js','TapNavigation'],['pocket.js','Pocket'],['pocket-queue.js','PocketQueue'],['pocket-floor.js','PocketFloor']];
 const bundleName=new Map(modules);
 // Every music file a module names is embedded, so the standalone file plays offline.
 const music=new Map();
@@ -34,8 +34,10 @@ const strip=content=>content.replace(/^import .*?;\s*$/gm,'');
 let bundle=three;
 for(const [file,name] of modules){
   const content=await embedMusic(await read('dist/'+file));
-  const names=[...content.matchAll(/export (?:function|class|const) (\w+)/g)].map(m=>m[1]);
-  const clean=strip(content).replace(/export (?=function|class|const)/g,'');
+  const names=[...content.matchAll(/export (?:function|class|const|let) (\w+)/g)].map(m=>m[1]);
+  for(const [,list] of content.matchAll(/export\s*\{([^}]+)\};?/g))for(const item of list.split(',').map(s=>s.trim()).filter(Boolean)){const [local,exported]=item.split(/\s+as\s+/);names.push(exported?`${exported}:${local}`:local);}
+  const clean=strip(content).replace(/export (?=function|class|const|let)/g,'').replace(/export\s*\{[^}]+\};?/g,'');
+  if(/\bexport\b/.test(clean))throw new Error(`Standalone build: unhandled export syntax in ${file}`);
   bundle+=`\nconst ${name}=(()=>{${bindImports(content,file)}\n${clean}\nreturn {${names.join(',')}};})();`;
 }
 const main=await read('dist/main.js');

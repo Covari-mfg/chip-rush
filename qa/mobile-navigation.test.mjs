@@ -18,7 +18,7 @@ const behavior = ['onPhone','goToStation','tapStation','tapFloor','dash','mobile
   'syncPhoneOrientation','clearMovement','startShift','pause','resume','closeHelp']
   .map(productionFunction).join('\n');
 
-function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = false} = {}) {
+function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = false, pocketOpen = false} = {}) {
   const nodes = new Map(), events = [], routes = [], interactions = [];
   let time = 100;
   function classes() {
@@ -52,6 +52,8 @@ function fixture({interfaceMode = 'mobile', phoneDevice = false, portrait = fals
     // Open for Business hooks that pause() calls; none matter for phone navigation.
     closeStore(){},closePopover(){},cancelMove(){},saveRun(){},endBeaconEnding(){},endFirstLight(){},flightOrigins:new Map(),partTags:new Map(),
     document:{body:{classList:classes()}},
+    // Pocket Shift hooks (hidden #/pocket mode); off unless a test turns the route on.
+    pocketRoute:()=>pocketOpen,pocketing:()=>false,
   });
   vm.runInContext(behavior,context);
   return {context,$,game,player,events,routes,interactions,
@@ -203,4 +205,18 @@ test('closing help in phone portrait keeps the shift paused behind the rotation 
   assert.equal(f.$('game').inert,true);
   assert.equal(f.$('phone-rotate-screen').hidden,false);
   assert.equal(f.events.filter(event=>event==='audio:false').length,1);
+});
+
+test('the hidden Pocket Shift route lifts the phone portrait gate, and only that route', () => {
+  const pocket=fixture({phoneDevice:true,portrait:true,pocketOpen:true});
+  assert.equal(pocket.context.phonePortrait(),false);
+  pocket.context.syncPhoneOrientation();
+  assert.equal(pocket.game.mode,'playing');
+  assert.equal(pocket.$('game').inert,false);
+  assert.equal(pocket.$('phone-rotate-screen').hidden,true);
+  const home=fixture({phoneDevice:true,portrait:true});
+  assert.equal(home.context.phonePortrait(),true);
+  home.context.syncPhoneOrientation();
+  assert.equal(home.game.mode,'paused');
+  assert.equal(home.$('phone-rotate-screen').hidden,false);
 });

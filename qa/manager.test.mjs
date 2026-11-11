@@ -944,8 +944,10 @@ test('with a hall bought, idle machines move between bays and reinstall', () => 
   assert.equal(game.stations['bay-5'].wear, 30, 'Wear travels with the machine');
   assert.equal(game.installing['bay-5'], INSTALL_SECONDS, 'Moving reinstalls');
   assert.equal(game.hasMachine('lathe'), false, 'Out of use while it reinstalls');
+  assert.equal(game.config.unlocks.includes('lathe'), false, 'Removed from config.unlocks while reinstalling');
   advance(game, INSTALL_SECONDS + .1);
   assert.equal(game.hasMachine('lathe'), true);
+  assert.equal(game.config.unlocks.includes('lathe'), true, 'Restored to config.unlocks once installed');
   assert.equal(game.moves, 1);
   // A machine with a part inside cannot move.
   const q = quoteFor(game, 'plate');game.acceptQuote(q.id);cad(game, q.id);game.interact(bin(game.order(q.id)));game.interact('mill');
@@ -970,9 +972,17 @@ test('the starting machines can be sold or replaced, and net worth counts them',
   assert.deepEqual(game.gapsFor(['lathe', 'inspect', 'ship']), ['lathe']);
   assert.equal(game.buyMachine('lathe', 'mill'), true, 'The old lathe bay is a large bay');
   assert.equal(game.sellMachine('inspect'), true);
+  assert.equal(game.covariEligible({ route: ['mill', 'inspect', 'ship'], units: 1 }), false, 'Missing QC bench alone does not make an in-house route Covari-eligible');
   assert.equal(game.buyMachine('inspect', 'lathe'), false, 'The QC spot is a bench bay');
   assert.equal(game.buyMachine('inspect', 'deburr'), true);
   assert.equal(game.config.unlocks.includes('inspect'), false);
+  // Owner CAD skips an order already claimed by a hired programmer.
+  const c = fresh();
+  evening(c, () => c.hire('programmer'));
+  const q1 = quoteFor(c, 'shaft'); c.acceptQuote(q1.id);
+  const q2 = quoteFor(c, 'plate'); c.acceptQuote(q2.id);
+  c.staff[0].orderId = q1.id;
+  assert.equal(c.nextCAD()?.id, q2.id, 'Owner CAD skips the order being programmed by a hired programmer');
 });
 
 test('a saved run resumes exactly where it was, mid-day or in the evening', () => {
