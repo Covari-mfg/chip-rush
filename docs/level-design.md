@@ -351,7 +351,8 @@ starts with $1,500, a lathe, a mill and QC.
   and ending conditions. Document machines, recipes, timers, or stars if the
   level uses them; these are not mandatory ingredients.
 - Map identity is separate from scenario identity. `MAPS` in `dist/main.js`
-  currently holds `first-shop` and `night-shop`: a map picks which stations exist
+  holds `first-shop`, `night-shop`, `dawn-shop`, `launch-pad`, `harbor-pier`,
+  `owner-shop`, and `owner-wing`: a map picks which stations exist
   (adding or hiding stations relative to the shared layout), its collision
   obstacles, and its lighting theme. Other geometry (the room shell, office and
   props) is shared. Do not describe an unimplemented map as available or invent

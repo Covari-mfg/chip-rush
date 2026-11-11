@@ -1036,6 +1036,7 @@ function syncBays(){
   for(const id of Object.keys(bays)){
     const s=stations[id],op=game.manager?game.stations[id]?.op??null:s.def.baseBay?id:null;
     if(s.op!==op){
+      s.model.traverse(node=>{if(node.name==='batched-shop-detail')node.geometry?.dispose();});
       s.model.removeFromParent();
       const model=op?createMachine(op):new THREE.Group();
       model.position.set(s.def.x,0,s.def.z);model.rotation.y=s.def.rotationY??0;model.scale.setScalar(op==='lathe'||op==='mill'?1.14:1);
@@ -1185,7 +1186,7 @@ function contractState(c){
 const customerName=index=>game.customers[index]?.name??'';
 function clock(seconds){const t=Math.max(0,Math.ceil(seconds));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;}
 // The sales strip: the rules your sales manager follows, and your standing bid.
-const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Turn away'},contracts:{true:'Take',false:'Skip'}};
+const POLICY_TEXT={gaps:{decline:'Turn away',covari:'Covari',accept:'Take anyway'},contracts:{true:'Take',false:'Skip'}};
 const amountOrOff=n=>n?money(n):'Off';
 function policyStepper(key, label, shown = ''){
   return `<span class="bid"><button data-policy="${key}" data-step="-1" aria-label="Lower the ${label}">◀</button><output data-show="${key}">${shown}</output><button data-policy="${key}" data-step="1" aria-label="Raise the ${label}">▶</button></span>`;
@@ -1223,6 +1224,7 @@ function policyAction(b){
   if(!list)return;
   const along=list[Math.max(0,Math.min(list.length-1,list.indexOf(p[key])+Number(b.dataset.step)))];
   const next=key==='gaps'?(p.gaps==='decline'?'covari':'decline'):key==='reserve'?(p.reserve+1)%3:key==='contracts'?!p.contracts:along;
+  if(key==='gaps'&&next==='covari'&&!game.covariPartner)game.partnerCovari();
   game.setPolicy(key,next);processEvents();updateUI(true);
 }
 let renderedManagerTickets='';
