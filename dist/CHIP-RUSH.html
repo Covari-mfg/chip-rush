@@ -1415,6 +1415,18 @@ body.orbit-mode .pa-banner{top:auto;left:18px;bottom:clamp(58px,9vh,84px);transf
     color: #ffd36e;
     font-size: 14px;
   }
+
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen .rotate-pocket {
+    margin-top: 30px;
+    min-height: 44px;
+    padding: 11px 20px;
+    border: 1px solid #65dec980;
+    border-radius: 999px;
+    background: #1b4a50;
+    color: #f5f0db;
+    font-size: 15px;
+    font-weight: 700;
+  }
 }
 
 /* A phone in landscape uses a narrow order rail beside the shop. */
@@ -2363,7 +2375,7 @@ html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-
 </style>
 </head>
 <body>
-  <section id="phone-rotate-screen" hidden aria-label="Rotate your phone" role="status"><span class="rotate-device" aria-hidden="true"></span><p class="eyebrow">CHIP RUSH · MOBILE</p><h1>Turn your phone to play</h1><p>The shop needs a little room. Rotate to landscape for tap-to-play controls.</p><p id="phone-rotate-status"></p></section>
+  <section id="phone-rotate-screen" hidden aria-label="Rotate your phone" role="status"><span class="rotate-device" aria-hidden="true"></span><p class="eyebrow">CHIP RUSH · MOBILE</p><h1>Turn your phone to play</h1><p>The shop needs a little room. Rotate to landscape for tap-to-play controls.</p><p id="phone-rotate-status"></p><button class="rotate-pocket" id="rotate-pocket" type="button">Or play Pocket Shift upright</button></section>
   <main id="game" aria-label="Chip Rush 3D machine shop game">
     <div id="scene" aria-label="3D workshop. Use WASD or arrow keys to move, E to interact. You can also click stations." role="application"></div>
     <div class="grain" aria-hidden="true"></div>
@@ -7933,7 +7945,32 @@ function isPhoneDevice(device = {}) {
   );
 }
 
-return {deviceInterface,isPhoneDevice};})();
+// Phones open on Pocket Shift, the portrait mode, unless the player has chosen
+// the full landscape game. The choice is kept on the device under its own key;
+// tablets and desktops always open on the full game.
+const POCKET_OPT_OUT_KEY = 'chip-rush-pocket-opt-out';
+
+function pocketOptedOut(storage) {
+  try { return storage?.getItem(POCKET_OPT_OUT_KEY) === '1'; } catch { return false; }
+}
+
+function setPocketOptOut(storage, optedOut) {
+  try {
+    if (optedOut) storage?.setItem(POCKET_OPT_OUT_KEY, '1');
+    else storage?.removeItem(POCKET_OPT_OUT_KEY);
+  } catch {}
+}
+
+// The home route ('' or '#/') opens Pocket Shift on a phone that has not opted out.
+// '#/pocket' always opens it; every other route (challenges, Open for Business)
+// keeps the full game.
+function opensPocket(hash, { phone = false, storage } = {}) {
+  const route = String(hash || '').replace(/^#\/?/, '');
+  if (route === 'pocket') return true;
+  return route === '' && phone && !pocketOptedOut(storage);
+}
+
+return {deviceInterface,isPhoneDevice,POCKET_OPT_OUT_KEY,pocketOptedOut,setPocketOptOut,opensPocket};})();
 const TapNavigation=(()=>{
 // Share the same station id between its label and its 3D model. Floor taps use
 // screen coordinates instead. Call consume only for the mobile interface.
@@ -8339,7 +8376,7 @@ const {runTime,readSpeedRecords,recordClear,versionLevelRecords,saveSpeedRecords
 const {technologyBadges,technologyIcon}=Technology;
 const {orderWorkflow,stockIcon}=Workflow;
 const {ManagerGame,MANAGER_ROLE,MANAGER_MODE,MACHINES,BAYS,BAY_SIZES,UPGRADES,WING,STAFF,RUN_LENGTHS,DAY_SECONDS,COVARI_SLOTS,QUOTE_WINDOW,AD,START_CASH,RESALE,BIDS,SALES_DELAY,BREAK_FROM,SERVICE_FROM,HALLS,HALL_RENT,hallAdjacent,INSTALL_SECONDS,rentFor,opInfo,boardId,POLICY_STEPS}=Manager;
-const {deviceInterface,isPhoneDevice}=Device;
+const {deviceInterface,isPhoneDevice,opensPocket,setPocketOptOut}=Device;
 const {createTapNavigation}=TapNavigation;
 const {PocketGame,POCKET_MODE,readPocketBest,recordPocketRun}=Pocket;
 const {createStationQueue}=PocketQueue;
@@ -8378,6 +8415,10 @@ let interfaceMode=deviceMode;
 document.documentElement.dataset.interface=interfaceMode;
 const phoneDevice=isPhoneDevice(navigator);
 document.documentElement.dataset.phone=String(phoneDevice);
+// Phones open on Pocket Shift (opt-out kept on the device, dist/device.js).
+const opensPocketHere=()=>opensPocket(location.hash,{phone:phoneDevice,storage:localStorage});
+// Mark the pocket route before the shop loads, so a portrait phone never flashes the rotate prompt.
+if(opensPocketHere())document.documentElement.dataset.mode='pocket';
 const $=id=>document.getElementById(id);
 const desktopSceneLabel=$('scene').getAttribute('aria-label');
 function syncInterface(){
@@ -8526,10 +8567,10 @@ const MAPS={
     'material-round':{x:-2.8,z:5.09,access:{x:-2.8,z:4.09}},
     'material-plate':{x:0,z:5.09,access:{x:0,z:4.09}},
     'material-block':{x:2.8,z:5.09,access:{x:2.8,z:4.09}},
-    lathe:{x:-2.3,z:2.42,scale:.78,w:2.106,d:1.404,height:2.262},
-    mill:{x:2.15,z:2.42,scale:.78,w:2.496,d:1.443,height:2.418},
-    deburr:{x:-2.45,z:-1.05,scale:.8,w:1.728,d:1.048,height:1.64},
-    buffer:{x:2.4,z:-1.05,scale:.8,w:1.88,d:1.16,height:1.12},
+    lathe:{x:-2.15,z:1.8,scale:.78,w:2.106,d:1.404,height:2.262},
+    mill:{x:2.15,z:1.8,scale:.78,w:2.496,d:1.443,height:2.418},
+    deburr:{x:-2.45,z:-1.4,scale:.8,w:1.728,d:1.048,height:1.64},
+    buffer:{x:2.4,z:-1.4,scale:.8,w:1.88,d:1.16,height:1.12},
     receiving:{name:'COVARI CRATE',x:-3,z:-4.2,w:1.3,d:1.05,height:1.05,access:{x:-3,z:-3.04}},
     inspect:{x:-.25,z:-4.25,rotationY:0,scale:.8,w:1.92,d:1.28,height:1.64,access:{x:-.25,z:-2.98}},
     ship:{x:2.6,z:-4.17,rotationY:0,scale:.8,w:2.16,d:1.44,height:1.48,access:{x:2.6,z:-2.82}},
@@ -8842,7 +8883,7 @@ function showPocketPanel(state){
   $('pocket-result').hidden=!result;$('pocket-how').hidden=result;
   if(result){const r=pocketResult??{newBest:false,best:readPocketBest(localStorage)};$('pocket-shipped').textContent=game.shipped;$('pocket-points').textContent=game.score.toLocaleString();$('pocket-time').textContent=pocketClock(game.elapsed);$('pocket-new-best').hidden=!r.newBest;$('pocket-outcome').textContent=pocketBestLine(r.best);}
   else $('pocket-best').textContent=pocketBestLine(readPocketBest(localStorage));
-  $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-play').focus({preventScroll:true});
+  $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-home').textContent=phoneDevice?'Play the full game instead':'Back to home';$('pocket-play').focus({preventScroll:true});
 }
 // Endless pocket-v1 rules on their own game object; never a server run or a shared save.
 function startPocket(){clearTimeout(pocketFinaleTimer);pocketResult=null;beaconFinaleTime=0;endBeaconEnding();audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent='POCKET SHIFT · BETA';$('shift-name').textContent=POCKET_MODE.name;$('pocket-flash').className='pocket-flash';resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
@@ -9526,8 +9567,9 @@ function navigateHome(route=''){
 }
 function applyHomeRoute(){
   const route=location.hash.replace(/^#\/?/,'');
-  // Hidden route: no picker entry, home tab or board. It skips the board refresh too.
-  if(route==='pocket'){showMenu(false);setPocketMode(true);applyMap();showPocketPanel('start');return;}
+  // Pocket Shift: #/pocket, and the home route on a phone that has not opted out.
+  // No picker entry, home tab or board. It skips the board refresh too.
+  if(opensPocketHere()){showMenu(false);setPocketMode(true);applyMap();showPocketPanel('start');return;}
   showMenu();
   if(route==='open-for-business'){showHomeView('business');return;}
   if(route.startsWith('challenges')){
@@ -10401,7 +10443,7 @@ function bindControls(){
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
-  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>navigateHome();$('launch-skip').onclick=skipTerminalCount;
+  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>{if(phoneDevice)setPocketOptOut(localStorage,true);navigateHome();};$('rotate-pocket').onclick=()=>{setPocketOptOut(localStorage,false);navigateHome();};$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});

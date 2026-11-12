@@ -396,7 +396,7 @@ test('a Pocket Shift run writes only its own best and sends nothing', () => {
   const context = vm.createContext({
     $, Math, String, Object, Number, JSON, pocketGame, POCKET_MODE, readPocketBest, recordPocketRun, game:null, menuMode:true, resultShown:false, beaconFinaleTime:0,
     pocketQueue:createStationQueue({limit:3}), stations:{}, targetRing:null, path:[], pathStation:null, pocketResult:null, pocketFinaleTimer:0,
-    clearTimeout(){}, setTimeout(){},
+    clearTimeout(){}, setTimeout(){}, phoneDevice:false,
     document:{documentElement:{dataset:{mode:'pocket'}}, body:{classList:{add(){}, remove(){}, toggle(){}}}},
     localStorage:storage, save:spy('save'), saveRun:spy('saveRun'), saveSpeedRecords:spy('saveSpeedRecords'), recordClear:spy('recordClear'),
     social:new Proxy({}, {get:(_, key) => spy('social.' + String(key))}),
@@ -408,6 +408,10 @@ test('a Pocket Shift run writes only its own best and sends nothing', () => {
   vm.runInContext(['pocketing','pocketRoute','syncPocketMarkers','pocketClock','pocketBestLine','showPocketPanel','startPocket','showPocketResults','showResults','restartRun'].map(productionFunction).join('\n'), context);
   context.showPocketPanel('start');
   assert.equal($('pocket-best').textContent, 'Your best run is kept on this device.');
+  assert.equal($('pocket-home').textContent, 'Back to home', 'Off a phone the card leads back to the full home');
+  context.phoneDevice = true;context.showPocketPanel('start');
+  assert.equal($('pocket-home').textContent, 'Play the full game instead', 'On a phone Pocket Shift is home; the link is the opt-out');
+  context.phoneDevice = false;
   context.startPocket();
   assert.equal(context.game, pocketGame);
   assert.equal(context.game.mode, 'playing');
@@ -436,20 +440,22 @@ test('a Pocket Shift run writes only its own best and sends nothing', () => {
   assert.ok(saved.bestPoints > 0 && saved.longestSeconds > 60);
 });
 
-test('the hidden route is reachable only by its hash', async () => {
+test('Pocket Shift opens from its hash or a phone home route, never from the full home', async () => {
   const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
   assert.match(html, /id="pocket-panel"/);
-  const stripped = html.replace(/<section id="pocket-panel"[\s\S]*?<\/section>/, '').replace(/<section id="pocket-hud"[\s\S]*?<\/section>/, '').replace(/<div id="pocket-(band|flash)"[^>]*><\/div>/g, '');
-  assert.doesNotMatch(stripped, /pocket/i, 'Only the mode’s own panel, HUD and layers mention Pocket Shift');
+  const stripped = html.replace(/<section id="pocket-panel"[\s\S]*?<\/section>/, '').replace(/<section id="pocket-hud"[\s\S]*?<\/section>/, '').replace(/<div id="pocket-(band|flash)"[^>]*><\/div>/g, '').replace(/<button class="rotate-pocket" id="rotate-pocket"[^>]*>[^<]*<\/button>/, '');
+  assert.doesNotMatch(stripped, /pocket/i, 'Only the mode’s own panel, HUD, layers and the phone rotate prompt mention Pocket Shift');
   assert.doesNotMatch(productionFunction('buildShiftPicker'), /pocket/i);
   assert.doesNotMatch(productionFunction('showHomeView'), /pocket/i);
   assert.doesNotMatch(productionFunction('buildModeCard'), /pocket/i);
-  assert.match(productionFunction('applyHomeRoute'), /route==='pocket'/);
+  assert.match(productionFunction('applyHomeRoute'), /if\(opensPocketHere\(\)\)\{/);
+  assert.match(main, /\$\('pocket-home'\)\.onclick=\(\)=>\{if\(phoneDevice\)setPocketOptOut\(localStorage,true\);navigateHome\(\);\}/, 'On a phone, leaving Pocket Shift for the full game is the opt-out');
+  assert.match(main, /\$\('rotate-pocket'\)\.onclick=\(\)=>\{setPocketOptOut\(localStorage,false\);navigateHome\(\);\}/, 'The rotate prompt opts back in');
   assert.match(html, /<section id="pocket-hud"[^>]*hidden/, 'The pocket HUD starts hidden');
   assert.match(html, /<div id="pocket-band"[^>]*hidden/);
   const css = await readFile(new URL('../dist/mobile.css', import.meta.url), 'utf8');
   const gate = css.slice(css.indexOf('#phone-rotate-screen {'), css.indexOf('@media (orientation: landscape) {\n  :where(html[data-interface="mobile"][data-phone="true"]) body.playing #shop-sidebar'));
-  assert.equal((gate.match(/html\[data-phone="true"\]:not\(\[data-mode="pocket"\]\)/g) ?? []).length, 11, 'Every rotate-gate rule exempts only the pocket route');
+  assert.equal((gate.match(/html\[data-phone="true"\]:not\(\[data-mode="pocket"\]\)/g) ?? []).length, 12, 'Every rotate-gate rule exempts only the pocket route');
   assert.doesNotMatch(gate, /:where\(html\[data-phone="true"\]\)/);
   // Every pocket rule is scoped to the pocket route or to pocket-only elements.
   const pocketCss = css.slice(css.indexOf('/* Pocket Shift (hidden #/pocket route)'));

@@ -800,6 +800,18 @@
     color: #ffd36e;
     font-size: 14px;
   }
+
+  :where(html[data-phone="true"]:not([data-mode="pocket"])) #phone-rotate-screen .rotate-pocket {
+    margin-top: 30px;
+    min-height: 44px;
+    padding: 11px 20px;
+    border: 1px solid #65dec980;
+    border-radius: 999px;
+    background: #1b4a50;
+    color: #f5f0db;
+    font-size: 15px;
+    font-weight: 700;
+  }
 }
 
 /* A phone in landscape uses a narrow order rail beside the shop. */

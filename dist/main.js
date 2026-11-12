@@ -13,7 +13,7 @@ import { runTime, readSpeedRecords, recordClear, versionLevelRecords, saveSpeedR
 import { technologyBadges, technologyIcon } from './technology.js';
 import { orderWorkflow, stockIcon } from './workflow.js';
 import { ManagerGame, MANAGER_ROLE, MANAGER_MODE, MACHINES, BAYS, BAY_SIZES, UPGRADES, WING, STAFF, RUN_LENGTHS, DAY_SECONDS, COVARI_SLOTS, QUOTE_WINDOW, AD, START_CASH, RESALE, BIDS, SALES_DELAY, BREAK_FROM, SERVICE_FROM, HALLS, HALL_RENT, hallAdjacent, INSTALL_SECONDS, rentFor, opInfo, boardId, POLICY_STEPS } from './manager.js';
-import { deviceInterface, isPhoneDevice } from './device.js';
+import { deviceInterface, isPhoneDevice, opensPocket, setPocketOptOut } from './device.js';
 import { createTapNavigation } from './tap-navigation.js';
 import { PocketGame, POCKET_MODE, readPocketBest, recordPocketRun } from './pocket.js';
 import { createStationQueue } from './pocket-queue.js';
@@ -33,6 +33,10 @@ let interfaceMode=deviceMode;
 document.documentElement.dataset.interface=interfaceMode;
 const phoneDevice=isPhoneDevice(navigator);
 document.documentElement.dataset.phone=String(phoneDevice);
+// Phones open on Pocket Shift (opt-out kept on the device, dist/device.js).
+const opensPocketHere=()=>opensPocket(location.hash,{phone:phoneDevice,storage:localStorage});
+// Mark the pocket route before the shop loads, so a portrait phone never flashes the rotate prompt.
+if(opensPocketHere())document.documentElement.dataset.mode='pocket';
 const $=id=>document.getElementById(id);
 const desktopSceneLabel=$('scene').getAttribute('aria-label');
 function syncInterface(){
@@ -181,10 +185,10 @@ const MAPS={
     'material-round':{x:-2.8,z:5.09,access:{x:-2.8,z:4.09}},
     'material-plate':{x:0,z:5.09,access:{x:0,z:4.09}},
     'material-block':{x:2.8,z:5.09,access:{x:2.8,z:4.09}},
-    lathe:{x:-2.3,z:2.42,scale:.78,w:2.106,d:1.404,height:2.262},
-    mill:{x:2.15,z:2.42,scale:.78,w:2.496,d:1.443,height:2.418},
-    deburr:{x:-2.45,z:-1.05,scale:.8,w:1.728,d:1.048,height:1.64},
-    buffer:{x:2.4,z:-1.05,scale:.8,w:1.88,d:1.16,height:1.12},
+    lathe:{x:-2.15,z:1.8,scale:.78,w:2.106,d:1.404,height:2.262},
+    mill:{x:2.15,z:1.8,scale:.78,w:2.496,d:1.443,height:2.418},
+    deburr:{x:-2.45,z:-1.4,scale:.8,w:1.728,d:1.048,height:1.64},
+    buffer:{x:2.4,z:-1.4,scale:.8,w:1.88,d:1.16,height:1.12},
     receiving:{name:'COVARI CRATE',x:-3,z:-4.2,w:1.3,d:1.05,height:1.05,access:{x:-3,z:-3.04}},
     inspect:{x:-.25,z:-4.25,rotationY:0,scale:.8,w:1.92,d:1.28,height:1.64,access:{x:-.25,z:-2.98}},
     ship:{x:2.6,z:-4.17,rotationY:0,scale:.8,w:2.16,d:1.44,height:1.48,access:{x:2.6,z:-2.82}},
@@ -497,7 +501,7 @@ function showPocketPanel(state){
   $('pocket-result').hidden=!result;$('pocket-how').hidden=result;
   if(result){const r=pocketResult??{newBest:false,best:readPocketBest(localStorage)};$('pocket-shipped').textContent=game.shipped;$('pocket-points').textContent=game.score.toLocaleString();$('pocket-time').textContent=pocketClock(game.elapsed);$('pocket-new-best').hidden=!r.newBest;$('pocket-outcome').textContent=pocketBestLine(r.best);}
   else $('pocket-best').textContent=pocketBestLine(readPocketBest(localStorage));
-  $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-play').focus({preventScroll:true});
+  $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-home').textContent=phoneDevice?'Play the full game instead':'Back to home';$('pocket-play').focus({preventScroll:true});
 }
 // Endless pocket-v1 rules on their own game object; never a server run or a shared save.
 function startPocket(){clearTimeout(pocketFinaleTimer);pocketResult=null;beaconFinaleTime=0;endBeaconEnding();audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent='POCKET SHIFT · BETA';$('shift-name').textContent=POCKET_MODE.name;$('pocket-flash').className='pocket-flash';resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
@@ -1181,8 +1185,9 @@ function navigateHome(route=''){
 }
 function applyHomeRoute(){
   const route=location.hash.replace(/^#\/?/,'');
-  // Hidden route: no picker entry, home tab or board. It skips the board refresh too.
-  if(route==='pocket'){showMenu(false);setPocketMode(true);applyMap();showPocketPanel('start');return;}
+  // Pocket Shift: #/pocket, and the home route on a phone that has not opted out.
+  // No picker entry, home tab or board. It skips the board refresh too.
+  if(opensPocketHere()){showMenu(false);setPocketMode(true);applyMap();showPocketPanel('start');return;}
   showMenu();
   if(route==='open-for-business'){showHomeView('business');return;}
   if(route.startsWith('challenges')){
@@ -2056,7 +2061,7 @@ function bindControls(){
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
   $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
-  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>navigateHome();$('launch-skip').onclick=skipTerminalCount;
+  $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>{if(phoneDevice)setPocketOptOut(localStorage,true);navigateHome();};$('rotate-pocket').onclick=()=>{setPocketOptOut(localStorage,false);navigateHome();};$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
   addEventListener('pointerdown',e=>{if(popover&&!e.target.closest('#floor-popover,.station-label,#wing-sign,.hall-sign'))closePopover();});

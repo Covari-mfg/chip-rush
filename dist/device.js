@@ -20,3 +20,28 @@ export function isPhoneDevice(device = {}) {
     /Android/i.test(userAgent) && /\bMobile\b/i.test(userAgent)
   );
 }
+
+// Phones open on Pocket Shift, the portrait mode, unless the player has chosen
+// the full landscape game. The choice is kept on the device under its own key;
+// tablets and desktops always open on the full game.
+export const POCKET_OPT_OUT_KEY = 'chip-rush-pocket-opt-out';
+
+export function pocketOptedOut(storage) {
+  try { return storage?.getItem(POCKET_OPT_OUT_KEY) === '1'; } catch { return false; }
+}
+
+export function setPocketOptOut(storage, optedOut) {
+  try {
+    if (optedOut) storage?.setItem(POCKET_OPT_OUT_KEY, '1');
+    else storage?.removeItem(POCKET_OPT_OUT_KEY);
+  } catch {}
+}
+
+// The home route ('' or '#/') opens Pocket Shift on a phone that has not opted out.
+// '#/pocket' always opens it; every other route (challenges, Open for Business)
+// keeps the full game.
+export function opensPocket(hash, { phone = false, storage } = {}) {
+  const route = String(hash || '').replace(/^#\/?/, '');
+  if (route === 'pocket') return true;
+  return route === '' && phone && !pocketOptedOut(storage);
+}

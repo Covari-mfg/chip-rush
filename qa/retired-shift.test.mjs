@@ -19,7 +19,7 @@ function fixture(){
   const context=vm.createContext({shiftRuleset,SHIFTS,isPlayableShift,nextShiftIndex,$,
     document:{createElement:element},selectedShift:0,bests:SHIFTS.map(()=>0),grades:SHIFTS.map(()=>0),speedRecords:{},
     runTime:String,showHomeView(){},hidePanels(){},showModelCredit(){},clock:String,SHIFT_CREDIT:{},
-    location:{hash:''},showMenu(){},briefingManager:false,
+    location:{hash:''},showMenu(){},briefingManager:false,opensPocketHere:()=>false,
     endBeaconEnding(){},endFirstLight(){},flightOrigins:new Map(),partTags:new Map(),audio:{init(){}},phonePortrait:()=>false,closePopover(){},resetBays(){},enterFloor(){},
     resetPad(){},processEvents(){},updateUI(){},classicGame:{reset:index=>started.push(index)},launchGame:{},
     social:{start(){}},game:null,

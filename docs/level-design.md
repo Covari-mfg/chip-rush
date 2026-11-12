@@ -345,9 +345,13 @@ starts with $1,500, a lathe, a mill and QC.
   briefing offer Continue, mid-day saves resume paused, and a finished run
   clears it.
 
-Pocket Shift (`#/pocket`, hidden, beta) is a portrait phone mode, not a level:
-it has no `SHIFTS` entry (game role −2) and is not on the home screen, picker,
-tabs or leaderboard. Ruleset `pocket-v1` (`dist/pocket.js`, `PocketGame`) is
+Pocket Shift (`#/pocket`, beta) is a portrait phone mode, not a level: it has
+no `SHIFTS` entry (game role −2) and is not on the home screen, picker, tabs or
+leaderboard. It is the default on phones: the plain home URL opens it, and
+"Play the full game instead" on its card opts that phone out (the choice is kept
+under `chip-rush-pocket-opt-out`; the portrait rotate prompt offers it again
+and opts back in). Tablets and desktops open on the full game; challenge links
+and `#/open-for-business` keep the full game everywhere (`dist/device.js`). Ruleset `pocket-v1` (`dist/pocket.js`, `PocketGame`) is
 endless: a fixed-seed order stream grows from Pocket spacer and Mounting plate
 to Bearing housing (order 5) and the deburr parts Dial knob and Valve body
 (order 11); arrivals ease from every 18 s to every 9 s over six minutes and
@@ -357,13 +361,13 @@ third expired order ends the run; there is no timer. Shipments score with
 (the floor has none) after two shipments and again 60 s after each offer
 resolves; a Covari job is never a strike. Controls are a plan of up to three
 tapped stations, with no Dash, on the full-width `pocket-shop` floor (stock
-bins in front, then Lathe and Mill, Deburr and the Hold bench, then Inspect and
+bins in front, then Lathe and Mill set back from the bins, Deburr and the Hold bench, then Inspect and
 Shipping, with the Covari crate spot by the back door). Deburr arrives shortly
 before order 11 and the crate spot shows only while a delivery is due
 (`dist/pocket-floor.js`); stations carry small icon badges whose words match the
 order tickets, and a tap near a station counts for the nearest one. The route
 always uses the touch layout, in a centred phone-width column on a wide desktop
-window. The only save is a local best under `chip-rush-pocket-v1`; no server
+window. The only game save is a local best under `chip-rush-pocket-v1`; no server
 runs, challenge links or analytics. See
 [experiments/pocket-shift.md](experiments/pocket-shift.md).
 
