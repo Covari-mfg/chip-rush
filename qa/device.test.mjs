@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deviceInterface, isPhoneDevice } from '../dist/device.js';
+import { deviceInterface, isPhoneDevice, opensPocket, pocketOptedOut, setPocketOptOut, POCKET_OPT_OUT_KEY } from '../dist/device.js';
 
 test('phones and tablets select the mobile interface', () => {
   const devices = [
@@ -78,4 +78,32 @@ test('small desktop windows and touchscreen laptops never become phones', () => 
   for (const desktop of desktops) {
     assert.equal(isPhoneDevice({...desktop,width:390,height:844,pointer:'coarse'}),false,desktop.userAgent);
   }
+});
+
+function memoryStorage() {
+  const values = new Map();
+  return {getItem:key => values.has(key) ? values.get(key) : null, setItem:(key, value) => values.set(key, String(value)), removeItem:key => values.delete(key)};
+}
+
+test('phones open on Pocket Shift until the player opts out', () => {
+  const storage = memoryStorage();
+  for (const hash of ['', '#', '#/']) assert.equal(opensPocket(hash, {phone:true, storage}), true, `phone home ${JSON.stringify(hash)}`);
+  for (const hash of ['', '#/']) assert.equal(opensPocket(hash, {phone:false, storage}), false, 'tablets and desktops keep the full game');
+  for (const hash of ['#/challenges', '#/challenges/first-shift', '#/open-for-business']) assert.equal(opensPocket(hash, {phone:true, storage}), false, `${hash} keeps the full game on a phone`);
+  setPocketOptOut(storage, true);
+  assert.equal(storage.getItem(POCKET_OPT_OUT_KEY), '1');
+  assert.equal(pocketOptedOut(storage), true);
+  assert.equal(opensPocket('', {phone:true, storage}), false, 'Opted out: the phone opens the full game');
+  setPocketOptOut(storage, false);
+  assert.equal(storage.getItem(POCKET_OPT_OUT_KEY), null);
+  assert.equal(opensPocket('', {phone:true, storage}), true, 'Opting back in restores the default');
+});
+
+test('#/pocket always opens Pocket Shift, and blocked storage keeps the default', () => {
+  const storage = memoryStorage();setPocketOptOut(storage, true);
+  assert.equal(opensPocket('#/pocket', {phone:true, storage}), true);
+  assert.equal(opensPocket('#/pocket', {phone:false}), true);
+  const blocked = {getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); }};
+  assert.equal(opensPocket('', {phone:true, storage:blocked}), true);
+  assert.doesNotThrow(() => setPocketOptOut(blocked, true));
 });

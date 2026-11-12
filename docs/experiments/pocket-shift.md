@@ -2,8 +2,9 @@
 
 Pocket Shift is a portrait, one-thumb way to play on a phone. It is a separate
 mode, not a level and not a model submission: it has no entry in `SHIFTS`, no
-legacy index, no server runs, no leaderboard and no challenge links, and it is
-reachable only through the hidden route `#/pocket`. Step 1 was a feel
+legacy index, no server runs, no leaderboard and no challenge links. It started
+as the hidden route `#/pocket`; since step 5 it is also the default home on
+phones, with an opt-out. Step 1 was a feel
 prototype on First Shift's rules. Step 2, recorded here, turns it into the
 format the owner chose: **endless, three strikes**, ruleset `pocket-v1`, with a
 local best only. This is a local development record; creator playtest on a real
@@ -301,6 +302,25 @@ comparison above is the like-for-like measure.
      the hidden Receiving pallet widened Receiving's bounding box on other maps
      (pixels unchanged, QA footprint changed), so the pallet and the bench are
      now attached only on their own maps.
+5. **Phone default and lathe spacing** (2026-11-12).
+   - *Decided by the owner* after launch: Pocket Shift becomes the default on
+     mobile, with an opt-out. *Observed by the owner*: the Lathe may be too
+     close to the Round stock bin.
+   - *Changed*: on a phone (`isPhoneDevice`; tablets keep the full game) the
+     plain home URL opens Pocket Shift (`opensPocket` in `dist/device.js`).
+     The card's link reads "Play the full game instead" on a phone and sets
+     `chip-rush-pocket-opt-out`; the portrait rotate prompt gains "Or play
+     Pocket Shift upright", which clears it. `#/pocket` always opens the mode;
+     challenge links and `#/open-for-business` never do. The pocket route is
+     marked before the shop loads, so a portrait phone no longer flashes the
+     rotate prompt while loading.
+   - *Changed on the floor*: Lathe and Mill move from z 2.42 to 1.8 (Lathe
+     also x −2.3 → −2.15, mirroring the Mill), and Deburr and the Hold bench
+     from z −1.05 to −1.4 to keep the machine tops off Deburr's badge. The
+     Lathe's standing spot is now about 1 m from the Round bin's (was 0.34 m)
+     and its badge no longer sits on the bin. `qa/pocket-balance.mjs --assert`
+     still holds (slow 165 s, ordinary 273 s, expert 343 s; was 165 / 292 /
+     356 s): simulation only.
 
 ## What was built
 
