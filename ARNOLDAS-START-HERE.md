@@ -37,6 +37,9 @@ For the playable shifts, stars depend on shipped orders, not score or rush bonus
 | Launch Window | T−3:40 countdown | 4 | 5 | 7 |
 | Last Light | 3 min 40s | 6 | 9 | 12 |
 | First Light | 3 min 40s | 6 | 9 | 12 |
+| Bellweather | 3 minutes | 4 | 6 | 8 |
+
+To review Bellweather, choose it from Shifts or open the local preview at `/#/challenges/bellweather`. Pick up a tuned bell on the pitch you want, or use the three pitch keys at the bench. Four bells earn the answering peal. The results screen lets you keep a recording.
 
 Night Shift (playable level 3) is a calmer after-hours chapter: no calls, a darker shop, a Covari offer for finishing work the floor cannot do (heat treatment, powder coating or laser marking), and two new stations, DEBURR and ANODIZE, in the middle of the floor. Its routes run up to four steps between stock and inspection, and two orders share the single color bath. Worth checking: is the finishing island readable, and do the dial-knob, ocean-collar, satin-bracket and valve-body routes feel fair?
 

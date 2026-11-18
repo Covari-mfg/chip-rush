@@ -605,3 +605,24 @@ body.firstlight-finale #shop-sidebar,body.firstlight-finale #orders,body.firstli
 @media(max-height:520px){.firstlight{flex-direction:row;gap:22px}.firstlight-scope{width:min(74vh,44vw)}.firstlight-copy{min-height:0;max-width:40vw}}
 /* Bottom left, clear of every station label and the toast. */
 body.orbit-mode .pa-banner{top:auto;left:18px;bottom:clamp(58px,9vh,84px);transform:none;max-width:min(430px,60vw);animation:none}
+
+/* Punched brass score strip; the player can read the whole tune with sound off. */
+#bell-score{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);pointer-events:none;z-index:3;display:flex;align-items:center;gap:14px;padding:7px 13px;color:#f4d398;background:#282527ed;border:1px solid #b89762;border-radius:4px;box-shadow:0 3px 12px #141b2344}
+#bell-score[hidden]{display:none}
+#bell-score>span{font:italic 17px Georgia,serif;white-space:nowrap}
+#bell-notes{display:flex;background:repeating-linear-gradient(to bottom,transparent 0 6px,#bc995238 6px 7px)}
+#bell-notes i{width:20px;height:29px;position:relative;text-align:center;font:600 9px/1 monospace;color:transparent;border-left:1px solid #bd9f722d}
+#bell-notes i::before{content:'';position:absolute;top:48%;left:38%;width:4px;height:2px;background:#c8b99977}
+#bell-notes i[data-note]::before{top:calc(70% - var(--pitch)*9%);background:#f2c167;width:8px;height:5px;border-radius:50%;transform:rotate(-18deg)}
+#bell-notes i.sounding{background:#d1b68633;border-bottom:2px solid #ffd594}
+body.bell-finale #shop-sidebar,body.bell-finale #game-footer,body.bell-finale #station-labels,body.bell-finale #live-hud,body.bell-finale #floating-text,body.bell-finale #carried-job{visibility:hidden}
+#bell-concert{background:linear-gradient(0deg,#1d2735f7,#253044dc);border:1px solid #d0a65b80;border-radius:4px;z-index:5}
+#bell-concert h2{font-family:Georgia,serif;font-weight:normal}
+@media(max-width:1000px){#bell-score>span{display:none}#bell-score{padding:4px 7px}#bell-notes i{width:15px;height:24px}}
+@media(max-width:700px){#bell-score{bottom:6px}#bell-notes i{width:11px;height:18px}}
+
+#bell-keys{display:flex;gap:4px;pointer-events:auto}
+#bell-notes[hidden],#bell-keys[hidden]{display:none}
+#bell-keys button{min-width:42px;height:34px;padding:0 10px;border:1px solid #ae9067;border-radius:3px;color:#4a362e;background:#ead9b4;font:bold 15px Georgia,serif;cursor:pointer}
+#bell-keys button.singing{background:#ffd289;box-shadow:inset 0 -3px #ab642c}
+#bell-keys button:focus-visible{outline:2px solid white;outline-offset:2px}

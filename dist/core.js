@@ -171,6 +171,18 @@ export const SHIFTS = [
     recipes:[0,1,2,1,0,2,0,1,2,1,0,2],unlocks:['lathe','mill','polish','gild','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:ORBIT_SOURCE_JOBS,calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
   },
+  {
+    id:'bellweather',mapId:'bell-terrace',engine:'bells',name:'Bellweather',author:'GPT-6.2 Astra',harness:'Codex',musicTrack:'bells',
+    subtitle:'Eight bells. You write the tune.',
+    goal:'Hang four bells before the evening peal. Eight fill the tower.',
+    brief:'From orbit you could see the lights of this valley. Down here, the villages used to tell time by a bell tower. Its eight hooks are empty. Cut a bronze blank, then take it to Tune. The bench sounds three pitches in turn. Collect the bell on the note you want, then hang it at the Belfry. Each bell becomes a beat in the tune that travels down the valley.',
+    tip:'Any pitch works. The bench shows the note as it rings. Collect on the pitch you like, or choose it directly at the bench with 1, 2, 3 or a tap.',
+    retryTip:'Cut your next blank while the tuning bench works. Every bell you hang adds a note.',
+    duration:180,firstArrival:9,interval:17,deadline:85,maxOrders:8,
+    recipes:[0,1,0,1,0,1,0,1],unlocks:['lathe','mill','inspect'],stock:['round','plate'],
+    programming:false,sourcing:true,sourceJobs:[{name:'Inscribed dedication plate',capability:'Laser marking',technology:'lm',gap:'No laser engraver on the terrace'}],
+    calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
+  },
 ];
 
 // Retired slots remain in the catalog for historical saves and scores. Entry

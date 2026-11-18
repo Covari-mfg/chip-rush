@@ -408,3 +408,15 @@ test('Last Light early completion accounts for tender return time, 72h run reten
   assert.equal(board.status,200);
 });
 
+
+test('Bellweather results respect its shipment and sourcing limits',()=>{
+  const role=SHIFTS.findIndex(shift=>shift.id==='bellweather'), level=SHIFTS[role];
+  assert.equal(role,8);
+  const run={role,ruleset:shiftRuleset(role),started_at:START};
+  const value={role,score:5000,shipped:8,missed:0,sourced:1,calls:0};
+  const eligibleAt=START+level.duration*1000;
+  assert.equal(validateResult(value,run,eligibleAt),null);
+  assert.ok(validateResult({...value,shipped:9},run,eligibleAt));
+  assert.ok(validateResult({...value,sourced:2},run,eligibleAt));
+  assert.ok(validateResult({...value,calls:1},run,eligibleAt));
+});

@@ -8,7 +8,7 @@ A complete single-player 3D machine-shop game. Original procedural assets, short
 
 Open **dist/CHIP-RUSH.html** in a current Chrome, Edge, Firefox, or Safari browser. Everything is embedded, including the 3D renderer. No account, server, network, or build step is required. WebGL 2 and hardware acceleration must be available.
 
-Six playable shifts explore the shop and its next chapters:
+Eight playable shifts explore the shop and its next chapters:
 
 | Level | Shift | Clear target | New responsibility | Stars |
 | --- | --- | --- | --- | --- |
@@ -19,6 +19,9 @@ Six playable shifts explore the shop and its next chapters:
 | Launch Window | T−3:40 countdown | 4 assemblies | Kits of parts joined in a robot assembly cell and stacked onto a rocket; liftoff or scrub at T−10; Covari for metal printing, carbon layup or stir welding | 4 / 5 / 7 |
 | Last Light | 3 min 40s | 6 delivered parts | Harbor pier, three-slot quay, player-dispatched tender, a working lighthouse and boats coming home; Covari for precision optical grinding | 6 / 9 / 12 |
 | First Light | 3 min 40s | 6 mirror segments | Orbital dock: toss parts in zero-g with E, float across the well, one-part catch rings, a telescope mirror to finish and the picture it takes; Covari for the sunshield film | 6 / 9 / 12 |
+| Bellweather | 3 minutes | 4 bells | Cut bronze blanks, choose their pitches, and hang them in a hilltop belfry. The valley answers your melody. Save it as a WAV. | 4 / 6 / 8 |
+
+Bellweather is the local review chapter from GPT-6.2 Astra and Codex. [Playtest and experiment record](docs/experiments/bellweather.md).
 
 **Open for Business** is a separate shop-manager game mode (Claude Opus 5.5, Claude Code), always available from its start-screen tab; it needs no cleared shifts. You run the shop until you stop: each working day is 2½ minutes, and any evening you can retire and post the result. Quotes from repeat customers arrive all day: bid on them (higher bids pay more but win less often), turn away work your floor cannot make, or send it to Covari. Accepting a job without the process means it expires, costing cash, reputation and the customer's loyalty. Multi-day contracts bundle several parts on one card. Click an empty bay on the floor to buy a machine for it; build the east wing for large bays that take extra lathes, mills and QC benches, then south halls that grow the floor to about ten times the first room (zoom and drag to look around) and let you move machines between bays. Expedite a job to put it first for your staff, or ask the customer for one more day and risk them taking it elsewhere. Machines wear and can break with a part inside, so repair them in person or hire a maintenance tech. Hire CAD programmers, shop runners, a shipping clerk and a sales manager who answers quotes with the rules you set on the sales strip, including a review line for big quotes and a Covari limit for small jobs. Rent and wages are due every evening; a run ends bankrupt if cash goes below zero. Stars count days survived (3 / 5 / 7). Final net worth posts to one Open for Business leaderboard (`manager-v1-endless`), which also lists earlier 3-, 5-, and 7-day scores, ranked by net worth. A run in progress saves as you play and can be continued from the Open for Business tab. See [docs/experiments/open-for-business.md](docs/experiments/open-for-business.md).
 

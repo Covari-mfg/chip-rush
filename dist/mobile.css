@@ -1072,6 +1072,25 @@
 :where(html[data-interface="mobile"]) #welcome #start-button{position:static;transform:none;width:calc(100% - 6px);margin:0 3px;padding:10px 15px}
 :where(html[data-interface="mobile"]) #clear-run:not([hidden]){display:flex}
 
+/* The full-game picker needs to clear the fixed header after leaving Pocket Shift. */
+@media (orientation: landscape) and (max-height: 599px) {
+  html[data-interface="mobile"] #welcome.welcome-panel {
+    margin-top: calc(76px + var(--mobile-safe-top));
+  }
+  html[data-interface="mobile"] #home-leaders {
+    top: calc(78px + var(--mobile-safe-top));
+  }
+}
+
+/* The touch controls already use the centre for the next-station hint. */
+html[data-interface="mobile"] #bell-score {
+  left: auto;
+  right: max(9px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  transform: none;
+}
+html[data-interface="mobile"] #bell-keys button { min-width: 44px; height: 36px; }
+
 /* Pocket Shift (hidden #/pocket route): portrait, one thumb. html[data-mode="pocket"]
    is set only while that route is open; nothing here touches any other screen.
    The route always uses the touch interface (a desktop browser included), and

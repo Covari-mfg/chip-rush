@@ -37,6 +37,7 @@ count playable entries independently of these legacy identities.
 | 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
 | 6 | `last-light` | Last Light | 220s | 6 deliveries | 6 / 9 / 12 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
 | 7 | `first-light` | First Light | 220s | 6 segments | 6 / 9 / 12 | Zero-g toss (E) and one-part catch rings on the `orbital-dock` ring, with a well the machinist floats across; the telescope mirror is the shipping station; the ending is the picture it takes; sunshield film outsourced |
+| 8 | `bellweather` | Bellweather | 180s | 4 bells | 4 / 6 / 8 | Tune and hang bells on a mountain terrace. Shipment order and pitch choices compose the evening peal. Covari engraves the dedication plate. |
 
 First Shift and Rush Hour use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
@@ -576,3 +577,11 @@ shader behind it; `orbitSun()` takes the shift from full sun into shadow and
 Music track `orbit`: three synthesized stems layered by segments set.
 
 Legacy index 7, shared ruleset and board, no migration.
+
+## Bellweather (`bellweather`)
+
+After First Light looks down on the coast, the shop returns to one of the valleys below it. A hilltop terrace serves an eight-bell carillon. Round blanks go to the lathe, plate blanks to the mill. Each then spends four seconds on the tuning bench. Once ready, the bench auditions three pentatonic pitches, changing every 1.15 seconds. Collecting the bell fixes its currently sounding note. A player standing at the bench can also press 1, 2 or 3 or tap the corresponding marked key. A machine swap tunes the outgoing bell and starts the new blank. Recycling clears its pitch.
+
+Hanging a bell at the Belfry earns ordinary shipment points and appends the chosen pitch to an eight-beat phrase in delivery order. Unfilled hooks leave rests. Four bells clear the chapter and earn a reply from the village an octave higher. Six and eight earn the other stars. The first order arrives immediately, the second after nine seconds, then every 17 seconds with the usual board and end-of-shift constraints. Ordinary deadlines are 85 seconds, with 14 extra for the opener. The shift lasts up to three minutes. The closing performance is skippable and runs outside the score clock. A player can download the composition in stereo WAV from results.
+
+Covari can laser-mark a dedication plate that this floor cannot engrave. Its ordinary delivery, QC and 300 points leave the tune and stars untouched. The chapter appends at index 8 to the released catalog and uses the shared score bounds. Earlier level IDs, timing records, save versions and public challenge formats are preserved. See the [experiment record](experiments/bellweather.md).

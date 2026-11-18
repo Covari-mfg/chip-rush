@@ -185,7 +185,7 @@ export class ShopAudio {
   // 'launch' Launch Window's layered countdown stems; 'harbor' Last Light;
   // 'orbit' First Light's three synthesized stems.
   setTrack(track='country'){
-    const next=['storm','launch','harbor','orbit'].includes(track)?track:'country';
+    const next=['storm','launch','harbor','orbit','bells'].includes(track)?track:'country';
     if(next===this.track)return;
     this.track=next;this.musicOffset=0;
     if(this.ctx&&this.musicSource){
@@ -233,7 +233,7 @@ export class ShopAudio {
     const orbit=this.track==='orbit',stems=orbit?(this.orbitStems||(this.orbitStems=buildOrbitStems(this.ctx))):this.stemBuffers;
     // A device that cannot build buffers plays First Light without music.
     const layered=this.track==='launch'||orbit,loop=orbit?ORBIT_LOOP_SECONDS:LAUNCH_LOOP_SECONDS;
-    const now=this.ctx.currentTime,launch=this.active&&layered,single=this.active&&!layered;
+    const now=this.ctx.currentTime,launch=this.active&&layered,single=this.active&&!layered&&this.track!=='bells';
     if(!launch&&this.stemSources){
       const first=this.stemSources[0];this.stemOffset=(first.offset+now-first.startedAt)%first.loop;
       for(const {source,fade} of this.stemSources){fade.gain.cancelScheduledValues(now);fade.gain.setTargetAtTime(0,now,.05);source.stop(now+.25);}
