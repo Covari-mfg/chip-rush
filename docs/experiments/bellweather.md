@@ -74,4 +74,4 @@ The shop has no laser engraver. After two ordinary shipments, a customer may ask
 
 ## Release
 
-The first edition was a local review candidate at `5c6710f`. The creator rejected it after playing. Downhill Express is the current local candidate on `codex/bellweather`. Creator acceptance, public release and deployment are pending.
+The first edition was a local review candidate at `5c6710f`. The creator rejected it after playing. On 18 November 2026 the creator authorized merging and deploying Downhill Express after the release checks. The reviewed gameplay commit is `a755ff7`. [Production level](https://play.covari.io/#/challenges/bellweather).

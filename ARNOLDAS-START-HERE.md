@@ -39,7 +39,7 @@ Stars track completed deliveries and shipments. The shop shifts finish early whe
 | First Light | 3 min 40s | 6 | 9 | 12 |
 | Bellweather · Downhill Express | At the terminus | 4 | 6 | 8 |
 
-To review Bellweather, choose it from Shifts or open the local preview at `/#/challenges/bellweather`. Use A/D or Left/Right to switch tracks, Space to throw on the green sleepers, S or Down to brake, and R to retry. Hit gold for a boost, or release on gold one track over to bank the throw.
+To play Bellweather, choose it from Shifts or [open Downhill Express directly](https://play.covari.io/#/challenges/bellweather). Use A/D or Left/Right to switch tracks, Space to throw on the green sleepers, S or Down to brake, and R to retry. Hit gold for a boost, or release on gold one track over to bank the throw.
 
 Night Shift (playable level 3) is a calmer after-hours chapter: no calls, a darker shop, a Covari offer for finishing work the floor cannot do (heat treatment, powder coating or laser marking), and two new stations, DEBURR and ANODIZE, in the middle of the floor. Its routes run up to four steps between stock and inspection, and two orders share the single color bath. Worth checking: is the finishing island readable, and do the dial-knob, ocean-collar, satin-bracket and valve-body routes feel fair?
 
