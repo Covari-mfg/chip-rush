@@ -606,5 +606,5 @@ body.firstlight-finale #shop-sidebar,body.firstlight-finale #orders,body.firstli
 /* Bottom left, clear of every station label and the toast. */
 body.orbit-mode .pa-banner{top:auto;left:18px;bottom:clamp(58px,9vh,84px);transform:none;max-width:min(430px,60vw);animation:none}
 
-/* The downhill camera and cab have their own full-screen play surface. */
-body.rail-mode #game > :is(.topbar,.grain,#live-hud,#shop-sidebar,#game-footer,#station-labels,#staff-tags,#floating-text,#carried-job,#pa-banner,#toast,#wing-sign,#zoom-controls,#mobile-tap-hint,#mobile-dash,#touch-shop,.mobile-controls,.hall-sign) { display:none!important }
+/* The lathe and its controls have their own full-screen play surface. */
+body.turning-mode #game > :is(.topbar,.grain,#live-hud,#shop-sidebar,#game-footer,#station-labels,#staff-tags,#floating-text,#carried-job,#pa-banner,#toast,#wing-sign,#zoom-controls,#mobile-tap-hint,#mobile-dash,#touch-shop,.mobile-controls,.hall-sign) { display:none!important }

@@ -1,5 +1,9 @@
 # CHIP RUSH verification
 
+## Bellweather · The Turning Room · 2026-11-18 (local review)
+
+Keyboard, landscape touch emulation and standalone browser runs accepted eight turned parts. Deliberately overcutting a section scrapped the blank and earned zero shipments. The inspection sheet showed measured and target diameters. All 471 tests passed. [Evidence and release history](../docs/experiments/bellweather.md).
+
 ## Bellweather · Downhill Express · 2026-11-18
 
 The replacement for the terrace chapter is ready for creator review. The desktop and standalone keyboard runs delivered all eight bells in 27.08 s with zero impacts. The landscape touch-emulated run delivered six, picked up the optional Covari plate and returned to First Shift. All 469 tests and both builds passed. [Full record and browser recording](../docs/experiments/bellweather.md).

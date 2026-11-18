@@ -409,21 +409,24 @@ test('Last Light early completion accounts for tender return time, 72h run reten
 });
 
 
-test('Bellweather downhill requires a physically possible completed course and supported score',async t=>{
+test('Bellweather turning validates finished blanks and keeps historical editions visible',async t=>{
   const role=8, run={role,ruleset:shiftRuleset(role),started_at:START};
-  const value={role,score:3760,shipped:8,missed:0,sourced:1,calls:0,elapsed:30,clearElapsed:12,spawned:8,finishReason:'work-complete'};
-  assert.equal(validateResult(value,run,START+30000),null);
-  for(const patch of [{elapsed:25},{clearElapsed:11},{spawned:7},{missed:1},{finishReason:'time-up'},{finishReason:undefined},{score:3759},{score:13101},{calls:1},{sourced:2},{shipped:9}])
-    assert.ok(validateResult({...value,...patch},run,START+30000),JSON.stringify(patch));
-  assert.equal(validateResult({...value,score:0,shipped:0,missed:8,sourced:0,clearElapsed:null},run,START+30000),null);
-  assert.match(validateResult(value,{...run,ruleset:RULESET},START+30000),/new shift/);
+  const value={role,score:3760,shipped:8,missed:0,sourced:1,calls:0,elapsed:50,clearElapsed:20,spawned:8,finishReason:'work-complete'};
+  assert.equal(validateResult(value,run,START+50000),null);
+  for(const patch of [{elapsed:1},{clearElapsed:1},{spawned:7},{missed:1},{finishReason:undefined},{score:100},{score:12000},{calls:1},{sourced:2},{shipped:9}])
+    assert.ok(validateResult({...value,...patch},run,START+50000),JSON.stringify(patch));
+  assert.equal(validateResult({...value,score:0,shipped:0,missed:8,sourced:0,clearElapsed:null,elapsed:0},run,START+50000),null);
+  assert.equal(validateResult({...value,score:0,shipped:0,missed:8,sourced:0,clearElapsed:null,elapsed:100,finishReason:'time-up'},run,START+100000),null);
+  assert.match(validateResult(value,{...run,ruleset:'bellweather-v2-downhill'},START+50000),/new shift/);
   const f=fixture(t);
-  assert.equal((await f.send('/api/runs',{method:'POST',data:{role,ruleset:RULESET}})).status,400);
-  f.sqlite.prepare('INSERT INTO scores(id,role,ruleset,name,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('old-bells',role,RULESET,'Old Bells',2000,2000,6,0,0,0,START);
-  const hosted=await f.start(role), response=await f.post(hosted,value,{now:START+30000});
+  assert.equal((await f.send('/api/runs',{method:'POST',data:{role,ruleset:'bellweather-v2-downhill'}})).status,400);
+  for(const [id,edition,name] of [['old-bells',RULESET,'Old Bells'],['downhill','bellweather-v2-downhill','Downhill']])
+    f.sqlite.prepare('INSERT INTO scores(id,role,ruleset,name,score,points,shipped,missed,sourced,calls,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,role,edition,name,2000,2000,6,0,0,0,START);
+  const hosted=await f.start(role), response=await f.post(hosted,value,{now:START+50000});
   assert.equal(response.status,200,await response.clone().text());
   const entries=(await (await f.send('/api/leaderboard')).json()).entries;
   assert.equal(entries.find(e=>e.name==='Old Bells').shiftName,'Bellweather (first edition)');
+  assert.equal(entries.find(e=>e.name==='Downhill').shiftName,'Downhill Express');
   assert.equal(entries.find(e=>e.name==='Old Bells').stars,2);
-  assert.ok(entries.some(e=>e.shiftId==='bellweather'&&e.name!=='Old Bells'));
+  assert.ok(entries.some(e=>e.shiftId==='bellweather'&&e.name!=='Old Bells'&&e.name!=='Downhill'));
 });

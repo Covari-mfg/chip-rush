@@ -98,7 +98,8 @@ test('first-edition Last Light links cannot challenge the changed crossing workl
 });
 
 
-test('first-edition Bellweather links cannot challenge the downhill race',()=>{
+test('older Bellweather links cannot challenge the turning edition',()=>{
   assert.equal(parseChallenge(query({role:'8',rules:RULESET,score:'2500',shipped:'6'})),null);
+  assert.equal(parseChallenge(query({role:'8',rules:'bellweather-v2-downhill',score:'2500',shipped:'6'})),null);
   assert.ok(parseChallenge(query({role:'8',score:'2500',shipped:'6'})));
 });
