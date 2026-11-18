@@ -1,78 +1,83 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHIFTS, stockType } from '../dist/core.js';
+import { SHIFTS, shiftRuleset } from '../dist/core.js';
 import { shiftGame } from '../dist/launch.js';
-import { TONE_SECONDS, BELL_NOTES } from '../dist/bells.js';
-import { simulateShift, navigation } from './balance.mjs';
+import { COURSE_LENGTH, MAX_SPEED, TOWERS, readRailRecord, keepRailRecord } from '../dist/bells.js';
+import { validateResult } from '../server/worker.js';
+import { simulateRail } from './bellweather-balance.mjs';
 
 const role=SHIFTS.findIndex(s=>s.id==='bellweather');
-function advance(game,seconds){
-  for(let i=0;i<Math.ceil(seconds*20);i++)game.tick(.05);
-}
-function cut(game,id){
-  const order=game.order(id),machine=order.route[0];
-  assert.ok(game.interact('material-'+stockType(order)));
-  assert.equal(game.hand.orderId,id);
-  assert.ok(game.interact(machine));advance(game,machine==='lathe'?8.05:10.05);
-  assert.ok(game.interact(machine));
-}
-function hang(game,id,voice=0){
-  cut(game,id);
-  assert.ok(game.interact('inspect'));advance(game,4.05+voice*TONE_SECONDS);
-  const tuning=game.tuning();
-  assert.equal(tuning.voice,voice);assert.ok(game.interact('inspect'));
-  assert.equal(game.heldOrder.note,tuning.note);assert.ok(game.interact('ship'));
-  return tuning.note;
-}
+const storage=()=>{let value=null;return {getItem:()=>value,setItem:(key,v)=>{value=v;}};};
 
-test('each of the three pitches makes a distinct first bell and preserves shipment credit',()=>{
-  const notes=[];
-  for(let voice=0;voice<3;voice++){
-    const game=shiftGame(role);notes.push(hang(game,101,voice));
-    assert.equal(game.peal.length,1);assert.equal(game.shipped,1);
-    assert.equal(game.peal[0],notes.at(-1));assert.ok(game.score>0);
+test('no input resolves the entire course with no shipment or speed points',()=>{
+  const r=simulateRail({strategy:'idle'});
+  assert.equal(r.finishReason,'work-complete');assert.equal(r.spawned,8);
+  assert.equal(r.shipped,0);assert.equal(r.missed,8);assert.equal(r.score,0);assert.equal(r.stars,0);
+  assert.equal(r.game.distance,COURSE_LENGTH);assert.ok(r.elapsed<100);
+});
+
+test('visible steering and throws produce reproducible cautious and express clears',()=>{
+  const cautious=simulateRail({strategy:'cautious'}),express=simulateRail({strategy:'express'}),advanced=simulateRail({strategy:'advanced'});
+  for(const r of [cautious,express,advanced]){
+    assert.equal(r.shipped,8);assert.equal(r.missed,0);assert.equal(r.stars,3);assert.equal(r.finishReason,'work-complete');
+    assert.ok(r.clearElapsed>=TOWERS[3].s/MAX_SPEED);assert.ok(r.elapsed>=COURSE_LENGTH/MAX_SPEED&&r.elapsed<100);
+    const value={role,score:r.score,shipped:r.shipped,missed:r.missed,sourced:r.sourced,calls:0,elapsed:r.elapsed,clearElapsed:r.clearElapsed,spawned:r.spawned,finishReason:r.finishReason};
+    assert.equal(validateResult(value,{role,ruleset:shiftRuleset(role),started_at:0},Math.ceil(r.elapsed*1000)),null);
   }
-  assert.equal(new Set(notes.map(n=>BELL_NOTES[n].hz)).size,3);
+  assert.ok(express.elapsed<cautious.elapsed);assert.ok(express.score>cautious.score);assert.equal(express.perfect,8);
+  const idle=simulateRail({strategy:'idle'});
+  assert.ok(idle.elapsed<cautious.elapsed);assert.equal(idle.score,0,'Speed alone earns no points');
+  assert.ok(advanced.elapsed<idle.elapsed&&advanced.elapsed<express.elapsed);
+  assert.equal(advanced.shipped,8);assert.equal(advanced.impacts,0);assert.ok(advanced.game.pads>0);assert.ok(advanced.game.banks>0);
+  assert.ok(advanced.score>express.score);
+  for(const r of [cautious,express,advanced]){
+    assert.equal(Object.values(r.game.scoreDetails).reduce((a,b)=>a+b,0),r.score,'Receipt sums to score');
+    assert.equal(r.game.scoreDetails.express,Math.max(0,Math.floor((45-r.elapsed)*60)));
+  }
 });
 
-test('paused tuning holds its pitch; a busy or empty bench cannot commit a note',()=>{
-  const game=shiftGame(role);cut(game,101);game.interact('inspect');
-  assert.equal(game.tuning(),null);assert.equal(game.interact('inspect'),false);
-  advance(game,4.1);const before=game.tuning();game.mode='paused';advance(game,5);
-  assert.deepEqual(game.tuning(),before);assert.equal(game.interact('inspect'),false);
-  game.mode='playing';advance(game,TONE_SECONDS);assert.notEqual(game.tuning().note,before.note);
-  game.interact('inspect');assert.equal(game.tuning(),null);assert.equal(game.peal.length,0);
-  assert.ok(game.interact('material-round'));assert.equal(game.order(101).note,undefined);
+test('stars follow ordinary deliveries, and the optional plate adds 300 only',()=>{
+  for(const [count,stars] of [[0,0],[3,0],[4,1],[6,2],[8,3]]){
+    const r=simulateRail({throwLimit:count,covari:false});assert.equal(r.shipped,count);assert.equal(r.stars,stars);
+  }
+  const withPlate=simulateRail({covari:true}),without=simulateRail({covari:false});
+  assert.equal(withPlate.sourced,1);assert.equal(without.sourced,0);
+  assert.equal(withPlate.shipped,without.shipped);assert.equal(withPlate.stars,without.stars);
+  assert.equal(withPlate.score-without.score,300);
+  assert.equal(simulateRail({throwLimit:1}).sourced,0);
 });
 
-test('a bench swap locks the outgoing pitch and starts a fresh sweep for its replacement',()=>{
-  const game=shiftGame(role);cut(game,101);game.interact('inspect');advance(game,1);
-  cut(game,102);const outgoing=game.tuning();
-  assert.ok(game.interact('inspect'));assert.equal(game.heldOrder.note,outgoing.note);
-  assert.equal(game.stations.inspect.part.orderId,102);assert.equal(game.tuning(),null);
-  assert.ok(game.interact('ship'));advance(game,4.1);assert.equal(game.tuning().voice,0);
-  assert.equal(game.tuning().orderId,102);
+test('ghost stores completed runs and prefers deliveries before time',()=>{
+  const store=storage(),slow=simulateRail({strategy:'cautious'}),fast=simulateRail({strategy:'express'});
+  assert.equal(keepRailRecord(slow.game,store),true);assert.equal(readRailRecord(store).shipped,8);
+  assert.equal(keepRailRecord(fast.game,store),true);assert.equal(readRailRecord(store).time,fast.elapsed);
+  assert.equal(keepRailRecord(slow.game,store),false);
+  assert.equal(keepRailRecord(simulateRail({strategy:'express',throwLimit:6}).game,store),false);
+  const game=shiftGame(role);assert.equal(keepRailRecord(game,store),false);
 });
 
-test('Covari supplies the engraved plate after two bells and adds no note or star progress',()=>{
-  const game=shiftGame(role);hang(game,101);hang(game,102);
-  assert.equal(game.sourcing,null);advance(game,9);assert.equal(game.sourcing.technology,'lm');
-  assert.ok(game.requestSource());advance(game,22.05);game.interact('receiving');game.interact('inspect');
-  advance(game,4.1);assert.equal(game.tuning(),null);assert.ok(game.interact('inspect'));
-  const before=game.score,notes=[...game.peal];assert.ok(game.interact('ship'));
-  assert.deepEqual(game.peal,notes);assert.equal(game.shipped,2);assert.equal(game.score-before,300);
-  assert.equal(game.stars(),0);game.reset(role);assert.deepEqual(game.peal,[]);
+test('pausing freezes the race and finish waits for the terminus',()=>{
+  const game=shiftGame(role);game.mode='paused';game.tick(1);assert.equal(game.elapsed,0);assert.equal(game.distance,0);
+  game.mode='playing';while(game.distance<TOWERS.at(-1).s+1)game.tick(.05);
+  assert.equal(game.mode,'playing');assert.equal(game.shipped+game.missed,8);
+  while(game.mode==='playing')game.tick(.05);
+  assert.equal(game.distance,COURSE_LENGTH);assert.equal(game.finishReason,'work-complete');
 });
 
-test('a walked production route can fill every hook without dash or outsourcing',()=>{
-  const result=simulateShift(role,{strategy:'flow',reaction:.8});
-  assert.equal(result.shipped,8);assert.equal(result.stars,3);assert.equal(result.finishReason,'work-complete');
-  assert.ok(!navigation.layoutFor('bell-terrace').some(s=>s.id==='laser'));
-});
 
-test('an explicit pitch key cuts the requested voice independently of the current sounding note',()=>{
-  const game=shiftGame(role);cut(game,101);game.interact('inspect');advance(game,4.1);
-  const tuning=game.tuning();assert.notEqual(tuning.note,tuning.choices[2]);
-  assert.ok(game.interact('inspect',2));assert.ok(game.interact('ship'));
-  assert.deepEqual(game.peal,[tuning.choices[2]]);
+test('hosted rail score bounds include the exact finish bonus and feasible shipment maximum',()=>{
+  const run={role,ruleset:shiftRuleset(role),started_at:0};
+  const elapsed=30,bonus=Math.floor((45-elapsed)*60);
+  const value={role,shipped:8,missed:0,sourced:1,calls:0,elapsed,clearElapsed:12,spawned:8,finishReason:'work-complete'};
+  const min=8*320+300+bonus;
+  const max=8*750+60*(0+1+2+3+4+5+5+5)+300+bonus;
+  const valid=score=>validateResult({...value,score},run,elapsed*1000);
+  assert.equal(valid(min),null);assert.ok(valid(min-1));assert.equal(valid(max),null);assert.ok(valid(max+1));
+  // Hosted elapsed is stored to milliseconds, making its inferred bonus at
+  // worst one point away from the unrounded receipt's exact bonus.
+  for(const strategy of ['cautious','express','advanced']){
+    const r=simulateRail({strategy}),stored=Math.round(r.elapsed*1000)/1000;
+    const inferred=Math.max(0,Math.floor((45-stored)*60));
+    assert.ok(Math.abs(inferred-r.game.scoreDetails.express)<=1);
+  }
 });

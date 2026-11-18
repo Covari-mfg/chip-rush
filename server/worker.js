@@ -1,5 +1,6 @@
 import { RULESET, SHIFTS, isPlayableShift, shiftRuleset } from '../dist/core.js';
 import { shiftGame } from '../dist/launch.js';
+import { COURSE_LENGTH, MAX_SPEED, TOWERS } from '../dist/bells.js';
 import { MANAGER_ROLE, MANAGER_BOARD, MANAGER_SCORE_RULESETS, DAY_SECONDS, START_CASH, START_ASSETS, MAX_DAYS, parseBoard, maxPayout } from '../dist/manager.js';
 const MAX_BODY=4096;
 const json=(data,status=200,extra={})=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
@@ -21,8 +22,12 @@ export function validateResult(value,run,now=Date.now()){
   for(const [key,[min,max]] of Object.entries(ranges))if(!Number.isInteger(value[key])||value[key]<min||value[key]>max)return 'That result is outside this shift’s limits.';
   if(value.finishReason!==undefined&&!['work-complete','time-up'].includes(value.finishReason))return 'Finish this shift before posting.';
   if(value.elapsed!==undefined&&(!Number.isFinite(value.elapsed)||value.elapsed<0||value.elapsed>config.duration+.1||wallSeconds<value.elapsed-5))return 'That finish time does not match this run.';
-  if(value.clearElapsed!==undefined&&value.clearElapsed!==null&&(!Number.isFinite(value.clearElapsed)||value.clearElapsed<config.passTarget*4||value.shipped<config.passTarget||!Number.isFinite(value.elapsed)||value.clearElapsed>value.elapsed+.01))return 'That clear time does not match the shipment target.';
-  if(value.finishReason==='work-complete'){
+  const downhill=config.ruleset==='bellweather-v2-downhill';
+  const clearFloor=downhill?TOWERS[config.passTarget-1].s/MAX_SPEED-.1:config.passTarget*4;
+  if(value.clearElapsed!==undefined&&value.clearElapsed!==null&&(!Number.isFinite(value.clearElapsed)||value.clearElapsed<clearFloor||value.shipped<config.passTarget||!Number.isFinite(value.elapsed)||value.clearElapsed>value.elapsed+.01))return 'That clear time does not match the shipment target.';
+  if(downhill){
+    if(value.finishReason!=='work-complete'||!Number.isFinite(value.elapsed)||value.elapsed<COURSE_LENGTH/MAX_SPEED-.1||value.spawned!==config.maxOrders||value.shipped+value.missed!==config.maxOrders)return 'Finish the course and resolve every delivery before posting.';
+  }else if(value.finishReason==='work-complete'){
     if(!Number.isFinite(value.elapsed)||!Number.isInteger(value.spawned)||value.spawned<1||value.spawned>(config.maxOrders??8)||value.spawned!==value.shipped+value.missed)return 'Finish every outstanding order before posting.';
     const lastArrival=value.spawned<2?0:config.firstArrival+(value.spawned-2)*config.interval;
     if(value.elapsed<lastArrival)return 'Those orders have not all arrived yet.';
@@ -51,7 +56,12 @@ export function validateResult(value,run,now=Date.now()){
   const support=value.sourced*300+value.calls*25;
   // Each answered call can lose its 25 points if the accepted rush misses.
   // Sourcing points remain earned even when every rush is missed.
-  if(value.score<value.sourced*300||value.score>value.shipped*1600+support)return 'That score does not match the completed work.';
+  // The rail finish bonus is fully determined by the submitted elapsed time.
+  // Each caught bell earns 320 base, at most 260 precision, 170 bank and a
+  // streak of 60 per previous consecutive catch (capped at five).
+  const finishBonus=downhill&&value.shipped>=config.passTarget?Math.max(0,Math.floor((45-value.elapsed)*60)):0;
+  const railMax=downhill?Array.from({length:value.shipped},(_,i)=>750+Math.min(5,i)*60).reduce((a,b)=>a+b,0):0;
+  if(value.score<(downhill?value.shipped*320+finishBonus:0)+value.sourced*300||value.score>(downhill?railMax+finishBonus:value.shipped*1600)+support)return 'That score does not match the completed work.';
   return null;
 }
 
@@ -96,8 +106,8 @@ export default {
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
-        const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6)).all();
-        return json({ruleset:RULESET,entries:(data.results||[]).filter(({role})=>SHIFTS[role]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:SHIFTS[role].name+(SHIFTS[role].retired?' (retired)':role===6&&edition!==shiftRuleset(6)?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:(role===6&&edition!==shiftRuleset(6)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
+        const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6),shiftRuleset(8)).all();
+        return json({ruleset:RULESET,entries:(data.results||[]).filter(({role})=>SHIFTS[role]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:(role===8&&edition!==shiftRuleset(8)?'Bellweather':SHIFTS[role].name)+(SHIFTS[role].retired?' (retired)':(role===6||role===8)&&edition!==shiftRuleset(role)?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:((role===6||role===8)&&edition!==shiftRuleset(role)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
         const value=await body(request);

@@ -1,5 +1,9 @@
 # CHIP RUSH verification
 
+## Bellweather · Downhill Express · 2026-11-18
+
+The replacement for the terrace chapter is ready for creator review. The desktop and standalone keyboard runs delivered all eight bells in 27.08 s with zero impacts. The landscape touch-emulated run delivered six, picked up the optional Covari plate and returned to First Shift. All 469 tests and both builds passed. [Full record and browser recording](../docs/experiments/bellweather.md).
+
 ## First Light, second edition · 2026-11-10 (local source, final submission, not released)
 
 Full record: [docs/experiments/first-light.md](../docs/experiments/first-light.md).

@@ -1082,15 +1082,6 @@
   }
 }
 
-/* The touch controls already use the centre for the next-station hint. */
-html[data-interface="mobile"] #bell-score {
-  left: auto;
-  right: max(9px, env(safe-area-inset-right));
-  bottom: max(8px, env(safe-area-inset-bottom));
-  transform: none;
-}
-html[data-interface="mobile"] #bell-keys button { min-width: 44px; height: 36px; }
-
 /* Pocket Shift (hidden #/pocket route): portrait, one thumb. html[data-mode="pocket"]
    is set only while that route is open; nothing here touches any other screen.
    The route always uses the touch interface (a desktop browser included), and

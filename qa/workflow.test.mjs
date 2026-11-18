@@ -42,8 +42,8 @@ const migration=main.slice(main.indexOf("const SAVE_KEY="),main.indexOf('const S
 function migrate(initial){
   const data=new Map(Object.entries(initial).map(([k,v])=>[k,JSON.stringify(v)]));
   const context=vm.createContext({versionLevelRecords,SHIFTS,RUN_LENGTHS,nextShiftIndex,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)}});
-  vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}${migration};this.result={unlocked,bests,grades};`,context);
-  return {result:JSON.parse(JSON.stringify(context.result)),data};
+  vm.runInContext(`let unlocked=0,bests=SHIFTS.map(()=>0),grades=SHIFTS.map(()=>0);function save(){localStorage.setItem(SAVE_KEY,JSON.stringify({unlocked,bests,grades}));}${migration};this.result={unlocked,bests,grades};this.archives=levelArchives;`,context);
+  return {result:JSON.parse(JSON.stringify(context.result)),archives:JSON.parse(JSON.stringify(context.archives)),data};
 }
 test('optional call rules preserve unlocks and leave historical records intact',()=>{
   for(const version of ['v7','v6','v5','v4','v3','v2']) {
@@ -83,8 +83,10 @@ test('a save can never unlock past the final level',()=>{
 
 test('Bellweather records append without moving existing saves',()=>{
   const saved={unlocked:7,bests:[101,102,103,104,105,106,107,108,109],grades:[1,2,3,1,2,3,1,2,3],levelVersions:{'last-light':SHIFTS[6].ruleset}};
-  const {result}=migrate({'chip-rush-roles-v8':saved});
-  assert.deepEqual(result.bests,saved.bests);
-  assert.deepEqual(result.grades,saved.grades);
+  const {result,archives}=migrate({'chip-rush-roles-v8':saved});
+  assert.deepEqual(result.bests.slice(0,8),saved.bests.slice(0,8));
+  assert.deepEqual(result.grades.slice(0,8),saved.grades.slice(0,8));
+  assert.deepEqual(archives['bellweather@first-edition'],{best:109,stars:3});
+  assert.equal(result.bests[8],0);assert.equal(result.grades[8],0);
   assert.equal(SHIFTS[8].id,'bellweather');
 });

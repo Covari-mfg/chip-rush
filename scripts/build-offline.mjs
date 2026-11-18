@@ -9,7 +9,7 @@ if(!match)throw new Error('Expected pinned Three.js named exports.');
 const exports=match[1].split(',').map(s=>{const [local,name]=s.trim().split(/\s+as\s+/);return `${name||local}:${local}`;}).join(',');
 const three=`const THREE=(()=>{${source.slice(0,match.index)}\nreturn {${exports}};})();`;
 // Dependency order: each module is evaluated after the modules it imports.
-const modules=[['assets/models.js','Models'],['assets/bellweather.js','BellTerrace'],['assets/bell-sky.js','BellSky'],['assets/harbor.js','Harbor'],['assets/orbital.js','Orbital'],['core.js','Core'],['bells.js','Bells'],['bell-audio.js','BellAudio'],['manager.js','Manager'],['beacon.js','Beacon'],['orbit.js','Orbit'],['launch.js','Launch'],['firstlight.js','FirstLight'],['audio.js','Audio'],['analytics.js','Analytics'],['records.js','Records'],['social.js','Social'],['technology.js','Technology'],['workflow.js','Workflow'],['device.js','Device'],['tap-navigation.js','TapNavigation'],['pocket.js','Pocket'],['pocket-queue.js','PocketQueue'],['pocket-floor.js','PocketFloor']];
+const modules=[['assets/models.js','Models'],['assets/bell-railway.js','BellRailway'],['assets/harbor.js','Harbor'],['assets/orbital.js','Orbital'],['core.js','Core'],['bells.js','Bells'],['bell-audio.js','BellAudio'],['manager.js','Manager'],['beacon.js','Beacon'],['orbit.js','Orbit'],['launch.js','Launch'],['firstlight.js','FirstLight'],['audio.js','Audio'],['analytics.js','Analytics'],['records.js','Records'],['social.js','Social'],['technology.js','Technology'],['workflow.js','Workflow'],['device.js','Device'],['tap-navigation.js','TapNavigation'],['pocket.js','Pocket'],['pocket-queue.js','PocketQueue'],['pocket-floor.js','PocketFloor'],['rail-cab.js','RailCabUI']];
 const bundleName=new Map(modules);
 // Every music file a module names is embedded, so the standalone file plays offline.
 const music=new Map();
@@ -45,8 +45,9 @@ bundle+=`\n${bindImports(main,'main.js')}\n${strip(main)}`;
 const fontData=(await readFile(path.join(root,'dist/assets/fonts/instrument-sans-latin.woff2'))).toString('base64');
 const css=(await read('dist/style.css')).replace('./assets/fonts/instrument-sans-latin.woff2',`data:font/woff2;base64,${fontData}`);
 const mobileCSS=await read('dist/mobile.css');
+const railCSS=await read('dist/rail.css');
 const logoData=(await readFile(path.join(root,'dist/assets/covari-logo.png'))).toString('base64');
-const html=(await read('dist/index.html')).replaceAll('src="./assets/covari-logo.png"',()=>`src="data:image/png;base64,${logoData}"`).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<link rel="stylesheet" href="./mobile.css">',()=>`<style>${mobileCSS}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
+const html=(await read('dist/index.html')).replaceAll('src="./assets/covari-logo.png"',()=>`src="data:image/png;base64,${logoData}"`).replace('href="./"','href=""').replace('<link rel="stylesheet" href="./style.css">',()=>`<style>${css}</style>`).replace('<link rel="stylesheet" href="./mobile.css">',()=>`<style>${mobileCSS}</style>`).replace('<link rel="stylesheet" href="./rail.css">',()=>`<style>${railCSS}</style>`).replace('<script type="module" src="./main.js"></script>',()=>`<script>(()=>{\n${bundle.replace(/<\/script/gi,'<\\/script')}\n})();</script>`);
 if(/(?:src|href)="\.\//.test(html.replace('href="./"','')))throw new Error('Unexpected external asset reference in standalone game.');
 if(/\.\/assets\/music\//.test(bundle))throw new Error('Unexpected external music reference in standalone game.');
 await writeFile(path.join(root,'dist/CHIP-RUSH.html'),html);
