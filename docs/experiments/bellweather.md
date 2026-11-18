@@ -1,8 +1,8 @@
 # Bellweather
 
-## Third edition · The Turning Room (local candidate)
+## Third edition · The Turning Room
 
-**Status, 18 November 2026:** local candidate for review. The released public game remains Downhill Express until the candidate is approved and released. The creator corrected the brief after the railway: machining must be part of play, while the genre remains open. This revision moves the challenge to hands-on turning rather than a delivery race.
+**Status, 18 November 2026:** The creator approved merging and deploying The Turning Room at gameplay commit `a303623`. The creator corrected the brief after the railway: machining must be part of play, while the genre remains open. This revision moves the challenge to hands-on turning rather than a delivery race.
 
 | | This edition |
 | --- | --- |

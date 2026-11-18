@@ -37,7 +37,7 @@ count playable entries independently of these legacy identities.
 | 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
 | 6 | `last-light` | Last Light | 220s | 6 deliveries | 6 / 9 / 12 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
 | 7 | `first-light` | First Light | 220s | 6 segments | 6 / 9 / 12 | Zero-g toss (E) and one-part catch rings on the `orbital-dock` ring, with a well the machinist floats across; the telescope mirror is the shipping station; the ending is the picture it takes; sunshield film outsourced |
-| 8 | `bellweather` | Bellweather · The Turning Room (local candidate) | 100s | 4 accepted parts | Turn three-section bell components to drawing with fast and fine feed; outsource an engraved plate. |
+| 8 | `bellweather` | Bellweather · The Turning Room | 100s | 4 accepted parts | Turn three-section bell components to drawing with fast and fine feed; outsource an engraved plate. |
 
 First Shift and Rush Hour use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
@@ -580,8 +580,8 @@ Legacy index 7, shared ruleset and board, no migration.
 
 ## Bellweather · The Turning Room (`bellweather`)
 
-The local candidate replaces the railway with direct machining. Eight bell components start as 32 mm round blanks, each with three target diameters and a tolerance. Select a section with 1–3 or A/D, hold Space to cut, toggle fast/fine feed with F and inspect with E. Fast feed removes 8 mm of diameter per second; fine removes 2.4. Starred sections also need a final 0.30 mm of fine feed. Switching sections takes 0.15 seconds. Pointer and touch controls mirror these actions; R retries.
+The Turning Room replaces the railway with direct machining. Eight bell components start as 32 mm round blanks, each with three target diameters and a tolerance. Select a section with 1–3 or A/D, hold Space to cut, toggle fast/fine feed with F and inspect with E. Fast feed removes 8 mm of diameter per second; fine removes 2.4. Starred sections also need a final 0.30 mm of fine feed. Switching sections takes 0.15 seconds. Pointer and touch controls mirror these actions; R retries.
 
 An oversized or insufficiently finished part stays for rework. Any undersized section scraps it; all three sections in tolerance with the specified finish accept it. Four, six and eight accepted parts earn stars. The batch ends after all eight blanks resolve or at 100 seconds, when unfinished blanks count as missed. Accepted parts score 320 base plus up to 480 precision and up to 200 consecutive-part streak points. A cleared batch earns 40 points per second under 60, rounded down. After two accepted parts, C or the offer button claims an engraved plate from Covari for 300 points; the lathe has no engraving station. The plate adds no accepted part or star.
 
-The candidate retains stable index 8 and uses `bellweather-v3-turning` for rules and timing records. The previous terrace and released `bellweather-v2-downhill` records remain distinct; challenges require the current edition. The Worker bounds submitted times and scores, but does not replay gameplay. Downhill Express remains the production edition until this local candidate is approved and released. See the [experiment record](experiments/bellweather.md).
+The Turning Room retains stable index 8 and uses `bellweather-v3-turning` for rules and timing records. The previous terrace and released `bellweather-v2-downhill` records remain distinct; challenges require the current edition. The Worker bounds submitted times and scores, but does not replay gameplay. See the [experiment record](experiments/bellweather.md).
