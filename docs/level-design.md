@@ -37,6 +37,7 @@ count playable entries independently of these legacy identities.
 | 5 | `launch-window` | Launch Window | 210s + 10s terminal count | 4 assemblies | 4 / 5 / 7 | Kits of parts joined in a robot assembly cell; each shipment is stacked onto a rocket on the pad; liftoff or scrub at T−10; `launch-pad` map; no CAD |
 | 6 | `last-light` | Last Light | 220s | 6 deliveries | 6 / 9 / 12 | Three-slot quay and player-dispatched tender; rebuild the lighthouse and guide the harbor fleet home; optical grinding outsourced |
 | 7 | `first-light` | First Light | 220s | 6 segments | 6 / 9 / 12 | Zero-g toss (E) and one-part catch rings on the `orbital-dock` ring, with a well the machinist floats across; the telescope mirror is the shipping station; the ending is the picture it takes; sunshield film outsourced |
+| 8 | `bellweather` | Bellweather · Downhill Express | At the terminus | 4 deliveries | Race a three-track alpine railway and throw bells into village hoops. Collect a Covari-engraved plate on an optional rail. |
 
 First Shift and Rush Hour use the `first-shop` map and the available Lathe, Mill,
 Inspect, Office, Shipping, stock bins, Hold bench, and Receiving bench where
@@ -576,3 +577,13 @@ shader behind it; `orbitSun()` takes the shift from full sun into shadow and
 Music track `orbit`: three synthesized stems layered by segments set.
 
 Legacy index 7, shared ruleset and board, no migration.
+
+## Bellweather · Downhill Express (`bellweather`)
+
+The bells are cast. A downhill trolley takes them to eight village hoops along one fixed 1,100-unit railway. Use A/D or Left/Right to switch tracks, Space to throw, S or Down to brake, and R to retry. Cyan rails accelerate the trolley. Striped barriers cost speed and break the delivery streak. The route ends at the terminus after all eight deliveries have resolved. Four deliveries clear the chapter, with higher stars at six and eight.
+
+On the hoop's track, release over the green sleepers, 9–30 units out. The gold stripe narrows that window to 15–21 units. A release on gold scores a bullseye and speeds up the trolley. From one track over, a gold release banks across to the hoop. A failed release near the hoop uses that delivery's attempt. Each good delivery earns 320 points. Gold adds 260, a bank adds a further 170, and a streak adds 60 per consecutive delivery beyond the first up to 300. Clearing before 45 seconds adds 60 points per second saved, rounded down. Stars depend on successful deliveries. The local race record ranks runs by deliveries first and elapsed time second, and stores splits and a replay trace for the ghost.
+
+There is no laser engraver aboard. After two deliveries, the violet Covari pickup opens if the trolley has yet to reach it. Ride the left track through it to collect the finished dedication plate for 300 points. This edition uses a trackside handoff in place of the shop's offer, Receiving and inspection steps. The plate adds zero deliveries or stars.
+
+Bellweather keeps index 8, introduced in the local terrace draft. Downhill Express uses `bellweather-v2-downhill` for its ruleset and timing records. Existing terrace scores and stars can be archived locally. The public challenge format is unchanged and checks the edition so that terrace links cannot challenge a race. The Worker validates that all eight race deliveries resolve before posting and uses the course length and speed cap to bound times. See the [experiment record](experiments/bellweather.md).

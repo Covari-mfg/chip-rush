@@ -286,8 +286,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   const rows=[];
   // First Light's normal action is the toss, which this driver does not know.
   // Its own driver plays it: serial carries by hand, flow tosses.
+  const rail=await import('./bellweather-balance.mjs');
   const orbit=SHIFTS.some(level=>level.engine==='orbit')?await import('./first-light-balance.mjs'):null;
   for(let shift=0;shift<SHIFTS.length;shift++)for(const strategy of ['serial','flow']){
+    if(SHIFTS[shift].engine==='bells'){const {game,...row}=rail.simulateRail({strategy:strategy==='serial'?'cautious':'express'});rows.push({...row,strategy,phone:'decline',rush:false,reaction,movement:'rail controls',elapsed:+row.elapsed.toFixed(2),log:[]});continue;}
     if(SHIFTS[shift].engine!=='orbit'){rows.push(simulateShift(shift,{strategy,reaction}));continue;}
     const row=orbit.simulateOrbit({strategy:strategy==='serial'?'carry':'toss',reaction});
     rows.push({role:row.role,strategy,phone:'decline',rush:false,reaction,movement:`click route + walk${strategy==='flow'?' + toss':''}`,spawned:row.spawned,shipped:row.shipped,pass:row.pass,stars:row.stars,score:row.score,missed:row.missed,unfinished:row.unfinished,elapsed:+row.elapsed.toFixed(2),log:row.log});

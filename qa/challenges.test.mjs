@@ -52,7 +52,7 @@ test('challenge numeric fields reject signs, decimals, nonfinite values, markup,
   assert.equal(parseChallenge(query({score:'20001'})),null);
   assert.equal(parseChallenge(query({shipped:'13'})),null);
   assert.equal(parseChallenge(query({role:'0',shipped:'9'})),null);
-  for(const role of [2,3])assert.equal(parseChallenge(query({role:String(role),shipped:String(SHIFTS[role].maxOrders+1)})),null,'Current higher-role order limits are enforced');
+  for(const role of [2,3,8])assert.equal(parseChallenge(query({role:String(role),shipped:String(SHIFTS[role].maxOrders+1)})),null,'Current higher-role order limits are enforced');
 });
 
 test('challenge stars are derived from role targets and cannot be supplied in the link',()=>{
@@ -69,7 +69,7 @@ test('challenge stars are derived from role targets and cannot be supplied in th
 
 test('valid zero and maximum counts parse without silently changing the challenge',()=>{
   assert.deepEqual(parseChallenge(query({role:'0',score:'0',shipped:'0'})),{role:0,score:0,shipped:0,stars:0});
-  for(const role of [2,3]) {
+  for(const role of [2,3,8]) {
     const shipped=SHIFTS[role].maxOrders,score=shipped*1600;
     assert.deepEqual(parseChallenge(query({role:String(role),score:String(score),shipped:String(shipped)})),{role,score,shipped,stars:3});
   }
@@ -95,4 +95,10 @@ test('retired Mixed Orders cannot be parsed or used to create a friend challenge
 test('first-edition Last Light links cannot challenge the changed crossing workload',()=>{
   assert.equal(parseChallenge(query({role:'6',rules:RULESET,score:'2500',shipped:'6'})),null);
   assert.ok(parseChallenge(query({role:'6',score:'2500',shipped:'6'})));
+});
+
+
+test('first-edition Bellweather links cannot challenge the downhill race',()=>{
+  assert.equal(parseChallenge(query({role:'8',rules:RULESET,score:'2500',shipped:'6'})),null);
+  assert.ok(parseChallenge(query({role:'8',score:'2500',shipped:'6'})));
 });

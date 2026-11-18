@@ -171,6 +171,17 @@ export const SHIFTS = [
     recipes:[0,1,2,1,0,2,0,1,2,1,0,2],unlocks:['lathe','mill','polish','gild','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:ORBIT_SOURCE_JOBS,calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
   },
+  {
+    id:'bellweather',mapId:'downhill-line',engine:'bells',ruleset:'bellweather-v2-downhill',recordId:'bellweather-v2-downhill',name:'Bellweather',author:'GPT-6.2 Astra',harness:'Codex',musicTrack:'bells',
+    subtitle:'Downhill Express · Alpine bell courier',
+    goal:'Throw four bells through the hoops before the terminus. Eight makes a clean sweep. Clear in under 45 seconds for a speed bonus.',
+    brief:'The bells are cast. The only way down is an old three-track timber railway. Shift left or right to line up with a village hoop, then throw on the green sleepers. A gold release hits the bullseye and kicks the trolley faster. From one track over, only a gold release will reach.',
+    tip:'A/D or ←/→ switch tracks. Space throws. Hold S or ↓ to brake. Cyan arrows add speed. Avoid striped barriers. R restarts instantly.',
+    retryTip:'Ride the cyan rail beside a delivery and throw across on gold. A clean run carries its speed down the mountain.',
+    duration:100,maxOrders:8,recipes:[0],unlocks:[],stock:[],programming:false,sourcing:true,
+    sourceJobs:[{name:'Engraved dedication plate',capability:'Laser marking',technology:'lm',gap:'No laser engraver aboard'}],
+    calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
+  },
 ];
 
 // Retired slots remain in the catalog for historical saves and scores. Entry

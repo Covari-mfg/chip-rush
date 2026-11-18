@@ -8,7 +8,7 @@ A complete single-player 3D machine-shop game. Original procedural assets, short
 
 Open **dist/CHIP-RUSH.html** in a current Chrome, Edge, Firefox, or Safari browser. Everything is embedded, including the 3D renderer. No account, server, network, or build step is required. WebGL 2 and hardware acceleration must be available.
 
-Six playable shifts explore the shop and its next chapters:
+Eight playable shifts explore the shop and its next chapters:
 
 | Level | Shift | Clear target | New responsibility | Stars |
 | --- | --- | --- | --- | --- |
@@ -19,6 +19,9 @@ Six playable shifts explore the shop and its next chapters:
 | Launch Window | T−3:40 countdown | 4 assemblies | Kits of parts joined in a robot assembly cell and stacked onto a rocket; liftoff or scrub at T−10; Covari for metal printing, carbon layup or stir welding | 4 / 5 / 7 |
 | Last Light | 3 min 40s | 6 delivered parts | Harbor pier, three-slot quay, player-dispatched tender, a working lighthouse and boats coming home; Covari for precision optical grinding | 6 / 9 / 12 |
 | First Light | 3 min 40s | 6 mirror segments | Orbital dock: toss parts in zero-g with E, float across the well, one-part catch rings, a telescope mirror to finish and the picture it takes; Covari for the sunshield film | 6 / 9 / 12 |
+| Bellweather · Downhill Express | To the terminus | 4 deliveries | Race a three-track trolley, dodge track work and throw bells through village hoops. Hit gold for a boost or bank a throw across one track. | 4 / 6 / 8 |
+
+Bellweather is the alpine railway chapter from GPT-6.2 Astra and Codex. Use A/D or Left/Right to switch tracks, Space to throw, S or Down to brake, and R to retry. [Playtest and experiment record](docs/experiments/bellweather.md).
 
 **Open for Business** is a separate shop-manager game mode (Claude Opus 5.5, Claude Code), always available from its start-screen tab; it needs no cleared shifts. You run the shop until you stop: each working day is 2½ minutes, and any evening you can retire and post the result. Quotes from repeat customers arrive all day: bid on them (higher bids pay more but win less often), turn away work your floor cannot make, or send it to Covari. Accepting a job without the process means it expires, costing cash, reputation and the customer's loyalty. Multi-day contracts bundle several parts on one card. Click an empty bay on the floor to buy a machine for it; build the east wing for large bays that take extra lathes, mills and QC benches, then south halls that grow the floor to about ten times the first room (zoom and drag to look around) and let you move machines between bays. Expedite a job to put it first for your staff, or ask the customer for one more day and risk them taking it elsewhere. Machines wear and can break with a part inside, so repair them in person or hire a maintenance tech. Hire CAD programmers, shop runners, a shipping clerk and a sales manager who answers quotes with the rules you set on the sales strip, including a review line for big quotes and a Covari limit for small jobs. Rent and wages are due every evening; a run ends bankrupt if cash goes below zero. Stars count days survived (3 / 5 / 7). Final net worth posts to one Open for Business leaderboard (`manager-v1-endless`), which also lists earlier 3-, 5-, and 7-day scores, ranked by net worth. A run in progress saves as you play and can be continued from the Open for Business tab. See [docs/experiments/open-for-business.md](docs/experiments/open-for-business.md).
 
@@ -37,8 +40,7 @@ prompt, creative freedom, shared tool access, and iteration record. Each new
 model/harness can continue the story with its own map, art, music, and gameplay.
 The level is the main output; optional improvements to the wider game, including
 shared mechanics, usability, performance, and code quality, are welcome too.
-The [current level guide](docs/level-design.md) describes the starting three
-scenarios, not a fixed template for future ones.
+The [current level guide](docs/level-design.md) describes the playable chapters and their rules.
 
 ## Review handoff
 
@@ -73,7 +75,7 @@ Rush Hour has three customer calls scheduled at 27, 77, and 127 seconds. Busy ma
 
 The compact floor groups stock bins and optional Hold storage on the left, larger CNC machines across the back, and Inspection followed by Shipping in one right-side work area. Physical packing cartons and floor markings give that area a purpose while keeping the central aisle clear.
 
-Fast shipping earns more points; consecutive on-time shipments build a streak up to five. Each shift has its own star thresholds shown above. The shift ends early when all jobs are resolved and no further orders can arrive; unresolved Covari offers and deliveries remain playable. An empty gap between arrivals or reaching a star target does not end it. The timer remains the upper limit and reports unfinished orders separately from missed deadlines. Early finishes can post their scores immediately and award no extra time bonus. Only shipment count determines clearing and stars; rush bonuses are optional. These are difficulty design targets, not measured human completion rates. The balance simulations establish attainability and separation between play styles; real-player testing is needed to measure how rare Rush Hour three stars actually is.
+In the shop shifts, fast shipping earns more points; consecutive on-time shipments build a streak up to five. Each shift has its own star thresholds shown above. The shift ends early when all jobs are resolved and no further orders can arrive; unresolved Covari offers and deliveries remain playable. An empty gap between arrivals or reaching a star target does not end it. The timer remains the upper limit and reports unfinished orders separately from missed deadlines. Early finishes can post their scores immediately and award no extra time bonus. Only shipment count determines clearing and stars; rush bonuses are optional. These are difficulty design targets, not measured human completion rates. The balance simulations establish attainability and separation between play styles; real-player testing is needed to measure how rare Rush Hour three stars actually is.
 
 ## Community features
 
@@ -135,7 +137,7 @@ The self-contained `dist/CHIP-RUSH.html` still opens offline with all 3D assets.
 - `qa/core.test.mjs`: regression checks for the full simulation and recovery paths.
 - `qa/stock.test.mjs`: stock dispatch, CAD priority and selection independence.
 - `qa/sourcing.test.mjs`: offer, delivery, receiving, QC, shipment and sourcing cleanup.
-- `qa/balance.mjs`: reproducible movement-aware balance simulation with serial, concurrent, and expert dash strategies.
+- `qa/balance.mjs`: reproducible movement-aware balance simulation. Shop strategies include serial routing, concurrent work and expert dashes. The Bellweather driver in `qa/bellweather-balance.mjs` steers and throws on cautious and express routes.
 - `qa/difficulty.test.mjs`: checks accessible clears, CAD/material step order, distinct mastery targets, rush penalties, and repeatable legal eight-shipment Rush Hour routes with either rush choice.
 - `qa/PLAYTEST.md`: observed browser playtest results and validation boundaries.
 

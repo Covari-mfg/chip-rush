@@ -612,6 +612,9 @@ body.firstlight-finale #shop-sidebar,body.firstlight-finale #orders,body.firstli
 @media(max-height:520px){.firstlight{flex-direction:row;gap:22px}.firstlight-scope{width:min(74vh,44vw)}.firstlight-copy{min-height:0;max-width:40vw}}
 /* Bottom left, clear of every station label and the toast. */
 body.orbit-mode .pa-banner{top:auto;left:18px;bottom:clamp(58px,9vh,84px);transform:none;max-width:min(430px,60vw);animation:none}
+
+/* The downhill camera and cab have their own full-screen play surface. */
+body.rail-mode #game > :is(.topbar,.grain,#live-hud,#shop-sidebar,#game-footer,#station-labels,#staff-tags,#floating-text,#carried-job,#pa-banner,#toast,#wing-sign,#zoom-controls,#mobile-tap-hint,#mobile-dash,#touch-shop,.mobile-controls,.hall-sign) { display:none!important }
 </style>
   <style>/* The same game link uses this layout only on the mobile interface. */
 :where(html[data-interface="mobile"]) {
@@ -1687,6 +1690,16 @@ body.orbit-mode .pa-banner{top:auto;left:18px;bottom:clamp(58px,9vh,84px);transf
 :where(html[data-interface="mobile"]) #welcome #start-button{position:static;transform:none;width:calc(100% - 6px);margin:0 3px;padding:10px 15px}
 :where(html[data-interface="mobile"]) #clear-run:not([hidden]){display:flex}
 
+/* The full-game picker needs to clear the fixed header after leaving Pocket Shift. */
+@media (orientation: landscape) and (max-height: 599px) {
+  html[data-interface="mobile"] #welcome.welcome-panel {
+    margin-top: calc(76px + var(--mobile-safe-top));
+  }
+  html[data-interface="mobile"] #home-leaders {
+    top: calc(78px + var(--mobile-safe-top));
+  }
+}
+
 /* Pocket Shift (hidden #/pocket route): portrait, one thumb. html[data-mode="pocket"]
    is set only while that route is open; nothing here touches any other screen.
    The route always uses the touch interface (a desktop browser included), and
@@ -2372,6 +2385,66 @@ html[data-mode="pocket"][data-interface="mobile"] #shop-sidebar #orders .source-
 .pocket-panel #pocket-home {
   min-height: 44px;
 }
+</style>
+  <style>.rail-cab[hidden]{display:none!important}
+.rail-cab{
+  --ink:#172f30;--cream:#fff2cf;--yellow:#ffcb4d;--pad:clamp(14px,2.3vw,40px);
+  position:fixed;inset:0;z-index:15;pointer-events:none;color:var(--cream);
+  font-family:"Instrument Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;
+  background:linear-gradient(180deg,#0c222948,transparent 18%,transparent 67%,#14282a96);
+}
+.rail-cab small,.rail-cab b,.rail-cab kbd{text-transform:uppercase;letter-spacing:.12em;font-size:10px;font-weight:750}
+.rail-cab button{color:var(--cream);background:var(--ink);border:1px solid #fff2cf55;border-radius:3px;pointer-events:auto;touch-action:manipulation;cursor:pointer}
+.rail-cab button:focus-visible{outline:3px solid var(--yellow);outline-offset:3px}
+.rail-cab button:active,.rail-cab button.held{transform:translateY(2px);background:#546351}
+.rail-mast{position:absolute;left:var(--pad);top:var(--pad);filter:drop-shadow(0 2px 2px #15292877)}
+.rail-mast small{display:flex;align-items:center;gap:7px;letter-spacing:.2em}
+.rail-wing{font-size:23px;color:var(--yellow);line-height:12px}
+.rail-mast strong,.rail-destination strong{display:block;font-family:Georgia,serif;font-style:italic;font-weight:700;letter-spacing:-.055em;line-height:1.06}
+.rail-mast strong{font-size:clamp(25px,3.3vw,48px)}
+.rail-stops{display:flex;gap:3px;margin-top:9px}
+.rail-stops i{height:4px;width:18px;background:#193636b5;transform:skew(-18deg)}
+.rail-stops i[data-state=hit]{background:#8ef4c5}.rail-stops i[data-state=miss]{background:#f68b66}
+.rail-clock,.rail-controls,.rail-speed,.rail-destination{position:absolute}
+.rail-clock{top:var(--pad);right:var(--pad);display:flex;align-items:center;gap:17px;background:#163235ed;border-top:2px solid var(--cream);padding:8px 12px}
+.rail-clock small{display:block;color:#d3c9a9;font-size:8px}.rail-clock strong{font-size:23px;line-height:1.1}.rail-clock b{font-size:16px;letter-spacing:.01em}
+.rail-clock button{height:33px;width:33px;font-size:20px;line-height:1}.rail-clock button+button{margin-left:-11px}
+.rail-destination,.rail-speed{bottom:86px;text-shadow:0 2px 4px #192529}
+.rail-destination{left:var(--pad);padding-left:13px;border-left:3px solid var(--yellow)}
+.rail-destination small,.rail-speed b{color:var(--yellow)}
+.rail-destination strong{font-size:clamp(26px,3vw,44px);margin:3px 0}
+.rail-speed{right:var(--pad);text-align:right}
+.rail-speed strong{font-size:clamp(38px,4.5vw,72px);letter-spacing:-.07em;font-weight:800;line-height:.85}
+.rail-speed small{font-size:12px;margin-left:6px}.rail-speed b{display:block;margin-top:6px}
+.rail-controls{left:var(--pad);right:var(--pad);bottom:var(--pad);display:flex;gap:18px;align-items:end;justify-content:space-between}
+.rail-actions,.rail-steer{display:flex;gap:4px}
+.rail-controls button{padding:0 13px;min-height:42px;font-size:16px;font-weight:bold}
+.rail-controls kbd{font-family:inherit;letter-spacing:.01em;margin-left:4px;color:#d5d5b7;font-size:10px}
+.rail-controls [data-throw]{background:var(--yellow);color:var(--ink);border-color:var(--yellow)}.rail-controls [data-throw] kbd{color:#625739}
+.rail-timing{width:min(480px,42vw);background:#172f30ed;border-top:2px solid #c9c0a1;padding:8px 14px 12px}
+.rail-meter-title{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.rail-meter-title b{font-size:14px;letter-spacing:.08em}.rail-meter-title span{font-size:11px;color:#d7dfcc}
+.rail-meter{height:7px;position:relative;background:#526460;margin-top:6px}
+.rail-window,.rail-gold,.rail-marker{position:absolute;height:100%;left:40%;width:42%;background:#60c79c}
+.rail-gold{left:58%;width:12%;background:var(--yellow)}.rail-marker{top:-3px;height:13px;width:3px;left:0;background:#fffbee}
+.rail-cab[data-window=green] .rail-timing{border-color:#68f1b8}.rail-cab[data-window=gold] .rail-timing{border-color:var(--yellow)}
+.rail-cab[data-window=green] [data-aim]{color:#8cfbc2}.rail-cab[data-window=gold] [data-aim]{color:var(--yellow)}
+.rail-feedback,.rail-covari{position:absolute;left:50%;transform:translateX(-50%);font-weight:750;white-space:nowrap}
+.rail-feedback{top:17%;font-size:clamp(16px,2.3vw,29px);font-style:italic;text-shadow:0 2px 4px #1b2630}
+.rail-feedback[data-kind=crash],.rail-feedback[data-kind=miss]{color:#ffe1cb}
+.rail-covari{top:24%;font-size:13px;background:#493f62ed;padding:5px 10px;border-left:3px solid #ceafff}
+.rail-covari:empty{display:none}
+.rail-cab[data-drive=express] .rail-speed strong{color:#a1fbf1}
+.rail-impact{box-shadow:inset 0 0 60px #a3382877}
+@media(max-height:560px),(max-width:740px){
+  .rail-cab{--pad:8px}.rail-mast strong{font-size:23px}.rail-mast small{font-size:8px}.rail-stops{margin-top:4px}.rail-stops i{width:11px;height:3px}
+  .rail-clock{gap:8px;padding:4px 6px}.rail-clock strong{font-size:17px}.rail-clock b{font-size:13px}.rail-clock button{height:30px;width:34px}.rail-clock button+button{margin-left:-5px}
+  .rail-speed,.rail-destination{bottom:58px}.rail-destination{padding-left:7px}.rail-destination strong{font-size:22px;margin:0}.rail-speed strong{font-size:34px}
+  .rail-controls{gap:6px}.rail-controls button{min-height:44px;padding:0 12px}.rail-controls kbd{display:none}
+  .rail-timing{padding:5px 8px 8px;width:min(47vw,370px)}.rail-meter-title b{font-size:12px}.rail-meter-title span{font-size:9px}
+  .rail-feedback{top:16%;font-size:17px}.rail-covari{top:24%;font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){.rail-impact{box-shadow:none}}
 </style>
 </head>
 <body>
@@ -3658,6 +3731,225 @@ function createLaunchComplex() {
 }
 
 return {createMachine,createPart,createCharacter,createWorkshop,createPocketShop,createWorker,createAnnex,createHall,createStormRig,createAssembly,createHangar,LAUNCH_SITE,createLaunchComplex};})();
+const BellRailway=(()=>{
+
+// The course is built in world space: the same centreline drives the rails,
+// scenery, gates and camera, so a bend never pulls a target off its track.
+function createBellRailway(){
+  const scene=new THREE.Scene(); scene.background=new THREE.Color('#9e829d'); scene.fog=new THREE.FogExp2('#d8a5a4',.0031);
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(900,24,12),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,vertexShader:'varying vec3 vPos; void main(){vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:`
+    varying vec3 vPos;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
+    void main(){
+      vec3 ray=normalize(vPos);
+      vec3 col=mix(vec3(.99,.66,.48),vec3(.43,.40,.59),smoothstep(-.03,.34,ray.y));
+      col=mix(col,vec3(.16,.26,.40),smoothstep(.29,.8,ray.y));
+      vec2 uv=ray.xz/max(.06,ray.y+.12)*vec2(2.,6.);
+      float cloud=noise(uv)*.55+noise(uv*2.3)*.30+noise(uv*5.7)*.15;
+      col=mix(col,vec3(.97,.74,.68),smoothstep(.50,.72,cloud)*smoothstep(.00,.1,ray.y)*.65);
+      float sun=max(0.,dot(ray,normalize(vec3(-.10,.175,-1.))));
+      col+=vec3(.25,.13,.05)*pow(sun,90.);
+      col=mix(col,vec3(1.,.92,.72),smoothstep(.9989,.99915,sun));
+      gl_FragColor=vec4(col,1.);
+    }`}));scene.add(sky);
+  const camera=new THREE.PerspectiveCamera(48,1,.1,1800);
+  scene.add(new THREE.HemisphereLight('#fff0cf','#594d68',2));
+  const sun=new THREE.DirectionalLight('#ffd59b',2.4); sun.position.set(-100,170,80); scene.add(sun);
+  const mat=(color, extra={})=>new THREE.MeshStandardMaterial({color,roughness:.78,...extra});
+  const wood=mat('#80513b'),woodLight=mat('#b5835a'), darkWood=mat('#453a39'), metal=mat('#596671',{metalness:.7,roughness:.35}), bronze=mat('#d08a37',{metalness:.75,roughness:.27}), gold=mat('#ffe28a',{metalness:.65,roughness:.28}), snow=mat('#e9e7df'), rock=mat('#718297'), pine=mat('#345c62'), water=mat('#6c9eae',{metalness:.3,roughness:.35}), green=mat('#7bffad',{emissive:'#18b967',emissiveIntensity:1}), cyan=mat('#63eeff',{emissive:'#00a9dc',emissiveIntensity:.9}), violet=mat('#c49bff',{emissive:'#7547c4',emissiveIntensity:.7}), red=mat('#eb6a50'), cream=mat('#fff0cd'), black=mat('#29313a');
+  const boxGeo=new THREE.BoxGeometry(1,1,1), cylGeo=new THREE.CylinderGeometry(1,1,1,12);
+  function box(parent,x,y,z,w,h,d,m){const o=new THREE.Mesh(boxGeo,m);o.position.set(x,y,z);o.scale.set(w,h,d);parent.add(o);return o}
+  function cylinder(parent,x,y,z,r,h,m){const o=new THREE.Mesh(cylGeo,m);o.position.set(x,y,z);o.scale.set(r,h,r);parent.add(o);return o}
+  function sphere(parent,x,y,z,r,m){const o=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),m);o.position.set(x,y,z);parent.add(o);return o}
+  const centre=s=>Math.sin(s*.0048)*32+Math.sin(s*.011)*8;
+  const height=s=>48-s*.021+Math.sin(s*.006)*3;
+  function point(s,lane=0,y=0){return new THREE.Vector3(centre(s)+lane*3.5,height(s)+y,-s)}
+  function angle(s){return Math.atan2(centre(s+1)-centre(s-1),2)}
+  function at(s,lane=0,y=0){const g=new THREE.Group();g.position.copy(point(s,lane,y));g.rotation.y=-angle(s);scene.add(g);return g}
+  function beam(parent,a,b,width,depth,m){const p=a.clone().add(b).multiplyScalar(.5),v=b.clone().sub(a);const o=box(parent,p.x,p.y,p.z,width,v.length(),depth,m);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize());return o}
+  // Timber deck is segmented along the curves; rails run uninterrupted across it.
+  const end=1160, step=5;
+  for(let s=-80;s<end;s+=step){
+    const g=at(s,0,-.38);box(g,0,0,-step/2,12,.48,step+.15,wood);
+    for(let lane=-1;lane<=1;lane++)for(const side of [-.72,.72])box(g,lane*3.5+side,.37,-step/2,.13,.16,step+.25,metal);
+    for(let z=0;z<step;z+=1.25)for(let lane=-1;lane<=1;lane++)box(g,lane*3.5,.27,-z,2,.13,.22,darkWood);
+    for(const x of [-5.8,5.8]){box(g,x,.1,-step/2,.23,.6,step,woodLight);box(g,x,1.05,-step/2,.13,.13,step,woodLight);box(g,x,.65,-step/2,.1,.1,step,woodLight);box(g,x,.68,0,.12,1.25,.12,woodLight)}
+    if(s%20===0){for(const x of [-5,5]){box(g,x,-15,0,.55,30,.55,darkWood);beam(g,new THREE.Vector3(x,-1,0),new THREE.Vector3(-x,-12,0),.3,.3,wood);}}
+  }
+  // Layered valley floor and a winding ribbon of water beneath the trestle.
+  const land=mat('#4c6c6a'),bank=mat('#829389'),river=mat('#5a9ca8',{metalness:.12,roughness:.55}),riverLight=mat('#a6d4d1');
+  box(scene,0,-15,-540,900,3,1600,land);
+  for(let s=-100;s<1300;s+=20){const x=centre(s)*.65+Math.sin(s*.009)*30;const g=new THREE.Group();g.position.set(x,-12.8,-s);g.rotation.y=-angle(s)*.6;scene.add(g);box(g,0,0,-10,43,.3,21,bank);box(g,0,.18,-10,36,.15,21,river);box(g,-9,.27,-10,.22,.03,15,riverLight);box(g,7,.27,-6,.15,.03,9,riverLight)}
+  let seed=491;const rnd=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
+  // Each ridge is one irregular connected mesh: snow belongs to its faces,
+  // rather than floating above a separate cone.
+  const ridgeMaterial=new THREE.MeshLambertMaterial({vertexColors:true,flatShading:true,side:THREE.DoubleSide});
+  function ridge(side,offset,baseHeight){
+    // Break up the face into gullies and sunlit spurs. The snow line follows
+    // altitude and slope, so a peak reads from the rails and from below.
+    const rows=[],vertices=[],colors=[];
+    const faces=['#4c555f','#5c606a','#646779','#787789','#9a8b98'];
+    for(let i=0;i<=52;i++){
+      const along=i*30-170;
+      const peak=baseHeight*(.87+.24*Math.sin(i*.71)+.19*Math.sin(i*.32+1)) + rnd()*20;
+      const ridgeX=offset+26*Math.sin(i*.49)+15*Math.cos(i*.93);
+      rows.push([0,.23,.51,.73,1].map((f,j)=>new THREE.Vector3(
+        side*(ridgeX-(1-f)*(48+18*Math.sin(i*.67+j*.6))+rnd()*8),
+        -12+f*(peak+12)+(j>0&&j<4?(rnd()-.5)*12:0),-along+(rnd()-.5)*19)));
+    }
+    function facet(a,b,c,band){
+      const altitude=(a.y+b.y+c.y)/3;
+      const snow=altitude>baseHeight*(.82+rnd()*.12);
+      const tint=new THREE.Color(snow?(rnd()>.5?'#ddd8cc':'#bbb8c2'):faces[Math.min(4,band+(rnd()>.55?1:0))]);
+      for(const v of [a,b,c]){vertices.push(v.x,v.y,v.z);colors.push(tint.r,tint.g,tint.b);}
+    }
+    for(let i=1;i<rows.length;i++)for(let j=1;j<5;j++){
+      const a=rows[i-1][j-1],b=rows[i-1][j],c=rows[i][j],d=rows[i][j-1];
+      facet(a,b,d,j-1);facet(b,c,d,j-1);
+    }
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();scene.add(new THREE.Mesh(geo,ridgeMaterial));
+  }
+  ridge(-1,155,76);ridge(1,175,78);ridge(-1,280,134);ridge(1,295,135);
+  const treeGeo=new THREE.ConeGeometry(1,1,7);
+  for(let i=0;i<220;i++){const s=rnd()*1300,side=i%2?1:-1,x=centre(s)+side*(36+rnd()*75),y=-13,h=6+rnd()*11;const g=new THREE.Group();g.position.set(x,y,-s);scene.add(g);cylinder(g,0,1,0,.25,3,darkWood);for(let level=0;level<2;level++){const t=new THREE.Mesh(treeGeo,pine);t.scale.set(h*(.34-level*.08),h*.7,h*(.34-level*.08));t.position.y=2+h*(.32+level*.26);g.add(t)}}
+  // Trackside depot and watermill punctuate the first bends without obscuring gates.
+  function building(s,side,scale=1){const g=at(s,side*5,-.2);box(g,0,0,0,8*scale,.5,11*scale,woodLight);box(g,side*2,2*scale,0,5*scale,4*scale,7*scale,cream);const roof=new THREE.Mesh(new THREE.ConeGeometry(4.8*scale,2.5*scale,4),bronze);roof.rotation.y=Math.PI/4;roof.position.set(side*2,5*scale,0);g.add(roof);for(const z of [-2,2]){box(g,-side*.55,2.3*scale,z*scale,.1,1.2*scale,1.2*scale,gold);box(g,-side*.62,2.3*scale,z*scale,.12,.12,1.3*scale,darkWood)}box(g,side*3.4,5.5*scale,-2*scale,.65*scale,2*scale,.65*scale,red);return g}
+  building(92,-1,1);building(340,1,1.2);building(770,-1,1.1);
+  const wheel=at(330,7,-16);const wheelRing=new THREE.Mesh(new THREE.TorusGeometry(4,.35,8,16),woodLight);wheel.add(wheelRing);for(let i=0;i<8;i++){const spoke=box(wheel,0,0,0,.2,8,.22,darkWood);spoke.rotation.z=i*Math.PI/4;const a=i*Math.PI/4;box(wheel,Math.sin(a)*4,Math.cos(a)*4,0,1,.35,.8,woodLight)}
+  // Arched stone gallery: the open arch leaves all three lanes visible.
+  for(const s of [420,438,456]){const g=at(s);for(const x of [-7,7])box(g,x,4,0,2,8,3,rock);const arch=new THREE.Mesh(new THREE.TorusGeometry(7,1,8,20,Math.PI),rock);arch.position.y=8;arch.rotation.z=0;g.add(arch)}
+  // The iron suspension span rises out of the timber approach. Its cables
+  // follow both the bend and the sag between the two pairs of towers.
+  const iron=mat('#703e3a'),cable=mat('#454959');
+  for(const end of [690,800]){
+    const g=at(end);
+    for(const x of [-6.5,6.5]){
+      box(g,x,6,0,.7,13,.9,iron);box(g,x,12.4,0,1.1,.6,1.3,cream);
+    }
+    box(g,0,11.2,0,13.4,.55,.8,iron);
+    for(let x=-6;x<6;x+=2)beam(g,new THREE.Vector3(x,11.3,0),new THREE.Vector3(x+2,12.5,0),.2,.2,iron);
+    box(g,0,12.6,0,13.4,.3,.6,iron);
+  }
+  for(const side of [-1,1]){
+    const anchor=s=>{const t=(s-690)/110;return point(s,side*1.86,4.3+8.2*Math.pow(2*t-1,2));};
+    for(let s=690;s<800;s+=5){
+      beam(scene,anchor(s),anchor(s+5),.19,.19,cable);
+      beam(scene,point(s,side*1.86,.4),anchor(s),.09,.09,metal);
+    }
+  }
+  // Raised buildings share the bridge foundations and side platforms.
+  function platform(g,side,length){
+    box(g,0,-.38,0,8,.45,length,wood);
+    for(const z of [-length*.4,length*.4])for(const x of [-3,3]){
+      box(g,x,-30,z,.7,60,.7,darkWood);
+      beam(g,new THREE.Vector3(x,-10,z),new THREE.Vector3(-x,-1,z),.32,.32,woodLight);
+    }
+    box(g,-side*5,-.35,0,5,.34,2.4,woodLight);
+  }
+  for(const [s,side] of [[92,-1],[340,1],[770,-1]])platform(at(s,side*5),side,11);
+  // The terminus has a clock tower visible from the final sprint.
+  const tower=at(1056,4.4);platform(tower,1,8);
+  box(tower,0,5.6,0,3.5,11.2,3.5,cream);box(tower,0,9,0,4,.28,4,wood);
+  for(const x of [-1.3,1.3])box(tower,x,7.5,1.8,.25,6,.18,darkWood);
+  const face=new THREE.Mesh(new THREE.CircleGeometry(1.15,24),darkWood);
+  face.position.set(0,9.7,1.78);tower.add(face);box(tower,0,10,1.81,.14,.65,.07,cream);box(tower,.33,9.7,1.81,.68,.12,.07,cream);
+  const spire=new THREE.Mesh(new THREE.ConeGeometry(3.1,5,4),bronze);spire.rotation.y=Math.PI/4;spire.position.y=13.6;tower.add(spire);
+  // Merge the immutable landscape and viaduct into material/geometry instances.
+  // Per-instance matrices preserve the bends while reducing thousands of draw calls.
+  scene.updateMatrixWorld(true);
+  const buckets=new Map(), staticRoots=scene.children.filter(o=>o!==sky && o!==wheel && !(o instanceof THREE.Light));
+  for(const root of staticRoots)root.traverse(o=>{if(!o.isMesh)return;const key=o.geometry.uuid+':'+o.material.uuid+':'+Math.floor(o.matrixWorld.elements[14]/180);let b=buckets.get(key);if(!b){b={geometry:o.geometry,material:o.material,matrices:[]};buckets.set(key,b)}b.matrices.push(o.matrixWorld.clone())});
+  for(const root of staticRoots)scene.remove(root);
+  for(const b of buckets.values()){const mesh=new THREE.InstancedMesh(b.geometry,b.material,b.matrices.length);b.matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh)}
+  // The trolley rides on the selected track. Its bell swings independently.
+  const trolley=new THREE.Group();scene.add(trolley);
+  box(trolley,0,.65,0,2.55,.45,3.6,red);box(trolley,0,.95,0,2.3,.18,3.25,woodLight);
+  for(const x of [-1.25,1.25])for(const z of [-1.15,1.15]){const w=cylinder(trolley,x,.43,z,.47,.24,metal);w.rotation.z=Math.PI/2;sphere(trolley,x*1.1,.43,z,.13,gold)}
+  for(const x of [-.9,.9]){box(trolley,x,1.75,.15,.18,1.7,.18,darkWood);box(trolley,x,1.15,-1.35,.12,.8,.12,gold)}
+  box(trolley,0,2.6,.15,2,.2,.22,woodLight);
+  const swing=new THREE.Group();swing.position.set(0,2.55,.15);trolley.add(swing);cylinder(swing,0,-.13,0,.11,.3,metal);
+  const bell=new THREE.Mesh(new THREE.CylinderGeometry(.31,.84,1.1,24,1,false),bronze);bell.position.y=-.75;swing.add(bell);const rim=new THREE.Mesh(new THREE.TorusGeometry(.84,.09,8,24),gold);rim.rotation.x=Math.PI/2;rim.position.y=-1.29;swing.add(rim);sphere(swing,0,-1.36,0,.16,darkWood);
+  for(const y of [-.55,-.95]){const band=new THREE.Mesh(new THREE.TorusGeometry(y===-.55?.49:.7,.035,6,24),gold);band.rotation.x=Math.PI/2;band.position.y=y;swing.add(band)}
+  for(const x of [-1.06,1.06])box(trolley,x,1.1,1.55,.1,.5,.1,gold);box(trolley,0,.8,1.83,1.1,.2,.06,gold);
+  const flag=box(trolley,0,1.6,1.5,1.7,.65,.04,cream);box(trolley,0,1.6,1.47,1.45,.1,.04,red);
+  function sign(parent,text,x,y,z,w,h,dark='#244145'){
+    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle=dark;ctx.fillRect(0,0,512,96);ctx.strokeStyle='#ebd893';ctx.lineWidth=4;ctx.strokeRect(5,5,502,86);
+    ctx.fillStyle='#fff0cd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 49px Georgia';ctx.fillText(text,256,48,482);
+    const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map}));
+    panel.position.set(x,y,z);parent.add(panel);
+  }
+  sign(trolley,'BELL  MAIL',0,1.6,1.54,1.72,.62);
+  const gates=new Map();
+  function makeGate(data){
+    const g=at(data.s,data.lane);const kind=data.kind;
+    if(kind==='delivery'){
+      // Copper-roofed station and a suspended, front-facing target hoop.
+      for(const x of [-1.55,1.55])box(g,x,2.1,0,.22,4.2,.25,woodLight);
+      box(g,0,4.3,0,3.4,.25,.5,bronze);box(g,0,3.7,.1,2.6,.72,.12,red);
+      sign(g,data.name.toUpperCase(),0,3.81,.19,3.28,.84);
+      const hoop=new THREE.Mesh(new THREE.TorusGeometry(.88,.14,10,28),mat('#ffbf37',{emissive:'#d6710e',emissiveIntensity:.6}));hoop.position.set(0,2.45,.2);g.add(hoop);
+      for(const x of [-.6,.6])beam(g,new THREE.Vector3(x,4.1,0),new THREE.Vector3(x,2.9,.2),.055,.055,gold);
+      const basket=new THREE.Mesh(new THREE.CylinderGeometry(.74,.48,.65,14,1,true),woodLight);basket.position.set(0,1.7,.15);g.add(basket);
+      for(const x of [-1.42,1.42]){box(g,x,3.05,.1,.22,1.5,.06,cream);box(g,x,2.65,.12,.22,.3,.06,red)}
+      for(let d=9;d<=30;d+=3){const r=at(data.s-d,data.lane,.08);box(r,0,.05,0,2.2,.08,2.4,green);if(d>=15&&d<=21)box(r,0,.11,0,.34,.04,2.4,gold);g.userData.zone??=[];g.userData.zone.push(r)}
+      // A small settlement beyond the target gives each delivery a destination.
+      const v=at(data.s, data.lane>0?3.5:-3.5,-.2);box(v,0,2,0,4,4,4,cream);const roof=new THREE.Mesh(new THREE.ConeGeometry(3.2,2.3,4),bronze);roof.position.y=5;roof.rotation.y=Math.PI/4;v.add(roof);box(v,0,2,2.05,1,1.4,.08,darkWood);platform(v,data.lane>0?1:-1,7);for(const x of [-1.25,1.25]){
+        box(v,x,2.5,2.04,.66,.91,.12,gold);box(v,x,2.5,2.12,.09,1,.09,wood);
+      }g.userData.village=v;
+    }else if(kind==='work'){
+      for(const x of [-.85,.85]){const leg=box(g,x,.6,0,.18,1.2,.2,woodLight);leg.rotation.z=x*.2}box(g,0,1.12,0,2.6,.55,.25,cream);for(const x of [-.8,0,.8]){const stripe=box(g,x,1.13,.14,.35,.57,.02,red);stripe.rotation.z=-.55}
+    }else if(kind==='boost'){
+      box(g,0,.12,0,2.6,.15,5,cyan);for(const z of [-1.5,0,1.5]){for(const side of [-1,1]){const a=box(g,side*.35,.22,z,.18,.08,1,cream);a.rotation.y=side*.65}}
+    }else{
+      for(const x of [-1.3,1.3])box(g,x,1.7,0,.15,3.4,.2,violet);box(g,0,3.35,0,2.8,.3,.4,violet);box(g,0,2.35,.1,2.3,.9,.15,violet);box(g,0,.12,0,2.5,.12,4,violet);sign(g,'COVARI',0,2.45,.21,2.8,.76,'#583c70');
+    }
+    g.userData.kind=kind;return g;
+  }
+  const finish=at(1100);for(const x of [-6,6])box(finish,x,4,0,.4,8,.4,woodLight);for(let i=0;i<12;i++)for(let j=0;j<2;j++)box(finish,-5.5+i,7.4+j*.6,0,1,.6,.2,(i+j)%2?cream:black);
+  const ghost=new THREE.Group();scene.add(ghost);const ghostMat=new THREE.MeshBasicMaterial({color:'#7af7ff',transparent:true,opacity:.28,depthWrite:false});box(ghost,0,.8,0,2.4,.5,3.3,ghostMat);box(ghost,0,1.5,0,1.3,1.1,1.4,ghostMat);
+  const shotMeshes=Array.from({length:3},()=>{
+    const shot=swing.clone();shot.scale.setScalar(.84);shot.visible=false;scene.add(shot);return shot;
+  });
+  const sparks=new THREE.Group();scene.add(sparks);
+  const glint=new THREE.MeshBasicMaterial({color:'#ffe497'});
+  for(let i=0;i<20;i++)box(sparks,0,0,0,.09,.24,.12,glint);
+  let landed=-1;
+  let lastHit=null;
+  const cameraPos=new THREE.Vector3(),look=new THREE.Vector3();let lastDistance=null, lastPhase=null;
+  function update(state,aspect,reduced){
+
+    ghost.visible=!!state.ghost&&Math.abs(state.ghost.distance-state.distance)>5&&state.ghost.distance>state.distance-20&&state.ghost.distance<state.distance+180;if(ghost.visible){ghost.position.copy(point(state.ghost.distance,state.ghost.lane,.18));ghost.rotation.y=-angle(state.ghost.distance)}
+    camera.aspect=aspect;camera.fov=(aspect<1.3?60:50)+(reduced?0:Math.max(0,state.speed-24)*.27);camera.updateProjectionMatrix();
+    for(const data of state.gates||[]){const key=data.s+':'+data.lane+':'+data.kind;let g=gates.get(key);if(!g){g=makeGate(data);gates.set(key,g)}g.visible=data.state!=='locked'&&data.s>state.distance-45&&data.s<state.distance+270;if(g.userData.zone)for(const z of g.userData.zone)z.visible=data.state==='ahead'&&data.s>state.distance-5&&data.s<state.distance+150; if(g.userData.village)g.userData.village.visible=g.visible;g.scale.setScalar(data.state==='hit'?.85:1)}
+    trolley.position.copy(point(state.distance,state.lane,.05));trolley.rotation.y=-angle(state.distance);swing.rotation.z=reduced?0:Math.sin(state.elapsed*3.2)*(.1+state.speed*.003);swing.rotation.x=reduced?0:Math.sin(state.elapsed*2.1)*.1;
+    flag.rotation.y=reduced?0:Math.sin(state.elapsed*9)*.12;
+    const cam=point(state.distance-12,state.lane*.65,6.4);const target=point(state.distance+27,state.lane*.3,1.5);const snap=reduced||lastDistance===null||state.distance<lastDistance-3||state.phase!==lastPhase&&state.phase!=='run'||state.phase==='finish';cameraPos.lerp(cam,snap?1:.35);look.lerp(target,snap?1:.4);lastDistance=state.distance;lastPhase=state.phase;if(!cameraPos.length())cameraPos.copy(cam);camera.position.copy(cameraPos);camera.lookAt(look);camera.rotateZ(reduced?0:((state.targetLane??state.lane)-state.lane)*-.028);sky.position.copy(camera.position);
+    for(let i=0;i<shotMeshes.length;i++){const shot=(state.shots||[])[i],m=shotMeshes[i];m.visible=!!shot;if(shot){const t=Math.min(1,shot.age/shot.duration);m.position.copy(point(THREE.MathUtils.lerp(shot.fromS,shot.toS,t),THREE.MathUtils.lerp(shot.fromLane,shot.toLane,t),2.5+Math.sin(t*Math.PI)*4))}}
+    swing.visible=!state.shots?.length;
+    trolley.rotation.z=reduced?0:((state.targetLane??state.lane)-state.lane)*-.13;
+    const hit=state.deliveries?.filter(g=>g.state==='hit').at(-1);
+    if(state.distance<115){landed=-1;lastHit=null;}
+    if(hit&&landed!==hit.index){landed=hit.index;lastHit={at:state.elapsed,s:hit.s,lane:hit.lane};}
+    const age=lastHit?state.elapsed-lastHit.at:2;
+    sparks.visible=age<.7&&!reduced;
+    if(sparks.visible){
+      sparks.position.copy(point(lastHit.s,lastHit.lane,2.6));
+      sparks.children.forEach((spark,i)=>{
+        const a=i*2.4,r=age*(2.5+(i%4));spark.position.set(Math.cos(a)*r,age*(6+i%4)-6*age*age,Math.sin(a)*r+age*2);
+        spark.rotation.z=a+age*2;spark.scale.set(.11,.24*(1-age),.1);
+      });
+    }
+    wheel.rotation.z=reduced?0:state.elapsed*.8;
+  }
+  update({distance:0,lane:0,speed:20,elapsed:0,gates:[],shots:[],impacts:0},1.6,true);
+  return {scene,camera,update};
+}
+
+return {createBellRailway};})();
 const Harbor=(()=>{
 
 // Last Light: original procedural diorama. The sea is presentation; the quay,
@@ -4524,6 +4816,17 @@ const SHIFTS = [
     recipes:[0,1,2,1,0,2,0,1,2,1,0,2],unlocks:['lathe','mill','polish','gild','inspect'],stock:['round','plate','block'],
     programming:false,sourcing:true,sourceJobs:ORBIT_SOURCE_JOBS,calls:false,callTimes:[],passTarget:6,stars:[6,9,12],
   },
+  {
+    id:'bellweather',mapId:'downhill-line',engine:'bells',ruleset:'bellweather-v2-downhill',recordId:'bellweather-v2-downhill',name:'Bellweather',author:'GPT-6.2 Astra',harness:'Codex',musicTrack:'bells',
+    subtitle:'Downhill Express · Alpine bell courier',
+    goal:'Throw four bells through the hoops before the terminus. Eight makes a clean sweep. Clear in under 45 seconds for a speed bonus.',
+    brief:'The bells are cast. The only way down is an old three-track timber railway. Shift left or right to line up with a village hoop, then throw on the green sleepers. A gold release hits the bullseye and kicks the trolley faster. From one track over, only a gold release will reach.',
+    tip:'A/D or ←/→ switch tracks. Space throws. Hold S or ↓ to brake. Cyan arrows add speed. Avoid striped barriers. R restarts instantly.',
+    retryTip:'Ride the cyan rail beside a delivery and throw across on gold. A clean run carries its speed down the mountain.',
+    duration:100,maxOrders:8,recipes:[0],unlocks:[],stock:[],programming:false,sourcing:true,
+    sourceJobs:[{name:'Engraved dedication plate',capability:'Laser marking',technology:'lm',gap:'No laser engraver aboard'}],
+    calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
+  },
 ];
 
 // Retired slots remain in the catalog for historical saves and scores. Entry
@@ -5161,6 +5464,195 @@ class ShopGame {
 }
 
 return {RULESET,scoreShipment,OPS,RECIPES,STOCK_TYPES,stockType,SOURCE_JOBS,FINISHING_SOURCE_JOBS,PRECISION_SOURCE_JOBS,LAUNCH_SOURCE_JOBS,ORBIT_SOURCE_JOBS,SHIFTS,isPlayableShift,shiftRuleset,nextShiftIndex,PROGRAM_DURATION,ShopGame};})();
+const Bells=(()=>{const {ShopGame}=Core;
+
+const COURSE_LENGTH=1100;
+const MAX_SPEED=43;
+const TOWERS=[
+  {s:115,lane:0,name:'Depot'}, {s:236,lane:-1,name:'Pine Mill'},
+  {s:357,lane:1,name:'Copper Falls'}, {s:491,lane:0,name:'Stone Gallery'},
+  {s:632,lane:-1,name:'North Chapel'}, {s:760,lane:1,name:'High Bridge'},
+  {s:895,lane:-1,name:'Switchback'}, {s:1038,lane:1,name:'Bellweather'},
+];
+const BELL_NOTES=[{hz:293.665},{hz:329.628},{hz:369.994},{hz:440},{hz:493.883},{hz:587.330}];
+const boostPads=[[54,0],[168,0],[261,1],[329,0],[400,-1],[464,1],[533,0],[608,0],[690,1],[738,0],[815,1],[869,0],[946,-1],[1018,0],[1065,1]];
+const trestleWork=[[193,1],[285,-1],[381,1],[423,0],[513,-1],[553,0],[595,1],[651,-1],[716,1],[786,0],[833,1],[911,-1],[963,0],[991,-1]];
+const bells=[0,2,3,1,4,2,5,0];
+const RACE_RECORD='chip-rush-bellweather-v2-downhill-ghost';
+
+function readRailRecord(storage){
+  try{
+    const r=JSON.parse(storage.getItem(RACE_RECORD));
+    if(!r||!Number.isInteger(r.shipped)||r.shipped<1||r.shipped>8||!Number.isFinite(r.time)||r.time<COURSE_LENGTH/MAX_SPEED||r.time>100)return null;
+    if(!Array.isArray(r.splits)||r.splits.length!==8||!r.splits.every(t=>Number.isFinite(t)&&t>=0&&t<=r.time))return null;
+    if(!Array.isArray(r.trace)||r.trace.length<2||r.trace.length>1050)return null;
+    if(!r.trace.every((p,i)=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite)
+      &&p[0]>=0&&p[0]<=r.time&&p[1]>=0&&p[1]<=COURSE_LENGTH&&Math.abs(p[2])<=1
+      &&(!i||p[0]>=r.trace[i-1][0]&&p[1]>=r.trace[i-1][1])))return null;
+    if(r.trace[0][0]!==0||r.trace.at(-1)[1]!==COURSE_LENGTH)return null;
+    return r;
+  }catch{return null;}
+}
+function keepRailRecord(game,storage){
+  const old=readRailRecord(storage);
+  if(game.phase!=='finish'||!game.shipped||old&&(old.shipped>game.shipped||old.shipped===game.shipped&&old.time<=game.elapsed))return false;
+  try{storage.setItem(RACE_RECORD,JSON.stringify({time:game.elapsed,shipped:game.shipped,splits:game.splits,trace:game.trace}));return true;}catch{return false;}
+}
+
+class BellGame extends ShopGame {
+  // The shared shift lifecycle owns scores, pause and results. All orders here
+  // are physical trackside handoffs, so the shop's arrival timer is unused.
+  spawn(){return false;}
+  interact(){return false;}
+  reset(shift=0){
+    super.reset(shift);
+    this.courseLength=COURSE_LENGTH;
+    this.distance=0;this.speed=18;this.lane=0;this.targetLane=0;this.braking=false;
+    this.boost=0;this.hitFlash=0;this.impacts=0;this.cooldown=0;this.phase='run';
+    this.perfect=0;this.banks=0;this.pads=0;this.topSpeed=18;this.shots=[];this.splits=[];
+    this.trace=[[0,0,0]];this.record=null;this.ghost=null;this.ghostIndex=0;
+    this.feedback=null;this.scoreDetails={base:0,precision:0,bank:0,streak:0,sourcing:0,express:0};
+    this.gates=[
+      ...TOWERS.map((t,i)=>({...t,kind:'delivery',index:i})),
+      ...boostPads.map(([s,lane])=>({s,lane,kind:'boost'})),
+      ...trestleWork.map(([s,lane])=>({s,lane,kind:'work'})),
+      {s:690,lane:-1,kind:'covari',name:'Laser-engraved dedication plate'},
+    ].sort((a,b)=>a.s-b.s).map(g=>({...g,state:g.kind==='covari'?'locked':'ahead'}));
+    this.deliveries=this.gates.filter(g=>g.kind==='delivery');
+    this.spawnIndex=8;
+  }
+
+  switchLane(direction){
+    if(this.mode!=='playing'||![-1,1].includes(direction))return;
+    this.targetLane=Math.max(-1,Math.min(1,this.targetLane+direction));
+  }
+  aim(){
+    const gate=this.deliveries.find(g=>g.state==='ahead');
+    if(!gate)return null;
+    const gap=gate.s-this.distance,offset=Math.abs(this.lane-gate.lane);
+    const gold=gap>=15&&gap<=21,direct=offset<=.32;
+    const bank=gold&&offset>=.68&&offset<=1.32;
+    return {gate,gap,gold,direct,bank,open:gap>=9&&gap<=30&&(direct||bank)};
+  }
+  notice(text,type,seconds=1.1){
+    this.feedback={text,type,until:this.elapsed+seconds};
+    this.emit('railCue',{text,kind:type});
+  }
+  throwBell(){
+    const aim=this.aim();
+    if(this.mode!=='playing'||this.cooldown>0||!aim||aim.gate.fired)return false;
+    const {gate,gap,open,bank,gold}=aim;
+    if(gap>41){
+      this.cooldown=.22;this.notice('Wait for the green strip','early',.55);return false;
+    }
+    gate.fired=true;
+    const quality=!open?'miss':bank?'bank':gold?'perfect':'clean';
+    gate.quality=quality;
+    this.shots.push({fromS:this.distance,toS:gate.s,fromLane:this.lane,toLane:open?gate.lane:this.lane+.5,
+      age:0,duration:Math.max(.18,gap/this.speed),success:open});
+    this.cooldown=.34;
+    if(!open)this.notice(gap>30?'Early release':gap<9?'Late release':'Outside throwing line','miss');
+    else this.emit('railThrow',{quality});
+    return open;
+  }
+  resolveGate(g){
+    const aligned=Math.abs(this.lane-g.lane)<.46;
+    if(g.kind==='delivery'){
+      this.splits.push(this.elapsed);
+      if(!g.quality||g.quality==='miss'){
+        this.missed++;this.combo=0;g.state='miss';
+        if(!g.fired)this.notice('Missed '+g.name,'miss');
+        return;
+      }
+      g.state='hit';this.shipped++;this.combo++;this.bestCombo=Math.max(this.bestCombo,this.combo);
+      const gold=g.quality!=='clean',bank=g.quality==='bank';
+      const precision=gold?260:0,bankPoints=bank?170:0,chain=Math.min(5,this.combo-1)*60;
+      this.scoreDetails.base+=320;this.scoreDetails.precision+=precision;this.scoreDetails.bank+=bankPoints;this.scoreDetails.streak+=chain;
+      const points=320+precision+bankPoints+chain;this.score+=points;
+      if(this.shipped===this.config.passTarget)this.clearElapsed=this.elapsed;
+      if(gold){this.perfect++;if(bank)this.banks++;this.kick(2.1,3.2);}
+      this.notice((bank?'Cross-track catch':gold?'Bullseye':'Delivered')+'  +'+points,g.quality);
+      this.emit('railBell',{note:bells[g.index],slot:g.index});
+      if(this.shipped===2){const plate=this.gates.find(e=>e.kind==='covari');if(plate.s>this.distance)plate.state='ahead';}
+      return;
+    }
+    g.state=aligned?'hit':'skip';
+    if(!aligned)return;
+    if(g.kind==='work'){
+      this.speed=Math.max(14,this.speed*.54);this.impacts++;this.hitFlash=.65;this.boost=0;this.combo=0;
+      this.notice('Track work · lost speed','crash');
+    }else if(g.kind==='boost'){
+      this.pads++;this.kick(3.4,5);this.notice('Express rail','boost',.6);
+    }else{
+      this.sourced=1;this.sourcePoints=300;this.score+=300;this.scoreDetails.sourcing+=300;
+      this.notice('Covari plate collected  +300','covari',1.5);
+    }
+  }
+  kick(duration,gain){this.boost=Math.max(this.boost,duration);this.speed=Math.min(MAX_SPEED,this.speed+gain);}
+  tick(dt){
+    if(this.mode!=='playing'||!Number.isFinite(dt)||dt<=0)return;
+    for(let left=Math.min(dt,.25);left>1e-8&&this.mode==='playing';){
+      const step=Math.min(1/120,left);this.advance(step);left-=step;
+    }
+  }
+  advance(dt){
+    const old=this.distance;
+    const cruise=this.braking?14:this.boost>0?MAX_SPEED:24;
+    const rate=this.braking?18:this.speed>cruise?2.9:5.7;
+    this.speed+=Math.sign(cruise-this.speed)*Math.min(Math.abs(cruise-this.speed),dt*rate);
+    dt=Math.min(dt,(COURSE_LENGTH-old)/this.speed);
+    this.elapsed+=dt;this.time=this.config.duration-this.elapsed;
+    this.distance=Math.min(COURSE_LENGTH,old+this.speed*dt);
+    this.lane+=Math.sign(this.targetLane-this.lane)*Math.min(Math.abs(this.targetLane-this.lane),dt*3.9);
+    this.topSpeed=Math.max(this.topSpeed,this.speed);this.boost=Math.max(0,this.boost-dt);
+    this.cooldown=Math.max(0,this.cooldown-dt);this.hitFlash=Math.max(0,this.hitFlash-dt);
+    for(const shot of this.shots)shot.age+=dt;
+    if(this.shots.length&&this.shots[0].age>=this.shots[0].duration)this.shots.shift();
+    for(const gate of this.gates)if(gate.s>old&&gate.s<=this.distance&&gate.state==='ahead')this.resolveGate(gate);
+    if(this.elapsed-this.trace.at(-1)[0]>=.1)this.trace.push([this.elapsed,this.distance,this.lane]);
+    if(this.distance>=COURSE_LENGTH-1e-7){
+      this.trace.push([this.elapsed,COURSE_LENGTH,this.lane]);
+      if(this.shipped>=this.config.passTarget){
+        this.scoreDetails.express=Math.max(0,Math.floor((45-this.elapsed)*60));
+        this.score+=this.scoreDetails.express;
+      }
+      this.phase='finish';this.finish('work-complete');
+    }
+    if(this.record){
+      const trace=this.record.trace;
+      while(this.ghostIndex+1<trace.length-1&&trace[this.ghostIndex+1][0]<=this.elapsed)this.ghostIndex++;
+      const a=trace[this.ghostIndex],b=trace[this.ghostIndex+1];
+      const t=Math.min(1,Math.max(0,(this.elapsed-a[0])/(b[0]-a[0]||1)));
+      this.ghost={distance:a[1]+t*(b[1]-a[1]),lane:a[2]+t*(b[2]-a[2])};
+    }
+  }
+  snapshot(){
+    return {...super.snapshot(),distance:this.distance,speed:this.speed,lane:this.lane,targetLane:this.targetLane,
+      next:this.aim(),impacts:this.impacts,perfect:this.perfect,banks:this.banks,pads:this.pads,splits:[...this.splits]};
+  }
+}
+
+return {COURSE_LENGTH,MAX_SPEED,TOWERS,BELL_NOTES,RACE_RECORD,readRailRecord,keepRailRecord,BellGame};})();
+const BellAudio=(()=>{const {BELL_NOTES}=Bells;
+
+// Four partials give each successful catch the same bronze bell timbre.
+function ringBell(context, output, note, volume=1) {
+  if(!context||!output)return;
+  const at=context.currentTime, frequency=BELL_NOTES[note].hz;
+  const pan=context.createStereoPanner();
+  pan.pan.value=.18;pan.connect(output);
+  for(const [ratio,seconds,level] of [[.5,1.7,.16],[1,1.35,.31],[2.39,.58,.085],[3.01,.32,.06]]){
+    const osc=context.createOscillator(),gain=context.createGain();
+    osc.frequency.value=frequency*ratio;
+    gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(level*volume,at+.008);
+    gain.gain.exponentialRampToValueAtTime(.0001,at+seconds);
+    osc.connect(gain);gain.connect(pan);
+    osc.onended=()=>{osc.disconnect();gain.disconnect();if(ratio===.5)pan.disconnect();};
+    osc.start(at);osc.stop(at+seconds+.01);
+  }
+}
+
+return {ringBell};})();
 const Manager=(()=>{const {ShopGame,OPS,stockType}=Core;
 
 // Open for Business: the shop-manager mode. Days instead of a single shift,
@@ -6950,8 +7442,10 @@ class FirstLightGame extends ShopGame {
 
 return {ORBIT_LEVEL,ORBIT_OPS,orbitOp,MIRROR_SLOTS,FLOWN_SEGMENTS,SEGMENTS,TOSS_SPEED,TOSS_MIN,TOSS_MAX,tossSeconds,FirstLightGame};})();
 const Launch=(()=>{const {ShopGame,SHIFTS,OPS,stockType}=Core;
+const {BellGame}=Bells;
 const {BeaconGame}=Beacon;
 const {FirstLightGame}=Orbit;
+
 
 
 
@@ -7186,7 +7680,7 @@ class LaunchGame extends ShopGame {
 
 // One place to create the rules for a level.
 function shiftGame(shift) {
-  const game = SHIFTS[shift]?.engine === 'launch' ? new LaunchGame() : SHIFTS[shift]?.engine === 'beacon' ? new BeaconGame() : SHIFTS[shift]?.engine === 'orbit' ? new FirstLightGame() : new ShopGame();
+  const game = SHIFTS[shift]?.engine === 'bells' ? new BellGame() : SHIFTS[shift]?.engine === 'launch' ? new LaunchGame() : SHIFTS[shift]?.engine === 'beacon' ? new BeaconGame() : SHIFTS[shift]?.engine === 'orbit' ? new FirstLightGame() : new ShopGame();
   game.reset(shift);
   return game;
 }
@@ -7486,7 +7980,7 @@ class ShopAudio {
   // 'launch' Launch Window's layered countdown stems; 'harbor' Last Light;
   // 'orbit' First Light's three synthesized stems.
   setTrack(track='country'){
-    const next=['storm','launch','harbor','orbit'].includes(track)?track:'country';
+    const next=['storm','launch','harbor','orbit','bells'].includes(track)?track:'country';
     if(next===this.track)return;
     this.track=next;this.musicOffset=0;
     if(this.ctx&&this.musicSource){
@@ -7534,7 +8028,7 @@ class ShopAudio {
     const orbit=this.track==='orbit',stems=orbit?(this.orbitStems||(this.orbitStems=buildOrbitStems(this.ctx))):this.stemBuffers;
     // A device that cannot build buffers plays First Light without music.
     const layered=this.track==='launch'||orbit,loop=orbit?ORBIT_LOOP_SECONDS:LAUNCH_LOOP_SECONDS;
-    const now=this.ctx.currentTime,launch=this.active&&layered,single=this.active&&!layered;
+    const now=this.ctx.currentTime,launch=this.active&&layered,single=this.active&&!layered&&this.track!=='bells';
     if(!launch&&this.stemSources){
       const first=this.stemSources[0];this.stemOffset=(first.offset+now-first.startedAt)%first.loop;
       for(const {source,fade} of this.stemSources){fade.gain.cancelScheduledValues(now);fade.gain.setTargetAtTime(0,now,.05);source.stop(now+.25);}
@@ -8362,8 +8856,96 @@ function pocketAbsentStations(game) {
 }
 
 return {POCKET_BADGES,pocketBadgeIcon,pocketShortName,pocketRemainingStations,POCKET_TAP_RADIUS,boxDistance,pocketTapTarget,POCKET_DEBURR_ORDER,pocketDeburrInstalled,pocketCrateShown,pocketAbsentStations};})();
+const RailCabUI=(()=>{const {ringBell}=BellAudio;
+
+const tracks=['Left','Centre','Right'];
+const masthead='<span class="rail-wing" aria-hidden="true">≋</span> Bellweather Railway';
+function createRailCab(game,audio,{pause,retry}){
+  const el=document.createElement('section');
+  el.className='rail-cab';el.hidden=true;el.setAttribute('aria-label','Downhill Express controls');
+  el.innerHTML=`<div class="rail-mast"><small>${masthead}</small><strong>Downhill Express</strong>
+    <div class="rail-stops" aria-label="Eight deliveries">${'<i></i>'.repeat(8)}</div></div>
+    <div class="rail-clock"><div><small>Run time</small><strong data-time></strong></div><div><small>Score</small><b data-score></b></div>
+      <button data-retry aria-label="Retry race" title="Retry (R)">↻</button><button data-pause aria-label="Pause" title="Pause (Esc)">Ⅱ</button></div>
+    <div class="rail-feedback" data-feedback role="status"></div>
+    <div class="rail-covari" data-covari></div>
+    <div class="rail-destination"><small data-stop></small><strong data-name></strong><b data-track></b></div>
+    <div class="rail-speed"><strong data-speed></strong><small>km/h</small><b data-drive></b></div>
+    <div class="rail-controls"><div class="rail-steer"><button data-left aria-label="Switch left">← <kbd>A</kbd></button><button data-right aria-label="Switch right">→ <kbd>D</kbd></button></div>
+      <div class="rail-timing"><div class="rail-meter-title"><b data-aim></b><span data-split></span></div>
+      <div class="rail-meter"><i class="rail-window"></i><i class="rail-gold"></i><i class="rail-marker" data-marker></i></div></div>
+      <div class="rail-actions"><button data-brake aria-label="Hold brake">Brake <kbd>S</kbd></button><button data-throw aria-label="Throw bell">Throw <kbd>Space</kbd></button></div></div>`;
+  document.getElementById('game').append(el);
+  const ui=Object.fromEntries([...el.querySelectorAll('*')].flatMap(node=>Object.keys(node.dataset).map(k=>[k,node])));
+  const stops=[...el.querySelectorAll('.rail-stops i')];
+  const set=(k,value)=>{const text=String(value);if(ui[k].textContent!==text)ui[k].textContent=text;};
+  const refocus=()=>document.getElementById('scene').focus({preventScroll:true});
+  const actions={left:()=>game.switchLane(-1),right:()=>game.switchLane(1),throw:()=>game.throwBell(),retry,pause};
+  for(const [name,action] of Object.entries(actions))ui[name].onclick=()=>{action();if(name!=='pause')refocus();};
+  const brake=ui.brake;
+  const hold=()=>{game.braking=true;brake.classList.add('held');};
+  const release=()=>{game.braking=false;brake.classList.remove('held');};
+  brake.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();brake.setPointerCapture(e.pointerId);hold();};
+  brake.onpointerup=brake.onpointercancel=brake.onlostpointercapture=release;
+  brake.onkeydown=e=>{if(['Space','Enter'].includes(e.code)){e.stopPropagation();e.preventDefault();hold();}};
+  brake.onkeyup=e=>{if(['Space','Enter'].includes(e.code)){e.preventDefault();release();}};
+  brake.onblur=release;window.addEventListener('blur',release);
+  let wheel=0,lastStop='',wheelStep=0;
+  function update(){
+    const aim=game.aim(),gate=aim?.gate;
+    set('time',game.elapsed.toFixed(2));set('score',game.score.toLocaleString());
+    set('speed',Math.round(game.speed*3.6));set('drive',game.braking?'Brake':game.boost>0?'Express':'Coasting');
+    el.dataset.drive=game.braking?'brake':game.boost>0?'express':'coast';
+    const stopKey=game.shipped+'/'+game.missed;
+    if(lastStop!==stopKey){
+      stops.forEach((stop,i)=>{stop.dataset.state=game.deliveries[i].state;});
+      lastStop=stopKey;
+    }
+    set('stop',gate?'Next stop   '+String(gate.index+1).padStart(2,'0')+' / 08':'Finish line');
+    set('name',gate?.name??'Terminus');
+    set('track',aim?tracks[gate.lane+1]+' track  ·  '+Math.ceil(aim.gap)+' m':Math.ceil(game.courseLength-game.distance)+' m');
+    const status=!aim?'Finish straight':gate.fired?(gate.quality==='miss'?'Missed throw':'Bell away'):aim.open?(aim.bank?'Bank shot':aim.gold?'Bullseye':'Throw now'):aim.gap>30?'Approach':aim.gap<9?'Too late':'Line up';
+    set('aim',status);
+    el.dataset.window=gate&&!gate.fired&&aim.open?(aim.gold?'gold':'green'):'';
+    ui.marker.style.left=Math.max(0,Math.min(100,(50-(aim?.gap??0))*2))+'%';
+    const fb=game.feedback?.until>game.elapsed?game.feedback:null;
+    set('feedback',fb?.text??'');ui.feedback.dataset.kind=fb?.type??'';
+    el.classList.toggle('rail-impact',game.hitFlash>.38);
+    const plate=game.gates.find(g=>g.kind==='covari');
+    const gap=plate.s-game.distance;
+    set('covari',plate.state==='ahead'&&gap>0&&gap<108?'↙  Covari · engraved plate   +300  /  '+Math.ceil(gap)+' m':'');
+    const split=game.splits.length-1;
+    if(game.record&&split>=0){
+      const delta=game.splits[split]-game.record.splits[split];
+      set('split','Split '+(delta>=0?'+':'−')+Math.abs(delta).toFixed(2)+' s');
+    }else if(game.ghost)set('split','Ghost '+game.record.time.toFixed(2)+' s');
+    else set('split',gate?.index===0?'Green to throw · gold to boost':'');
+    if(game.elapsed<wheel-.8){wheel=0;wheelStep=0;}
+    if(game.mode==='playing'&&game.elapsed>=wheel){
+      const accent=wheelStep++%4===0;
+      audio.note(accent?89:67,.045,'triangle',accent?.041:.021);
+      if(accent)audio.note(225,.018,'triangle',.017,.045);
+      wheel=game.elapsed+Math.max(.12,.44-game.speed*.0065);
+    }
+  }
+  function sound(event){
+    if(event.type==='railBell')ringBell(audio.ctx,audio.master,event.note,.70);
+    if(event.type==='railThrow')audio.note(event.quality==='clean'?430:640,.12,'triangle',.07);
+    if(event.type!=='railCue')return;
+    if(event.kind==='crash'){audio.note(62,.3,'sawtooth',.10);audio.note(92,.19,'triangle',.08,.045);}
+    if(event.kind==='boost'){audio.note(196,.11,'triangle',.055);audio.note(294,.13,'triangle',.045,.08);}
+    if(event.kind==='bank')audio.note(880,.2,'sine',.055,.16);
+    if(event.kind==='covari')ringBell(audio.ctx,audio.master,5,.45);
+  }
+  return {el,update,sound};
+}
+
+return {createRailCab};})();
 const {createWorkshop,createMachine,createCharacter,createPart,createWorker,createAnnex,createHall,createStormRig,createHangar,createLaunchComplex,createAssembly,createPocketShop,LAUNCH_SITE}=Models;
 const {ShopGame,SHIFTS,OPS,shiftRuleset,PROGRAM_DURATION,stockType,isPlayableShift,nextShiftIndex}=Core;
+const {BellGame,readRailRecord,keepRailRecord}=Bells;
+const {createBellRailway}=BellRailway;
+const {createRailCab}=RailCabUI;
 const {ShopAudio}=Audio;
 const {LaunchGame,launchOp}=Launch;
 const {crossingWindow,BeaconGame}=Beacon;
@@ -8381,6 +8963,9 @@ const {createTapNavigation}=TapNavigation;
 const {PocketGame,POCKET_MODE,readPocketBest,recordPocketRun}=Pocket;
 const {createStationQueue}=PocketQueue;
 const {POCKET_BADGES,pocketBadgeIcon,pocketShortName,pocketRemainingStations,pocketTapTarget,pocketAbsentStations}=PocketFloor;
+
+
+
 
 
 
@@ -8432,7 +9017,9 @@ const mobileTaps=createTapNavigation();
 // Pocket Shift's plan of up to three stations (see pocketTap).
 const pocketQueue=createStationQueue({limit:3});
 // Shifts and Open for Business share one renderer; game points at the active rules.
-const classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),orbitGame=new FirstLightGame(),pocketGame=new PocketGame(),audio=new ShopAudio();let game=classicGame;
+let railway,railCab;
+const bellGame=new BellGame(),classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),orbitGame=new FirstLightGame(),pocketGame=new PocketGame(),audio=new ShopAudio();let game=classicGame;
+const bellPlaying=()=>game===bellGame&&!menuMode;
 const launching=()=>game===launchGame&&!menuMode;
 const orbiting=()=>game===orbitGame&&!menuMode;
 // Names and durations for the level in play: First Light has its own stations.
@@ -8524,6 +9111,7 @@ for(const h of HALL_PLOTS)HALL_SPOTS.forEach(([dx,dz],j)=>{const id=`bay-${11+h.
 const openHalls=new Set();
 // A map lists the stations it adds (def.map) and the shared ones it clears away.
 const MAPS={
+  'downhill-line':{theme:'day',fixed:[]},
   'first-shop':{theme:'day'},
   'night-shop':{theme:'night'},
   'harbor-pier':{theme:'harbor',shell:'harbor',hide:['office'],fixed:[],place:{ship:{name:'QUAY · LOAD / SAIL'},lathe:{x:-3.6},mill:{x:.5}}},
@@ -8725,7 +9313,7 @@ function findPathWide(tx,tz,from){
 function onPhone(){return ['answering','offer'].includes(game.call?.state);}
 function useStation(id){game.setOfficePresence(atOffice());return game.interact(id==='office'&&game.call?.state==='ringing'?'phone':id);}
 function atOffice(){const s=stations.office;return !!s&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<.78;}
-function goToStation(id){if(game.mode!=='playing')return;if(onPhone())return toast('Finish the customer call first.');const s=stations[id];if(!s||!s.model.visible||id==='receiving'&&!game.config.sourcing)return;path=findPath(s.access.x,s.access.z);pathStation=id;targetRing.position.set(s.access.x,.08,s.access.z);targetRing.visible=true;if(!path.length&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.3){useStation(id);pathStation=null;processEvents();}}
+function goToStation(id){if(game.mode!=='playing'||game.config?.engine==='bells')return;if(onPhone())return toast('Finish the customer call first.');const s=stations[id];if(!s||!s.model.visible||id==='receiving'&&!game.config.sourcing)return;path=findPath(s.access.x,s.access.z);pathStation=id;targetRing.position.set(s.access.x,.08,s.access.z);targetRing.visible=true;if(!path.length&&Math.hypot(player.x-s.access.x,player.z-s.access.z)<1.3){useStation(id);pathStation=null;processEvents();}}
 function tapStation(id,event){
   if(game.mode!=='playing')return;
   if(onPhone())return toast('Finish the customer call first.');
@@ -9160,6 +9748,7 @@ function syncPhoneOrientation(){
 function resize(){
   viewport={w:innerWidth,h:innerHeight};
   syncPhoneOrientation();
+  if(bellPlaying()){renderer.setSize(viewport.w,viewport.h);return;}
   shopFrame=measureShopFrame();layoutDirty=true;renderedPocketTickets='';renderer.setSize(viewport.w,viewport.h);if(!menuMode)revealSelectedTicket();updateCamera(0,true);
 }
 function updateCamera(dt,instant=false){
@@ -9518,6 +10107,18 @@ function frame(now){
   requestAnimationFrame(frame);
   if(now-lastRender<1000/framesPerSecond(game.mode)-2)return;
   lastRender=now;
+  if(bellPlaying()){
+    const dt=(now-last)/1000;last=now;
+    game.tick(dt);
+    for(const event of game.drain())railCab.sound(event);
+    railway.update(game,viewport.w/viewport.h,reduced);
+    renderer.render(railway.scene,railway.camera);
+    railCab.el.hidden=game.mode!=='playing';
+    if(!railCab.el.hidden)railCab.update();
+    if(game.mode==='results'&&!resultShown)showResults();
+    updateMusic();
+    return;
+  }
   const planning=isPlanning();
   const renderDt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;
   const dt=planning?0:renderDt;if(!planning)clockTime+=dt;
@@ -9536,14 +10137,14 @@ function frame(now){
   if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
-const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5','last-light':'Created with Codex + GPT-6.1 Sol','first-light':'Created with Claude Code + Fable 5.2'};
+const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5','last-light':'Created with Codex + GPT-6.1 Sol','first-light':'Created with Claude Code + Fable 5.2','bellweather':'Created with Codex + GPT-6.2 Astra'};
 function buildShiftPicker(){
   const holder=$('shift-picker');holder.replaceChildren();
   SHIFTS.forEach((s,i)=>{
     if(!isPlayableShift(i))return;
     const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=false;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',s.name);
     const tool=s.harness.replace(' Cloud Agent','');const creditHtml=`<small class="shift-credit"><b>${s.author}</b><span>${tool}</span></small>`;
-    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):`${Math.round(s.duration/60*10)/10} min`}</span>`;
+    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):s.engine==='bells'?'1.1 km':Math.round(s.duration/60*10)/10+' min'}</span>`;
     b.onclick=()=>{selectedShift=i;buildShiftPicker();showHomeView('challenges');};holder.appendChild(b);
   });
   const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id])}`:''].filter(Boolean);
@@ -9579,7 +10180,25 @@ function applyHomeRoute(){
 
 function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel','pocket-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
-function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
+function startRail(index){
+  closeStore();closePopover();clearMovement();audio.init();
+  game=bellGame;game.reset(index);game.record=readRailRecord(localStorage);
+  railway??=createBellRailway();
+  railCab??=createRailCab(game,audio,{pause,retry:restartRun});
+  social.start(index,shiftRuleset(index));selectedShift=index;menuMode=false;resultShown=false;
+  hidePanels();$('overlay').hidden=true;
+  document.body.classList.remove('manager-mode','launch-mode','orbit-mode','paused','has-office');
+  document.body.classList.add('rail-mode','playing');
+  railCab.el.hidden=false;railCab.update();
+  $('scene').setAttribute('aria-label','Downhill Express. Left and right switch tracks, Space throws a bell, Down brakes and R restarts.');
+  $('scene').focus({preventScroll:true});last=performance.now();
+}
+function leaveRail(){
+  if(!railCab)return;
+  railCab.el.hidden=true;document.body.classList.remove('rail-mode');
+  $('scene').setAttribute('aria-label',desktopSceneLabel);syncInterface();
+}
+function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}if(SHIFTS[index].engine==='bells'){startRail(index);return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -9614,8 +10233,8 @@ function savedRunSummary(){
   try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
-function enterFloor(){closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);document.body.classList.toggle('orbit-mode',game===orbitGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();const spawn=MAPS[activeMapId()].spawn??SPAWN;player.x=spawn.x;player.z=spawn.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
-function pause(){if(game.mode!=='playing')return;$('restart-button').textContent=game.manager?'Restart this shop run':pocketing()?'Restart this run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function enterFloor(){leaveRail();closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);document.body.classList.toggle('orbit-mode',game===orbitGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();const spawn=MAPS[activeMapId()].spawn??SPAWN;player.x=spawn.x;player.z=spawn.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function pause(){if(game.mode!=='playing')return;if(game.config?.engine==='bells')game.braking=false;$('restart-button').textContent=game.manager?'Restart this shop run':pocketing()?'Restart this run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
 function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
@@ -9628,7 +10247,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(refreshBoard=true){if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();endFirstLight();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode','orbit-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
+function showMenu(refreshBoard=true){leaveRail();if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();endFirstLight();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode','orbit-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -9645,6 +10264,7 @@ function showBriefing(index){
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
   $('briefing-back').textContent='Back to challenges';$('briefing-targets').setAttribute('aria-label','Shipment targets');$('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?cfg.terminalCount?`${cfg.goal} The count starts at T−${clock(cfg.duration+cfg.terminalCount)}.`:cfg.goal:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>${cfg.engine==='orbit'?'segments':'shipped'}</small></strong></div>`).join('');
+  $('briefing-touch').textContent=cfg.engine==='bells'?'Use the arrows to switch tracks. Hold Brake to slow the trolley. Tap Throw on green.':'Tap a station to walk over and use it. Tap Dash while walking to move faster.';
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
 let briefingManager=false;
@@ -9690,11 +10310,25 @@ function showResults(){
     $('result-message').textContent=`${mirror} of ${whole} segments in the mirror${game.shield?', behind Covari’s sunshield':''}. ${shiftMastery?'The sharpest picture this telescope can take, and the shop made the glass.':passed?'Enough to see by. Every further segment sharpens the picture.':game.config.retryTip}`;
     $('result-progress').textContent=nextStar<0?'All twelve segments set. A full mirror.':`${game.config.stars[nextStar]-game.shipped} more segment${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;}
   if(beaconing()){$('result-shipped-label').textContent='INSTALLED';$('result-message').textContent=`${game.shipped} lantern parts delivered in ${game.tender.trips} crossing${game.tender.trips===1?'':'s'}. ${passed?'The fishing boats have a light to follow.':game.config.retryTip}`;}
-  const labels={base:'Parts',program:'CAD',speed:'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
+  const labels={express:'Express time',precision:'Precision',bank:'Cross-track',base:bellPlaying()?'Handoffs':'Parts',program:'CAD',speed:'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
   $('result-breakdown').textContent=Object.entries(game.scoreDetails).filter(([,v])=>v!==0).map(([k,v])=>`${labels[k]} ${v.toLocaleString()}`).join(' · ')||'Ship a part to start earning points.';
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} ${orbiting()?'SEGMENTS':'SHIPPED'}`;
   $('result-covari-message').textContent='More work than your shop can handle? Outsource with Covari. Keep the customer. Keep earning.';
   $('next-button').innerHTML=passed&&!challengeRun&&nextShiftIndex(game.shiftIndex)>=0?'NEXT SHIFT <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
+  $('result-speed').querySelector('small').textContent=bellPlaying()?'FINISH TIME':'TIME TO CLEAR';
+  if(bellPlaying()){
+    const record=keepRailRecord(game,localStorage);
+    const delta=game.record?game.elapsed-game.record.time:null;
+    $('result-kicker').textContent='BELLWEATHER  /  DOWNHILL EXPRESS';
+    $('result-title').textContent=game.shipped===8?'Every village rang.':passed?'Made the mail run.':'The last train in.';
+    $('result-message').textContent=game.shipped+' of 8 bells delivered · '+game.perfect+' bullseyes · '+game.banks+' cross-track · '+game.impacts+' impacts';
+    $('result-clear-time').textContent=runTime(game.elapsed);
+    $('result-speed-record').textContent=record?'New ghost saved · '+game.shipped+'/8':delta!==null?'Ghost '+runTime(game.record.time)+' · '+game.record.shipped+'/8 · '+(delta>=0?'+':'−')+Math.abs(delta).toFixed(2)+'s':'Land a delivery to set a ghost.';
+    $('result-progress').textContent=game.shipped===8?'Race your ghost. Match all eight and beat its finish time.':(game.shipped<4?4-game.shipped+' more to clear. ':'')+'Your ghost keeps the most deliveries, then the fastest time.';
+    $('result-shipped-label').textContent='DELIVERED';
+    $('result-breakdown').textContent=game.pads+' express pads · '+Math.round(game.topSpeed*3.6)+' km/h peak'+(game.sourced?' · Covari plate +300':'')+(game.scoreDetails.express?' · Express time +'+game.scoreDetails.express:'');
+    $('next-button').textContent='RACE AGAIN  ↻';
+  }
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,clearElapsed:game.clearElapsed,finishReason:game.finishReason,spawned:game.spawnIndex});
 }
 function selectSourceJob(){
@@ -10442,7 +11076,7 @@ function bindControls(){
   $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=(event)=>{if(event.target.closest('a')){window.open(event.target.closest('a').href,'_blank','noopener,noreferrer');event.preventDefault();return;}navigateHome('open-for-business');};$('briefing-back').onclick=()=>navigateHome(briefingManager?'':'challenges');
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
-  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.config?.engine==='bells'?restartRun():game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>{if(phoneDevice)setPocketOptOut(localStorage,true);navigateHome();};$('rotate-pocket').onclick=()=>{setPocketOptOut(localStorage,false);navigateHome();};$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
@@ -10452,6 +11086,18 @@ function bindControls(){
   $('evening-open').onclick=openNextDay;$('evening-retire').onclick=()=>{if(game.manager&&game.retire())processEvents();};$('evening-leave').onclick=showMenu;
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
+    if(bellPlaying()){
+      if(e.code==='KeyR'&&['playing','results','paused'].includes(game.mode)){e.preventDefault();if(!e.repeat)restartRun();return;}
+      const actions={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyS:'brake',ArrowDown:'brake',Space:'throw',KeyE:'throw'};
+      const action=actions[e.code];
+      if(action&&game.mode==='playing'&&!(e.code==='Space'&&e.target.closest?.('button'))){
+        e.preventDefault();if(e.repeat)return;
+        if(action==='brake')game.braking=true;
+        else if(action==='throw')game.throwBell();
+        else game.switchLane(action);
+        return;
+      }
+    }
     if(['Space','Enter'].includes(e.code)&&e.target.closest?.('button'))return;
     const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyE','ShiftLeft','ShiftRight',...(orbiting()?['KeyF']:[])];
     if(game.mode==='playing'&&!onPhone()&&controls.includes(e.code))e.preventDefault();if(e.repeat)return;
@@ -10470,7 +11116,7 @@ function bindControls(){
     if(e.code==='KeyF')tossNext();
   });
   addEventListener('pagehide',saveRun);
-  addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
+  addEventListener('keyup',e=>{keys.delete(e.code);if(bellPlaying()&&['KeyS','ArrowDown'].includes(e.code))game.braking=false;});addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;
     if(pocketing()){const id=pocketTapTarget({x:e.clientX,y:e.clientY},pocketTapTargets());if(interfaceMode==='mobile')e.preventDefault();if(id)tapStation(id,e);else tapFloor(null,e);return;}
@@ -10480,6 +11126,7 @@ function bindControls(){
   const pointers=new Map();let drag=null,pinch=null;
   const canvas=renderer.domElement;
   canvas.addEventListener('pointerdown',e=>{
+    if(bellPlaying())return;
     if(!managingView())return floorClick(e);
     pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});try{canvas.setPointerCapture(e.pointerId);}catch{}
     if(pointers.size===1){drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false,button:e.button};pinch=null;}

@@ -227,6 +227,7 @@ test('every map is registered and offers the stations its levels use', () => {
   assert.deepEqual(ids('first-shop'), original, 'Released levels keep exactly their original stations');
   assert.deepEqual(ids('night-shop'), [...original, 'anodize', 'deburr'].sort(), 'Night Shift keeps Receiving for its Covari deliveries');
   for (const shift of SHIFTS) {
+    if (shift.engine === 'bells') continue; // Downhill is a railway, not a station map.
     const available = ids(shift.mapId);
     assert.ok(navigation.maps[shift.mapId], `${shift.id} has a registered map`);
     for (const id of [...shift.unlocks, 'ship', 'buffer', ...shift.stock.map(type => `material-${type}`), ...(shift.programming ? ['office'] : []), ...(shift.sourcing ? ['receiving'] : [])]) {
@@ -371,6 +372,7 @@ test('a stalled shift still ends at the clock without extra income', () => {
 
 test('shipment points stay under the shared per-shipment score ceiling for every level', () => {
   for (const shift of SHIFTS) {
+    if (shift.engine === 'bells') continue; // Rail scoring has its own engine and tests.
     // Launch Window orders are kits; their value sits on the kit, not a recipe.
     const richest = Math.max(...(shift.kits ? shift.kits.map(index => KITS[index].value) : shift.recipes.map(index => (shift.engine==='beacon'?BEACON_RECIPES:RECIPES)[index].value)));
     const best = scoreShipment({ value: richest, remaining: shift.deadline + 14 }, 5, { programming: shift.programming, rushBonus: shift.calls ? 100 : 0 });

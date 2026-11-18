@@ -21,7 +21,7 @@ function fixture(){
     runTime:String,showHomeView(){},hidePanels(){},showModelCredit(){},clock:String,SHIFT_CREDIT:{},
     location:{hash:''},showMenu(){},briefingManager:false,opensPocketHere:()=>false,
     endBeaconEnding(){},endFirstLight(){},flightOrigins:new Map(),partTags:new Map(),audio:{init(){}},phonePortrait:()=>false,closePopover(){},resetBays(){},enterFloor(){},
-    resetPad(){},processEvents(){},updateUI(){},classicGame:{reset:index=>started.push(index)},launchGame:{},
+    resetPad(){},processEvents(){},updateUI(){},classicGame:{reset:index=>started.push(index)},launchGame:{},bellGame:{},
     social:{start(){}},game:null,
   });
   vm.runInContext(['buildShiftPicker','startShift','showBriefing','applyHomeRoute','unlockCleared','playedFirstShift','unlockForSave'].map(productionFunction).join('\n'),context);

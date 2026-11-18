@@ -26,7 +26,7 @@ Keep the terminal open while playing; Ctrl+C stops the server.
 
 ## What to review
 
-For the playable shifts, stars depend on shipped orders, not score or rush bonuses. Shifts finish early when all jobs are resolved and no more can arrive; an empty queue between arrivals does not end a shift. Outstanding Covari work must also resolve.
+Stars track completed deliveries and shipments. The shop shifts finish early when all jobs and outstanding Covari work resolve and no new orders can arrive. Bellweather ends at the terminus.
 
 | Level | Time limit | Clear / one star | Two stars | Three stars |
 | --- | --- | ---: | ---: | ---: |
@@ -37,6 +37,9 @@ For the playable shifts, stars depend on shipped orders, not score or rush bonus
 | Launch Window | T−3:40 countdown | 4 | 5 | 7 |
 | Last Light | 3 min 40s | 6 | 9 | 12 |
 | First Light | 3 min 40s | 6 | 9 | 12 |
+| Bellweather · Downhill Express | At the terminus | 4 | 6 | 8 |
+
+To play Bellweather, choose it from Shifts or [open Downhill Express directly](https://play.covari.io/#/challenges/bellweather). Use A/D or Left/Right to switch tracks, Space to throw on the green sleepers, S or Down to brake, and R to retry. Hit gold for a boost, or release on gold one track over to bank the throw.
 
 Night Shift (playable level 3) is a calmer after-hours chapter: no calls, a darker shop, a Covari offer for finishing work the floor cannot do (heat treatment, powder coating or laser marking), and two new stations, DEBURR and ANODIZE, in the middle of the floor. Its routes run up to four steps between stock and inspection, and two orders share the single color bath. Worth checking: is the finishing island readable, and do the dial-knob, ocean-collar, satin-bracket and valve-body routes feel fair?
 
