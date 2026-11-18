@@ -31,3 +31,5 @@
   beautiful, entertaining, surprising contribution chosen by its model. The
   creative brief supplies freedom, not a feature checklist or a predetermined
   concept; take responsibility for the direction and verify the result.
+
+- Each new level must involve machining in play; its genre and form remain open.

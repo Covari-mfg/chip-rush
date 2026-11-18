@@ -99,12 +99,12 @@ test('a damaged old speed save does not prevent recording a new clear',()=>{
 });
 
 
-test('Bellweather downhill keeps first-edition speed records separate',()=>{
-  let stored=JSON.stringify({bellweather:90});
+test('Bellweather turning keeps earlier speed records separate',()=>{
+  let stored=JSON.stringify({bellweather:90,'bellweather-v2-downhill':27});
   const storage={getItem:()=>stored,setItem:(key,value)=>{stored=value;}};
   const records=readSpeedRecords(storage,SHIFTS);
   assert.equal(records.bellweather,undefined);
   assert.equal(recordClear(records,{config:SHIFTS[8],clearElapsed:16,passed:()=>true}),true);
   saveSpeedRecords(storage,records);
-  assert.deepEqual(JSON.parse(stored),{bellweather:90,'bellweather-v2-downhill':16});
+  assert.deepEqual(JSON.parse(stored),{bellweather:90,'bellweather-v2-downhill':27,'bellweather-v3-turning':16});
 });

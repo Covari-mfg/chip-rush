@@ -1,9 +1,9 @@
 import * as THREE from './vendor/three.module.js';
 import { createWorkshop, createMachine, createCharacter, createPart, createWorker, createAnnex, createHall, createStormRig, createHangar, createLaunchComplex, createAssembly, createPocketShop, LAUNCH_SITE } from './assets/models.js';
 import { ShopGame, SHIFTS, OPS, shiftRuleset, PROGRAM_DURATION, stockType, isPlayableShift, nextShiftIndex } from './core.js';
-import { BellGame, readRailRecord, keepRailRecord } from './bells.js';
-import { createBellRailway } from './assets/bell-railway.js';
-import { createRailCab } from './rail-cab.js';
+import { BellGame } from './bells.js';
+import { createBellLathe } from './assets/bell-lathe.js';
+import { createLatheConsole } from './lathe-console.js';
 import { ShopAudio } from './audio.js';
 import { LaunchGame, launchOp } from './launch.js';
 import { crossingWindow, BeaconGame } from './beacon.js';
@@ -53,7 +53,7 @@ const mobileTaps=createTapNavigation();
 // Pocket Shift's plan of up to three stations (see pocketTap).
 const pocketQueue=createStationQueue({limit:3});
 // Shifts and Open for Business share one renderer; game points at the active rules.
-let railway,railCab;
+let latheView,latheConsole;
 const bellGame=new BellGame(),classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),orbitGame=new FirstLightGame(),pocketGame=new PocketGame(),audio=new ShopAudio();let game=classicGame;
 const bellPlaying=()=>game===bellGame&&!menuMode;
 const launching=()=>game===launchGame&&!menuMode;
@@ -147,7 +147,7 @@ for(const h of HALL_PLOTS)HALL_SPOTS.forEach(([dx,dz],j)=>{const id=`bay-${11+h.
 const openHalls=new Set();
 // A map lists the stations it adds (def.map) and the shared ones it clears away.
 const MAPS={
-  'downhill-line':{theme:'day',fixed:[]},
+  'turning-room':{theme:'day',fixed:[]},
   'first-shop':{theme:'day'},
   'night-shop':{theme:'night'},
   'harbor-pier':{theme:'harbor',shell:'harbor',hide:['office'],fixed:[],place:{ship:{name:'QUAY · LOAD / SAIL'},lathe:{x:-3.6},mill:{x:.5}}},
@@ -1146,11 +1146,11 @@ function frame(now){
   if(bellPlaying()){
     const dt=(now-last)/1000;last=now;
     game.tick(dt);
-    for(const event of game.drain())railCab.sound(event);
-    railway.update(game,viewport.w/viewport.h,reduced);
-    renderer.render(railway.scene,railway.camera);
-    railCab.el.hidden=game.mode!=='playing';
-    if(!railCab.el.hidden)railCab.update();
+    for(const event of game.drain())latheConsole.sound(event);
+    latheView.update(game,viewport.w/viewport.h,reduced);
+    renderer.render(latheView.scene,latheView.camera);
+    latheConsole.el.hidden=game.mode!=='playing';
+    if(!latheConsole.el.hidden)latheConsole.update();
     if(game.mode==='results'&&!resultShown)showResults();
     updateMusic();
     return;
@@ -1180,7 +1180,7 @@ function buildShiftPicker(){
     if(!isPlayableShift(i))return;
     const b=document.createElement('button');b.className='shift-choice'+(selectedShift===i?' selected':'');b.disabled=false;b.dataset.levelId=s.id;b.title=`${s.author} - ${s.harness}`;b.setAttribute('aria-description',`Author: ${s.author}. Harness: ${s.harness}.`);b.setAttribute('aria-label',s.name);
     const tool=s.harness.replace(' Cloud Agent','');const creditHtml=`<small class="shift-credit"><b>${s.author}</b><span>${tool}</span></small>`;
-    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):s.engine==='bells'?'1.1 km':Math.round(s.duration/60*10)/10+' min'}</span>`;
+    b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):s.engine==='bells'?'100 s':Math.round(s.duration/60*10)/10+' min'}</span>`;
     b.onclick=()=>{selectedShift=i;buildShiftPicker();showHomeView('challenges');};holder.appendChild(b);
   });
   const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id])}`:''].filter(Boolean);
@@ -1216,25 +1216,25 @@ function applyHomeRoute(){
 
 function hidePanels(){for(const id of ['welcome','home-leaders','pause-panel','help-panel','results-panel','briefing-panel','evening-panel','pocket-panel'])$(id).hidden=true;}
 function clearMovement(){mobileTaps.reset();keys.clear();path=[];pathStation=null;dashTime=0;dashCooldown=0;if(targetRing)targetRing.visible=false;}
-function startRail(index){
+function startTurning(index){
   closeStore();closePopover();clearMovement();audio.init();
-  game=bellGame;game.reset(index);game.record=readRailRecord(localStorage);
-  railway??=createBellRailway();
-  railCab??=createRailCab(game,audio,{pause,retry:restartRun});
+  game=bellGame;game.reset(index);
+  latheView??=createBellLathe();
+  latheConsole??=createLatheConsole(game,audio,{pause,retry:restartRun});
   social.start(index,shiftRuleset(index));selectedShift=index;menuMode=false;resultShown=false;
   hidePanels();$('overlay').hidden=true;
   document.body.classList.remove('manager-mode','launch-mode','orbit-mode','paused','has-office');
-  document.body.classList.add('rail-mode','playing');
-  railCab.el.hidden=false;railCab.update();
-  $('scene').setAttribute('aria-label','Downhill Express. Left and right switch tracks, Space throws a bell, Down brakes and R restarts.');
+  document.body.classList.add('turning-mode','playing');
+  latheConsole.el.hidden=false;latheConsole.update();
+  $('scene').setAttribute('aria-label','Turning Room. Keys 1 to 3 select a section. Hold Space to cut, F changes feed and E inspects.');
   $('scene').focus({preventScroll:true});last=performance.now();
 }
-function leaveRail(){
-  if(!railCab)return;
-  railCab.el.hidden=true;document.body.classList.remove('rail-mode');
+function leaveTurning(){
+  if(!latheConsole)return;
+  latheConsole.el.hidden=true;document.body.classList.remove('turning-mode');
   $('scene').setAttribute('aria-label',desktopSceneLabel);syncInterface();
 }
-function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}if(SHIFTS[index].engine==='bells'){startRail(index);return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}if(SHIFTS[index].engine==='bells'){startTurning(index);return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -1269,9 +1269,9 @@ function savedRunSummary(){
   try{const data=JSON.parse(saved.game).data;if(!RUN_LENGTHS.includes(data?.length)||!Number.isInteger(data.day))return null;
     return {day:data.day,length:data.length,cash:Number(data.cash)||0,evening:data.mode==='evening'};}catch{return null;}
 }
-function enterFloor(){leaveRail();closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);document.body.classList.toggle('orbit-mode',game===orbitGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();const spawn=MAPS[activeMapId()].spawn??SPAWN;player.x=spawn.x;player.z=spawn.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
-function pause(){if(game.mode!=='playing')return;if(game.config?.engine==='bells')game.braking=false;$('restart-button').textContent=game.manager?'Restart this shop run':pocketing()?'Restart this run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
-function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');last=performance.now();}
+function enterFloor(){leaveTurning();closeStore();document.body.classList.toggle('manager-mode',!!game.manager);document.body.classList.toggle('launch-mode',game===launchGame);document.body.classList.toggle('orbit-mode',game===orbitGame);$('action-manage').hidden=!game.manager;$('touch-shop').hidden=!game.manager;$('zoom-controls').hidden=!game.manager;resultShown=false;menuMode=false;applyMap();layoutDirty=true;clearMovement();const spawn=MAPS[activeMapId()].spawn??SPAWN;player.x=spawn.x;player.z=spawn.z;player.angle=Math.PI;character.rotation.y=Math.PI;character.scale.setScalar(1);character.userData.officeSeated=false;character.userData.seatBlend=0;for(const p of parts.values())p.mesh.removeFromParent();parts.clear();$('floating-text').replaceChildren();$('toast').classList.remove('visible');toastUntil=0;hidePanels();$('overlay').hidden=true;$('overlay').classList.remove('centered');$('live-hud').hidden=false;$('shop-sidebar').hidden=false;$('game-footer').hidden=false;$('pause-button').hidden=false;document.querySelector('.shift-heading').hidden=false;document.body.classList.add('playing');document.body.classList.toggle('has-office',game.config.programming);document.body.classList.remove('paused');nearby=null;renderedTickets='';renderedManagerTickets='';}
+function pause(){if(game.mode!=='playing')return;if(game.config?.engine==='bells')game.cutting=false;$('restart-button').textContent=game.manager?'Restart this shop run':pocketing()?'Restart this run':'Restart this shift';closeStore();closePopover();cancelMove();game.mode='paused';saveRun();audio.update(false);clearMovement();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('pause-panel').hidden=false;document.body.classList.add('paused');$('resume-button').focus();}
+function resume(){if(game.mode!=='paused'||phonePortrait())return;audio.init();game.mode='playing';hidePanels();$('overlay').hidden=true;document.body.classList.remove('paused');if(game.config?.engine==='bells')$('scene').focus({preventScroll:true});last=performance.now();}
 function showHelp(){
   if(!$('help-panel').hidden)return;
   helpReturn={mode:game.mode,panel:['welcome','pause-panel','results-panel','briefing-panel'].find(id=>!$(id).hidden),centered:$('overlay').classList.contains('centered')};
@@ -1283,7 +1283,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(refreshBoard=true){leaveRail();if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();endFirstLight();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode','orbit-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
+function showMenu(refreshBoard=true){leaveTurning();if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();endFirstLight();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode','orbit-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -1300,7 +1300,7 @@ function showBriefing(index){
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
   $('briefing-back').textContent='Back to challenges';$('briefing-targets').setAttribute('aria-label','Shipment targets');$('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?cfg.terminalCount?`${cfg.goal} The count starts at T−${clock(cfg.duration+cfg.terminalCount)}.`:cfg.goal:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
   $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>${cfg.engine==='orbit'?'segments':'shipped'}</small></strong></div>`).join('');
-  $('briefing-touch').textContent=cfg.engine==='bells'?'Use the arrows to switch tracks. Hold Brake to slow the trolley. Tap Throw on green.':'Tap a station to walk over and use it. Tap Dash while walking to move faster.';
+  $('briefing-touch').textContent=cfg.engine==='bells'?'Tap A, B or C to select a section. Hold Cut to remove metal. Tap Feed for a lighter finish, then Inspect.':'Tap a station to walk over and use it. Tap Dash while walking to move faster.';
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
 let briefingManager=false;
@@ -1346,24 +1346,21 @@ function showResults(){
     $('result-message').textContent=`${mirror} of ${whole} segments in the mirror${game.shield?', behind Covari’s sunshield':''}. ${shiftMastery?'The sharpest picture this telescope can take, and the shop made the glass.':passed?'Enough to see by. Every further segment sharpens the picture.':game.config.retryTip}`;
     $('result-progress').textContent=nextStar<0?'All twelve segments set. A full mirror.':`${game.config.stars[nextStar]-game.shipped} more segment${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;}
   if(beaconing()){$('result-shipped-label').textContent='INSTALLED';$('result-message').textContent=`${game.shipped} lantern parts delivered in ${game.tender.trips} crossing${game.tender.trips===1?'':'s'}. ${passed?'The fishing boats have a light to follow.':game.config.retryTip}`;}
-  const labels={express:'Express time',precision:'Precision',bank:'Cross-track',base:bellPlaying()?'Handoffs':'Parts',program:'CAD',speed:'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
+  const labels={precision:'Fit',base:'Parts',program:'CAD',speed:bellPlaying()?'Time bonus':'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
   $('result-breakdown').textContent=Object.entries(game.scoreDetails).filter(([,v])=>v!==0).map(([k,v])=>`${labels[k]} ${v.toLocaleString()}`).join(' · ')||'Ship a part to start earning points.';
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} ${orbiting()?'SEGMENTS':'SHIPPED'}`;
   $('result-covari-message').textContent='More work than your shop can handle? Outsource with Covari. Keep the customer. Keep earning.';
   $('next-button').innerHTML=passed&&!challengeRun&&nextShiftIndex(game.shiftIndex)>=0?'NEXT SHIFT <span>↗</span>':'TRY AGAIN <span>↗</span>';$('results-panel').scrollTop=0;$('next-button').focus({preventScroll:true});
-  $('result-speed').querySelector('small').textContent=bellPlaying()?'FINISH TIME':'TIME TO CLEAR';
   if(bellPlaying()){
-    const record=keepRailRecord(game,localStorage);
-    const delta=game.record?game.elapsed-game.record.time:null;
-    $('result-kicker').textContent='BELLWEATHER  /  DOWNHILL EXPRESS';
-    $('result-title').textContent=game.shipped===8?'Every village rang.':passed?'Made the mail run.':'The last train in.';
-    $('result-message').textContent=game.shipped+' of 8 bells delivered · '+game.perfect+' bullseyes · '+game.banks+' cross-track · '+game.impacts+' impacts';
-    $('result-clear-time').textContent=runTime(game.elapsed);
-    $('result-speed-record').textContent=record?'New ghost saved · '+game.shipped+'/8':delta!==null?'Ghost '+runTime(game.record.time)+' · '+game.record.shipped+'/8 · '+(delta>=0?'+':'−')+Math.abs(delta).toFixed(2)+'s':'Land a delivery to set a ghost.';
-    $('result-progress').textContent=game.shipped===8?'Race your ghost. Match all eight and beat its finish time.':(game.shipped<4?4-game.shipped+' more to clear. ':'')+'Your ghost keeps the most deliveries, then the fastest time.';
-    $('result-shipped-label').textContent='DELIVERED';
-    $('result-breakdown').textContent=game.pads+' express pads · '+Math.round(game.topSpeed*3.6)+' km/h peak'+(game.sourced?' · Covari plate +300':'')+(game.scoreDetails.express?' · Express time +'+game.scoreDetails.express:'');
-    $('next-button').textContent='RACE AGAIN  ↻';
+    $('result-kicker').textContent='BELLWEATHER  /  THE TURNING ROOM';
+    $('result-title').textContent=game.shipped===8?'Batch complete.':passed?'Parts cleared inspection.':'Back to the drawing.';
+    $('result-message').textContent=game.shipped+' accepted · '+game.scrapped+' scrapped · '+(8-game.index)+' unfinished';
+    $('result-progress').textContent=game.shipped===8?'Eight parts to print. Batch time '+runTime(game.elapsed)+'.':'Four accepted parts clear the shift. Six earn two stars, eight earn three.';
+    if(game.partLog.length)$('result-progress').append(latheConsole.inspectionReport());
+    $('result-shipped-label').textContent='ACCEPTED';
+    $('result-missed-label').textContent='UNFILLED';
+    $('result-covari-message').textContent='This turning room sends its laser engraving to Covari. Your shop can also source work it cannot do in-house.';
+    $('next-button').textContent='RUN ANOTHER BATCH  ↻';
   }
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,clearElapsed:game.clearElapsed,finishReason:game.finishReason,spawned:game.spawnIndex});
 }
@@ -2124,13 +2121,16 @@ function bindControls(){
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
     if(bellPlaying()){
       if(e.code==='KeyR'&&['playing','results','paused'].includes(game.mode)){e.preventDefault();if(!e.repeat)restartRun();return;}
-      const actions={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyS:'brake',ArrowDown:'brake',Space:'throw',KeyE:'throw'};
-      const action=actions[e.code];
-      if(action&&game.mode==='playing'&&!(e.code==='Space'&&e.target.closest?.('button'))){
+      if(game.mode==='playing'&&['Digit1','Digit2','Digit3','KeyA','ArrowLeft','KeyD','ArrowRight','Space','KeyF','KeyE','KeyC'].includes(e.code)){
+        if(e.code==='Space'&&e.target.closest?.('button'))return;
         e.preventDefault();if(e.repeat)return;
-        if(action==='brake')game.braking=true;
-        else if(action==='throw')game.throwBell();
-        else game.switchLane(action);
+        if(e.code.startsWith('Digit'))game.selectLand(Number(e.code.at(-1))-1);
+        else if(['KeyA','ArrowLeft'].includes(e.code))game.selectLand(game.land-1);
+        else if(['KeyD','ArrowRight'].includes(e.code))game.selectLand(game.land+1);
+        else if(e.code==='Space')game.cutting=true;
+        else if(e.code==='KeyF')game.fast=!game.fast;
+        else if(e.code==='KeyE')game.inspectPart();
+        else game.takePlate();
         return;
       }
     }
@@ -2152,7 +2152,7 @@ function bindControls(){
     if(e.code==='KeyF')tossNext();
   });
   addEventListener('pagehide',saveRun);
-  addEventListener('keyup',e=>{keys.delete(e.code);if(bellPlaying()&&['KeyS','ArrowDown'].includes(e.code))game.braking=false;});addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
+  addEventListener('keyup',e=>{keys.delete(e.code);if(bellPlaying()&&e.code==='Space')game.cutting=false;});addEventListener('blur',()=>{keys.clear();if(game.mode==='playing')pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.mode==='playing')pause();if(document.hidden)saveRun();updateMusic();});
   const raycaster=new THREE.Raycaster(),ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   const floorClick=e=>{if(game.mode!=='playing'||e.button>0)return;
     if(pocketing()){const id=pocketTapTarget({x:e.clientX,y:e.clientY},pocketTapTargets());if(interfaceMode==='mobile')e.preventDefault();if(id)tapStation(id,e);else tapFloor(null,e);return;}

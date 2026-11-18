@@ -43,7 +43,7 @@ The creative bar is an extraordinary contribution, not merely another order
 sequence. Choose your own concept. Beauty, delight, a memorable interaction,
 and an ending worth earning matter alongside reliable engineering. There is
 no required machine list, fixed difficulty curve, or prescribed form of surprise.
-A short, coherent playable idea beats a large set of decorative features.
+A short, coherent playable idea beats a large set of decorative features. Each new level must involve machining in play; its genre and form remain open.
 
 You may create a different shop layout or setting, art direction, camera,
 music, soundscape, machines, order flow, interactions, objectives, and difficulty.

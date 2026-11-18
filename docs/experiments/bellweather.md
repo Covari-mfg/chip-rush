@@ -1,5 +1,27 @@
 # Bellweather
 
+## Third edition · The Turning Room (local candidate)
+
+**Status, 18 November 2026:** local candidate for review. The released public game remains Downhill Express until the candidate is approved and released. The creator corrected the brief after the railway: machining must be part of play, while the genre remains open. This revision moves the challenge to hands-on turning rather than a delivery race.
+
+| | This edition |
+| --- | --- |
+| Catalog | `bellweather`, stable index 8; map `turning-room`, engine `bells`; ruleset and speed-record ID `bellweather-v3-turning`. |
+| Credit | The catalog retains the established GPT-6.2 Astra / Codex slot attribution. GPT-6.1 Terra contributed the lathe scene, server validation and deterministic turning QA. |
+| Implementation | Original in-game lathe scene, turning console and sound, built in the existing game. |
+
+Eight 32 mm blanks become three-section components for the bell works. Select a section with 1–3 or A/D, hold Space to cut, toggle rough/fine feed with F, and inspect with E. Pointer and touch controls provide the same actions. Rough feed removes 8 mm diameter per second; fine removes 2.4. Later drawings mark sections that require a final 0.30 mm cut using fine feed. A useful practice is to rough to roughly 1 mm above target, then finish slowly. Changing sections takes 0.15 seconds. An oversized or unfinished component stays for rework; an undersized section scraps the blank. All sections in tolerance and with any required finish pass inspection.
+
+Four accepted parts clear; six and eight earn higher stars. Resolve all eight blanks or reach 100 seconds; unfinished blanks count as missed. An accepted part earns 320 base points, up to 480 for precision and a streak of up to 200. A cleared batch earns 40 points per second under 60, rounded down. After two accepted parts, C or the on-screen offer obtains a Covari-engraved maker’s plate for 300 points. There is no engraver in this shop, and the plate adds no part or star.
+
+### Third-edition evidence and compatibility
+
+- **Deterministic engine simulation, not player data.** A driver using the ordinary selection, feed and inspection inputs accepted eight parts in 28.11 s for 7,200 points with fast/fine feed. Fine-only accepted eight in 73.12 s for 5,930 points. Both include the optional 300-point plate. Idle play timed out at 100 s with zero accepted and zero points.
+- **Desktop keyboard.** The local browser driver used section selection, held feed, rough/fine changes and inspection to ship eight parts. Paused and resumed, exercised rework, sourced the plate and restarted. A separate deliberate overcut scrapped section B, advanced to a fresh 32 mm blank and awarded zero shipments. Returning to First Shift restored its shop controls.
+- **Touch and offline.** An 844 × 390 landscape touch-emulated run accepted eight in 39.87 s for 8,323 points. A standalone file run accepted eight in 33.88 s for 7,816 points. Both opened the inspection sheet with eight measured parts and retried. These were scripted inputs. Physical-device and human difficulty are unmeasured.
+- **Verification.** 471 automated tests passed, including a nominal-diameter journal that fails inspection until it receives a fine pass. Inspection uses the hundredth-millimetre reading on the instrument. The shared test suite, both builds, standalone syntax, deployment dry run and whitespace check passed. The lathe scene uses original geometry, procedural textures, and Web Audio. [Lathe during a cut](bellweather/turning-room.jpg).
+- **Records.** The stable index remains 8. Local scores and clear times remain edition-specific. The community board retains first-edition rows and labels v2 rows Downhill Express. Old-edition challenges and new score submissions are checked against the current ruleset; the Worker applies conservative plausibility bounds rather than replaying a run.
+
 ## Second edition · Downhill Express
 
 The creator rejected the terrace version after playing it. The shop loop felt basic and lacked speed or risk. This iteration keeps the setting and the bells, and sends an alpine delivery trolley down the valley.
@@ -15,7 +37,7 @@ The fixed three-track course runs past timber trestles, mountains, a stone galle
 
 A trolley cannot laser-engrave a dedication plate. After two successful deliveries, the Covari pickup unlocks if it is still ahead. A pass through the left-track pickup earns 300 points. The trackside handoff replaces the workshop's acceptance, Receiving and inspection interactions. It adds zero regular orders or stars.
 
-The new ruleset and speed-record ID are both `bellweather-v2-downhill`. The prior edition's local points and stars archive under its prior identity, and its speed records remain distinct. The current ruleset gates challenges and score submissions. The community board can distinguish historical first-edition rows from Downhill Express. Existing score columns cover both editions.
+The new ruleset and speed-record ID are both `bellweather-v2-downhill`. The prior edition's local points and stars archive under its prior identity, and its speed records remain distinct. At its release, the ruleset gated challenges and score submissions, and the community board distinguished first-edition rows from Downhill Express. Existing score columns covered both editions.
 
 ### Second-edition evidence
 
@@ -72,6 +94,6 @@ The shop has no laser engraver. After two ordinary shipments, a customer may ask
 - **Automated verification.** 467 tests passed. Focused coverage includes all three pitches, direct input, pause, recycling, bench swaps, Covari credit and movement-based completion. Catalog, historical saves, challenge limits and server bounds cover the appended slot. The Rush Hour expert assertion, standalone and hosted builds, standalone syntax check, Worker deployment dry run and whitespace check passed.
 - **Compatibility.** Ordinary points and bounded self-reported times use the existing shift competition. Pitch choices affect the composition. The standard save stores stars and points, and the speed save uses the stable ID. The tune belongs to the current run and its optional audio download. No schema migration.
 
-## Release
+## Earlier release
 
 The first edition was a local review candidate at `5c6710f`. The creator rejected it after playing. On 18 November 2026 the creator authorized merging and deploying Downhill Express after the release checks. The reviewed gameplay commit is `a755ff7`. [Production level](https://play.covari.io/#/challenges/bellweather).
