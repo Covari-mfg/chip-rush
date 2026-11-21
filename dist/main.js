@@ -4,6 +4,8 @@ import { ShopGame, SHIFTS, OPS, shiftRuleset, PROGRAM_DURATION, stockType, isPla
 import { BellGame } from './bells.js';
 import { createBellLathe } from './assets/bell-lathe.js';
 import { createLatheConsole } from './lathe-console.js';
+import { RedlineGame, redlineOp, flowMultiplier, isCncOp, CHANGEOVER_SECONDS, WARM_HOLD_SECONDS } from './redline.js';
+import { createPaddock } from './assets/paddock.js';
 import { ShopAudio } from './audio.js';
 import { LaunchGame, launchOp } from './launch.js';
 import { crossingWindow, BeaconGame } from './beacon.js';
@@ -24,7 +26,7 @@ import { POCKET_BADGES, pocketBadgeIcon, pocketShortName, pocketRemainingStation
 
 const speedRecords=(()=>{try{return readSpeedRecords(localStorage,SHIFTS);}catch{return {};}})();
 let homeView='challenges',titleFrame=null;
-let beaconEnding=null,beaconFinaleTime=0;
+let beaconEnding=null,beaconFinaleTime=0,redlineEnding=null,redlineFinaleTime=0;
 // First Light's ending, toss animation and PA cursor (declared before boot runs).
 let firstLight=null,firstLightTime=0,firstLightView=null,tossSwing=0,orbitCall=0,orbitCoach=0,orbitPromptText='',trailClock=0;
 const flightOrigins=new Map(),partTags=new Map(),FLOAT_SPEED=3.3;
@@ -54,12 +56,13 @@ const mobileTaps=createTapNavigation();
 const pocketQueue=createStationQueue({limit:3});
 // Shifts and Open for Business share one renderer; game points at the active rules.
 let latheView,latheConsole;
-const bellGame=new BellGame(),classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),orbitGame=new FirstLightGame(),pocketGame=new PocketGame(),audio=new ShopAudio();let game=classicGame;
+const bellGame=new BellGame(),redlineGame=new RedlineGame(),classicGame=new ShopGame(),managerGame=new ManagerGame(),launchGame=new LaunchGame(),beaconGame=new BeaconGame(),orbitGame=new FirstLightGame(),pocketGame=new PocketGame(),audio=new ShopAudio();let game=classicGame;
 const bellPlaying=()=>game===bellGame&&!menuMode;
+const redlining=()=>game===redlineGame&&!menuMode;
 const launching=()=>game===launchGame&&!menuMode;
 const orbiting=()=>game===orbitGame&&!menuMode;
-// Names and durations for the level in play: First Light has its own stations.
-const opOf=key=>orbiting()?orbitOp(key):opInfo(key)??launchOp(key);
+// Names and durations for the level in play: First Light and Redline have their own stations.
+const opOf=key=>orbiting()?orbitOp(key):redlining()?redlineOp(key):opInfo(key)??launchOp(key);
 let challengeRun=false;
 const sourceCard=$('source-card');
 const social=createSocial({onChallenge:role=>{challengeRun=role>unlocked;showBriefing(role);}});
@@ -109,7 +112,7 @@ const STATION_LAYOUT=[
   {id:'ship',name:'SHIPPING',x:5.8,z:1,height:1.85,w:1.8,d:2.7,rotationY:-Math.PI/2,access:{x:4.27,z:1}},
   {id:'receiving',name:'RECEIVING',x:-2.3,z:3.2,height:1.75,w:2,d:.8,access:{x:-2.3,z:2.05}},
   {id:'buffer',name:'HOLD BENCH',x:-6.4,z:1.7,height:1.4,w:2.35,d:1.45},
-  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop','pocket-shop']},
+  {id:'deburr',name:'DEBURR',x:-.9,z:.85,height:2.05,w:2.16,d:1.31,map:['night-shop','dawn-shop','pocket-shop','paddock-garage']},
   {id:'anodize',name:'ANODIZE',x:2.4,z:.85,height:2.2,w:2.27,d:1.31,map:['night-shop','dawn-shop']},
   // Launch Window's robot cell, mid-floor between the machines and Inspection.
   {id:'assemble',name:'ASSEMBLY',x:1.55,z:.2,height:1.75,w:2.86,d:1.6,map:'launch-pad'},
@@ -148,6 +151,7 @@ const openHalls=new Set();
 // A map lists the stations it adds (def.map) and the shared ones it clears away.
 const MAPS={
   'turning-room':{theme:'day',fixed:[]},
+  'paddock-garage':{theme:'paddock',shell:'paddock',hide:['office','material-plate'],fixed:[],place:{'material-round':{name:'ALU STOCK'},'material-block':{name:'TI STOCK'},lathe:{x:-3.75},mill:{x:.65},ship:{name:'PIT BAY'}}},
   'first-shop':{theme:'day'},
   'night-shop':{theme:'night'},
   'harbor-pier':{theme:'harbor',shell:'harbor',hide:['office'],fixed:[],place:{ship:{name:'QUAY · LOAD / SAIL'},lathe:{x:-3.6},mill:{x:.5}}},
@@ -206,9 +210,9 @@ const placed=(def,mapId)=>({...def,...MAPS[mapId].place?.[def.id]});
 const MAP_SCALED=new Set(Object.values(MAPS).flatMap(map=>Object.entries(map.place??{}).filter(([,p])=>p.scale!==undefined).map(([id])=>id)));
 const accessOf=def=>def.access||{x:def.x,z:def.z+def.d/2+.63};
 const SPAWN={x:0,z:2.6};
-let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,harbor,orbitDock,orbitSuit,pocketShop,lighting,appliedTheme=null,lightningFlash=0;
+let renderer,scene,camera,character,carryAnchor,playerRing,targetRing,world,annex,stormRig,hangar,launchSite,harbor,paddock,orbitDock,orbitSuit,pocketShop,lighting,appliedTheme=null,lightningFlash=0;
 let path=[],pathStation=null,nearby=null,walkPhase=0,dashTime=0,dashCooldown=0,dashDirection=new THREE.Vector3(),clockTime=0,uiElapsed=0,last=performance.now(),toastUntil=0,shake=0;
-let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,stationPartSignature={};
+let cameraBlend=0,menuMode=true,helpReturn=null,renderedTickets='',resultShown=false,resultShownAt=0,stationPartSignature={};
 let renderedSelection=null, nextPhoneRing=0;
 const stations={},bays={},staffViews=new Map(),routeCache=new Map(),parts=new Map(),particles=[],hallShells=new Map(),hallSigns=new Map();const player={...SPAWN,angle:Math.PI};
 let viewport={w:innerWidth,h:innerHeight};
@@ -510,7 +514,7 @@ function showPocketPanel(state){
   $('pocket-play').innerHTML=`${result?'Play again':'Play'} <span aria-hidden="true">↗</span>`;$('pocket-home').textContent=phoneDevice?'Play the full game instead':'Back to home';$('pocket-play').focus({preventScroll:true});
 }
 // Endless pocket-v1 rules on their own game object; never a server run or a shared save.
-function startPocket(){clearTimeout(pocketFinaleTimer);pocketResult=null;beaconFinaleTime=0;endBeaconEnding();audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent='POCKET SHIFT · BETA';$('shift-name').textContent=POCKET_MODE.name;$('pocket-flash').className='pocket-flash';resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
+function startPocket(){clearTimeout(pocketFinaleTimer);pocketResult=null;beaconFinaleTime=0;endBeaconEnding();if(typeof endRedlineEnding==='function'){redlineFinaleTime=0;endRedlineEnding();}audio.init();game=pocketGame;closePopover();resetBays();game.reset();pocketQueue.clear();enterFloor();$('shift-number').textContent='POCKET SHIFT · BETA';$('shift-name').textContent=POCKET_MODE.name;$('pocket-flash').className='pocket-flash';resetPad();processEvents();syncPocketMarkers();updateUI(true);$('scene').focus();}
 function showPocketResults(){clearTimeout(pocketFinaleTimer);resultShown=true;audio.update(false);clearMovement();pocketQueue.clear();syncPocketMarkers();pocketResult=recordPocketRun(localStorage,{score:game.score,shipped:game.shipped,elapsed:game.elapsed});showPocketPanel('result');$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');}
 // A miss must be unmistakable: the marker fills, the screen flashes, and a short
 // buzz where the browser allows it (never with reduced motion).
@@ -598,6 +602,9 @@ function createMaterialBin(type){
 const THEMES={
   harborDusk:{sky:0x14283e,backdrop:0x1b3549,hemi:[0xc4d5ee,0x23384f,1.85],sun:[0xffc48a,2.4],fill:[0x83a4dd,1.65],exposure:1.16},
   harbor:{sky:0x26364f,backdrop:0x254358,hemi:[0xffe4bf,0x35607b,2.1],sun:[0xffc68e,3.6],fill:[0x8bc9dc,2],exposure:1.2},
+  // Redline: crisp sunlit Mediterranean paddock shifting toward golden pre-grid hour.
+  paddock:{sky:0x235163,backdrop:0x3d7c66,hemi:[0xf2fbff,0x3c5d63,2.25],sun:[0xfff0d4,3.85],fill:[0x8dd9ed,2.05],exposure:1.22},
+  paddockGold:{sky:0x2d4860,backdrop:0x396c5a,hemi:[0xffe2be,0x3c525c,2.05],sun:[0xffc27e,3.55],fill:[0x8eb8df,1.85],exposure:1.2},
   // First Light: one pass from full sun into the planet's shadow.
   orbitDay:{sky:0x05080f,backdrop:0x05080f,hemi:[0xeef6ff,0x3a78c2,1.75],sun:[0xfff3df,3.6],fill:[0x78b8ff,1.6],exposure:1.14},
   orbitGold:{sky:0x05080f,backdrop:0x05080f,hemi:[0xffdcb8,0x345f9f,1.75],sun:[0xff9d58,3.5],fill:[0x6f93dc,1.5],exposure:1.17},
@@ -629,12 +636,13 @@ function applyMap(){
   if(appliedTheme!==mapKey){
     appliedTheme=mapKey;openHalls.clear();for(const id of halls)openHalls.add(id);
     applyTheme(THEMES[MAPS[mapId].theme]);activateMap(mapId);routeCache.clear();
-    const launchMap=MAPS[mapId].shell==='hangar',harborMap=MAPS[mapId].shell==='harbor',orbitMap=MAPS[mapId].shell==='orbit',pocketMap=MAPS[mapId].shell==='pocket';
+    const launchMap=MAPS[mapId].shell==='hangar',harborMap=MAPS[mapId].shell==='harbor',paddockMap=MAPS[mapId].shell==='paddock',orbitMap=MAPS[mapId].shell==='orbit',pocketMap=MAPS[mapId].shell==='pocket';
     for(const s of Object.values(stations)){s.def=placed(s.base,mapId);s.access=accessOf(s.def);
+      s.label.classList.remove('setup-change','redline-hot','match-ok','match-warn');
       // A map can stand a different model in for a shared station (First Light's mirror is Shipping).
       const variant=s.variants?.[mapId]??s.variants?.default;if(variant&&variant!==s.model){s.model.visible=false;s.model=variant;}
       if(s.def.id!=='office'){s.model.position.set(s.def.x,0,s.def.z);s.model.rotation.y=s.def.rotationY??0;if(MAP_SCALED.has(s.def.id))s.model.scale.setScalar(s.def.scale??1);}s.label.querySelector('.station-name').textContent=s.def.name;if(!pocketMap)s.label.setAttribute('aria-label','Walk to '+s.def.name);}
-    world.visible=!launchMap&&!harborMap&&!orbitMap&&!pocketMap;pocketShop.visible=pocketMap;hangar.visible=launchSite.visible=launchMap;harbor.visible=harborMap;lighting.backdrop.visible=!harborMap&&!orbitMap;
+    world.visible=!launchMap&&!harborMap&&!paddockMap&&!orbitMap&&!pocketMap;pocketShop.visible=pocketMap;hangar.visible=launchSite.visible=launchMap;harbor.visible=harborMap;paddock.visible=paddockMap;lighting.backdrop.visible=!harborMap&&!paddockMap&&!orbitMap;
     orbitDock.visible=orbitSuit.visible=orbitMap;if(orbitMap)orbitDock.userData.setStations(orbitGame.machines().map(id=>({id,x:stations[id].def.x,z:stations[id].def.z,height:stations[id].def.height,w:stations[id].def.w})));
     // Pocket Shift's crate arrives on a pallet by the back door instead of the Receiving bench.
     const dockModel=stations.receiving.model,dock=dockModel.userData;dockModel.remove(dock.bench,dock.pallet);dockModel.add(pocketMap?dock.pallet:dock.bench);dock.pallet.visible=true;dock.crate.position.y=pocketMap?.14:1.01;dock.crate.scale.setScalar(pocketMap?1.45:1);
@@ -646,6 +654,7 @@ function applyMap(){
   for(const [id,shell] of hallShells)shell.plot.visible=managing&&mapId==='owner-wing'&&!openHalls.has(id)&&(game.hallBuyable(id)||game.hallsPending.includes(id));
   if(managing){const t=game.mode==='evening'||game.mode==='results'?1:Math.min(1,game.elapsed/DAY_SECONDS);applyTheme(THEMES.morning,THEMES.dusk,t*t);}
   if(beaconing())applyTheme(THEMES.harbor,THEMES.harborDusk,Math.min(1,game.elapsed/game.config.duration));
+  if(redlining())applyTheme(THEMES.paddock,THEMES.paddockGold,Math.min(1,game.elapsed/game.config.duration));
   if(orbiting())applyOrbitTheme();
   if(launching()){const t=Math.min(1,game.elapsed/game.config.duration);applyTheme(THEMES.predawn,THEMES.sunrise,pad.cinematic?Math.min(1,.75+pad.cinematic.t/14):t*.75);}
   for(const s of Object.values(stations))s.model.visible=mapHas(s.def,mapId)&&!absentStations.has(s.def.id)&&(s.def.id!=='material-block'||menuMode||game.config.stock.includes('block'));
@@ -674,7 +683,7 @@ function boot(){
   const fill=new THREE.DirectionalLight(0x86d8ee,2);fill.position.set(9,7,-6);scene.add(fill);
   const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x163845,roughness:1}));backdrop.rotation.x=-Math.PI/2;backdrop.position.y=-.53;backdrop.receiveShadow=true;scene.add(backdrop);lighting={hemi,sun,fill,backdrop};
   world=createWorkshop();scene.add(world);annex=createAnnex();annex.visible=false;scene.add(annex);stormRig=createStormRig();stormRig.visible=false;scene.add(stormRig);
-  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);harbor=createHarbor();harbor.visible=false;scene.add(harbor);orbitDock=createOrbitalDock();orbitDock.visible=false;scene.add(orbitDock);pocketShop=createPocketShop(MAPS['pocket-shop'].bounds,{doorX:MAPS['pocket-shop'].place.receiving.x});pocketShop.visible=false;scene.add(pocketShop);
+  hangar=createHangar();hangar.visible=false;scene.add(hangar);launchSite=createLaunchComplex();launchSite.visible=false;scene.add(launchSite);harbor=createHarbor();harbor.visible=false;scene.add(harbor);paddock=createPaddock();paddock.visible=false;scene.add(paddock);orbitDock=createOrbitalDock();orbitDock.visible=false;scene.add(orbitDock);pocketShop=createPocketShop(MAPS['pocket-shop'].bounds,{doorX:MAPS['pocket-shop'].place.receiving.x});pocketShop.visible=false;scene.add(pocketShop);
   for(const h of HALL_PLOTS){const shell=createHall(h);shell.built.visible=shell.plot.visible=false;scene.add(shell.built,shell.plot);hallShells.set(h.id,shell);
     const sign=$('wing-sign').cloneNode(true);sign.id='hall-sign-'+h.id;sign.classList.add('hall-sign');sign.setAttribute('aria-label',`Expand the shop with ${h.name}`);sign.querySelector('.station-name').textContent=`BUILD ${h.name.toUpperCase()}`;sign.onclick=()=>openPopover('hall',h.id);$('wing-sign').after(sign);hallSigns.set(h.id,sign);}
   scene.add(sun.target);
@@ -721,9 +730,10 @@ function measureShopFrame(){
   // A plot for sale peeks in at the edge of the fitted view, but only where it touches floor already open.
   for(const h of HALL_PLOTS)if(!openHalls.has(h.id)&&game.manager&&!menuMode&&game.hallBuyable?.(h.id)&&(h.row===1||HALL_PLOTS.some(o=>openHalls.has(o.id)&&hallAdjacent(o,h))))include(new THREE.Vector3(h.cx,0,h.z0+2));
   if(launchSite?.visible)for(const point of launchSite.userData.framePoints)include(point);
+  if(paddock?.visible)for(const point of paddock.userData.framePoints)include(point);
   if(orbitDock?.visible)for(const point of orbitDock.userData.framePoints)include(point);
   // The player works in the shop. Offshore scenery never widens its play camera.
-  for(const shellObject of [...(pocketMap?[pocketShop]:harbor?.visible||orbitDock?.visible?[]:hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
+  for(const shellObject of [...(pocketMap?[pocketShop]:harbor?.visible||paddock?.visible||orbitDock?.visible?[]:hangar?.visible?[hangar]:[world]),...(annex?.visible?[annex]:[]),...[...hallShells.values()].filter(shell=>shell.built.visible).map(shell=>shell.built)]){
     const shell=new THREE.Box3().setFromObject(shellObject);
     for(const x of [shell.min.x,shell.max.x])for(const y of [shell.min.y,shell.max.y])for(const z of [shell.min.z,shell.max.z])include(new THREE.Vector3(x,y,z));
   }
@@ -803,6 +813,7 @@ function updateCamera(dt,instant=false){
   if(pad.follow>0&&!menuMode)look.addScaledVector(cameraUp,pad.follow);
   if(managingView()&&playFrame){halfHeight/=view.zoom;applyView(look,halfHeight,aspect,dt);}
   if(beaconing()&&(beaconEnding||game.mode==='results')){const t=Math.min(1,beaconFinaleTime/4),blend=t*t*(3-2*t);look.lerp(new THREE.Vector3(4.5,.5,-3),blend);}
+  if(redlining()&&(redlineEnding||game.mode==='results')){const t=Math.min(1,redlineFinaleTime/2.4),blend=t*t*(3-2*t);look.lerp(new THREE.Vector3(7.5,.4,-2.4),blend);}
   // First Light's ending moves in on the mirror before the picture opens.
   if(orbiting()&&(firstLight||game.mode==='results')){const blend=ease(firstLightTime/3);look.lerp(new THREE.Vector3(0,.3,-.4),blend);halfHeight*=1-.3*blend;}
   camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
@@ -845,7 +856,7 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='hint')toast(ev.message);
   if(ev.type==='sourceDelivered'){audio.event('ready');spawnParticles(stations.receiving.def.x,1.6,stations.receiving.def.z,0x72e8cf,8);}
   if(ev.type==='sourceFulfilled'&&launching())showPA(`Covari’s ${game.sourcing.name.toLowerCase()} is on the pad. +300.`);
-  if(ev.type==='sourceFulfilled'){audio.event('shipped');floatText(`+${ev.points} · ORDER FULFILLED`,'ship',true);if(orbiting())spawnParticles(0,.6,0,0x72e8cf,18);else spawnParticles(6,1.2,1.2,0x72e8cf,18);}
+  if(ev.type==='sourceFulfilled'){audio.event('shipped');floatText(`+${ev.points} · ORDER FULFILLED`,'ship',true);if(orbiting())spawnParticles(0,.6,0,0x72e8cf,18);else if(redlining())spawnParticles(10.6,1.1,.4,0x72e8cf,24);else spawnParticles(6,1.2,1.2,0x72e8cf,18);}
   if(ev.type==='programmed'){floatText('CAD READY ✓','office',true);}
   if(ev.type==='surge'){
     const bolt=ev.source==='lightning';
@@ -866,13 +877,15 @@ function processEvents(){for(const ev of game.drain()){
   if(ev.type==='rushWon'){floatText('RUSH DELIVERED ✓','ship',true);}
   if(ev.type==='recycle')toast(`#${ev.orderId} recycled`,3);
   if(ev.type==='ready'){floatText('READY ✓',ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.5,s.def.z,0x9effd4,5);}
-  if(ev.type==='shipped'){floatText(`+${ev.points}${ev.combo>1?'  ×'+ev.combo+' streak':''}`,'ship');if(orbiting()){const at=orbitDock.userData.slotWorld(game.installed.length);spawnParticles(at.x,at.y+.1,at.z,0xffd76c,22);shake=.35;}else{spawnParticles(6,1.2,1.2,0xffd76c,28);shake=.7;}if(launching()&&game.stack.length)queueSection(game.stack.at(-1),game.stack.length);}
+  if(ev.type==='redlineFlow'){const hot=ev.streak>=3;floatText(hot?`REDLINE ${ev.multiplier.toFixed(2)}×`:`0s BATCH ${ev.multiplier.toFixed(2)}×`,ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.5,s.def.z,hot?0xff9b4a:0x62e5cf,hot?16:8);}
+  if(ev.type==='changeover'){floatText(`SETUP ${ev.alloy.toUpperCase()} · ${CHANGEOVER_SECONDS}s`,ev.station,true);const s=stations[ev.station];spawnParticles(s.def.x,1.4,s.def.z,0xffa84b,10);}
+  if(ev.type==='shipped'){floatText(`+${ev.points}${ev.batch?' · BATCH +'+ev.batch:''}${ev.combo>1?'  ×'+ev.combo:''}`,'ship');if(orbiting()){const at=orbitDock.userData.slotWorld(game.installed.length);spawnParticles(at.x,at.y+.1,at.z,0xffd76c,22);shake=.35;}else if(redlining()){spawnParticles(10.6,.95,-.3,0xffd76c,28);shake=.6;}else{spawnParticles(6,1.2,1.2,0xffd76c,28);shake=.7;}if(launching()&&game.stack.length)queueSection(game.stack.at(-1),game.stack.length);}
   if(ev.type==='kitted'){floatText(ev.waiting?`KIT · ${ev.waiting} TO GO`:'KIT COMPLETE','assemble',true);const s=stations.assemble;spawnParticles(s.def.x+.8,1.0,s.def.z,0x9fe0ff,5);}
   if(ev.type==='assembling'){floatText('ASSEMBLING','assemble',true);}
   if(ev.type==='expired'&&!pocketing())toast(`#${ev.orderId} expired`,3.3);
   if(ev.type==='strike'&&pocketing())pocketStrike(ev);
   if(ev.type==='stage'&&pocketing())toast(ev.stage===1?'New part: Bearing housing · block stock':'Deburr work joins: Dial knob and Valve body',2.6);
-  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else if(orbiting())startFirstLight();else if(pocketing())pocketFinale();else showResults();}
+  if(ev.type==='finish'){if(launching())startTerminalCount();else if(beaconing())startBeaconEnding();else if(redlining())startRedlineEnding();else if(orbiting())startFirstLight();else if(pocketing())pocketFinale();else showResults();}
   if(orbiting())orbitEvent(ev);
   if(ev.type==='quayLoaded')floatText(`${ev.count} / 3 ON QUAY`,'ship',true);
   if(ev.type==='tenderDeparted')toast(`Tender away · ${ev.count} part${ev.count===1?'':'s'} · 12s crossing`,2.5);
@@ -961,7 +974,7 @@ function animateOfficeSeat(dt){
 function animateShop(dt){
   const active=game.mode==='playing';
   applyMap();
-  updateHarbor(dt);updateOrbit(dt);
+  updateHarbor(dt);updatePaddock(dt);updateOrbit(dt);
   if(stations.receiving)stations.receiving.model.userData.crate.visible=!!game.receiving;
   for(const [id,s] of Object.entries(stations)){
     const state=game.stations[id],down=!!state?.down,busy=!!state?.part&&!state.ready&&!down&&!state?.service,ready=!!state?.ready,op=game.manager?state?.op:id;
@@ -970,8 +983,8 @@ function animateShop(dt){
     const spindle=s.model.userData.spindle;
     if(op==='heat')s.model.userData.heat.material.emissiveIntensity=busy&&active?.95+Math.sin(clockTime*5)*.3:ready?.6:.3;
     if(op==='laser')s.model.userData.beam.visible=busy&&active;
-    if(spindle&&busy&&active){const boost=game.machineSpeed?.()||1;if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15*boost;else if(op==='mill'){spindle.rotation.y+=dt*11*boost;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4*boost)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2*boost)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3*boost)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
-      if((op==='lathe'||op==='mill'||op==='deburr')&&Math.random()<dt*7*boost&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,boost>1?0x5ce6ff:0xffd67b,1);}
+    if(spindle&&busy&&active){const boost=redlining()&&isCncOp(id)?(state?.changingOver?.4:flowMultiplier(state?.streak??1)):(game.machineSpeed?.()||1);if(op==='lathe'||op==='deburr')spindle.rotation.x+=dt*15*boost;else if(op==='mill'){spindle.rotation.y+=dt*11*boost;spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*4*boost)*.09;}else if(op==='anodize')spindle.position.y=spindle.userData.baseY+Math.sin(clockTime*2*boost)*.12;else if(op==='inspect')spindle.rotation.y=Math.sin(clockTime*3*boost)*.15;else if(op==='laser')spindle.position.x=Math.sin(clockTime*7)*.24;
+      if((op==='lathe'||op==='mill'||op==='deburr')&&Math.random()<dt*7*boost&&!reduced){const p=s.model.localToWorld(s.model.userData.workPoint.clone());spawnParticles(p.x,p.y+.1,p.z,redlining()&&state?.changingOver?0xff9b3d:redlining()&&(state?.streak??1)>=3?0xff9e54:boost>1?0x5ce6ff:0xffd67b,1);}
     }
     if(id==='assemble'&&s.model.visible)animateRobot(s,busy&&active,ready,dt);
     if(state?.part){const mesh=parts.get(state.part.orderId)?.mesh;if(mesh){const wp=s.model.userData.workPoint;if(wp){mesh.position.y=wp.y+(ready&&!reduced?Math.sin(clockTime*3.5)*.055:0);if(ready)mesh.rotation.y+=dt*.8;}}}
@@ -1017,7 +1030,7 @@ function revealSelectedTicket(){
 function updateTickets(force){
   const signature=game.orders.map(o=>`${o.id}:${o.index}:${o.location}:${o.id===game.selectedId}:${game.stations[o.location]?.ready}:${o.programmed}:${game.office.orderId===o.id}:${game.office.present}:${game.call?.orderId===o.id?game.call.state:""}`).join('|');
   if(force||signature!==renderedTickets){const focused=document.activeElement?.id;const scroll={x:$('orders').scrollLeft,y:$('orders').scrollTop};renderedTickets=signature;$('orders').replaceChildren();if(!game.orders.length){$('orders').innerHTML='<div class="orders-empty">All caught up. Keep an eye on incoming orders.</div>';}
-    for(const o of game.orders){const el=document.createElement('article');const stock=stockType(o);const active=game.heldOrder?.id===o.id,focus=!game.hand&&(game.office.orderId??game.selectedId)===o.id;el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(active?' carried-job':focus?' passive-focus':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Order ${o.id}, ${o.name}`);const route=orderWorkflow(o,game.config.programming,orbiting()?ORBIT_OPS:undefined).map(step=>beaconing()&&step.key==='ship'?{...step,label:'QUAY',title:'Load at the quay, then send the tender',done:['quay','tender'].includes(o.location),active:o.index===o.route.length-1&&!['quay','tender'].includes(o.location)}:step).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="stock-icon" role="img" title="${stock} stock" aria-label="${stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><div class="route">${route}</div><div class="ticket-status sr-only">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;$('orders').appendChild(el);}
+    for(const o of game.orders){const el=document.createElement('article');const stock=stockType(o);const isRedline=game.config?.engine==='redline';const active=game.heldOrder?.id===o.id,focus=isRedline?!active&&game.selectedId===o.id:!game.hand&&(game.office.orderId??game.selectedId)===o.id;el.className='order-ticket'+(o.route.length+1+(game.config.programming?1:0)>4?' long-route':'')+(active?' carried-job':focus?' passive-focus':'')+(isRedline?' redline-clickable':'')+(o.hot?' hot-ticket':'');el.id='ticket-'+o.id;el.setAttribute('aria-label',`Order ${o.id}, ${o.name}`);const route=orderWorkflow(o,game.config.programming,orbiting()?ORBIT_OPS:undefined).map(step=>beaconing()&&step.key==='ship'?{...step,label:'QUAY',title:'Load at the quay, then send the tender',done:['quay','tender'].includes(o.location),active:o.index===o.route.length-1&&!['quay','tender'].includes(o.location)}:isRedline&&step.key==='ship'?{...step,label:'PIT',title:'Fit part onto the Formula car at Pit Bay'}:isRedline&&step.key.startsWith('material-')?{...step,label:o.alloy==='ti'?'TI':'ALU',title:`Collect ${o.alloy==='ti'?'Titanium':'Aluminum'} stock`}:step).map(step=>`<span class="route-step${step.done?' done':step.active?' active':''}" title="${step.title}">${step.done?'✓ ':''}${step.label}</span>`).join('<span class="route-arrow">›</span>');const alloyBadge=isRedline&&o.alloy?`<span class="alloy-pill alloy-${o.alloy}">${o.alloy.toUpperCase()}</span>${o.hot?'<span class="hot-pill">HOT +120</span>':''}`:'';el.innerHTML=`<div class="ticket-top"><span>Order #${o.id}${alloyBadge}</span><span class="due"></span></div><div class="ticket-heading"><h3>${o.name}</h3><span class="stock-icon" role="img" title="${isRedline?o.alloy.toUpperCase():stock} stock" aria-label="${isRedline?o.alloy.toUpperCase():stock} stock">${stockIcon(stock)}</span><span class="technology-badges">${technologyBadges([...new Set(o.route.filter(key=>key==='lathe'||key==='mill'))])}</span></div><div class="route">${route}</div><div class="ticket-status sr-only">${ticketState(o)}</div><div class="rush-status" hidden></div><div class="ticket-progress"><i></i></div>`;if(isRedline)el.onclick=()=>{if(game.mode==='playing'){game.selectOrder(o.id);processEvents();updateUI(true);}};$('orders').appendChild(el);}
     $('orders').appendChild(sourceCard);if(focused)$(focused)?.focus({preventScroll:true});
     $('orders').scrollLeft=scroll.x;$('orders').scrollTop=scroll.y;
     if(renderedSelection!==game.selectedId){renderedSelection=game.selectedId;revealSelectedTicket();}
@@ -1111,13 +1124,26 @@ function positionLabels(){
   const p=screenPoint(s.def.label?new THREE.Vector3(s.def.label.x,s.def.label.y,s.def.label.z):new THREE.Vector3(s.def.x,(managing?s.height:s.def.height)+.1,s.def.z));s.label.style.left=p.x+'px';s.label.style.top=p.y+'px';
   if(managing){const bayEmpty=bayOf(id)&&!game.stations[id],hideEmptyBay=game.mode==='playing'&&bayEmpty&&!moveFits(id);s.label.hidden=!mapHas(s.def,activeMapId())||(id==='material-block'&&!game.config.stock.includes('block'))||hideEmptyBay;s.label.classList.toggle('target',target===id||nearby?.def.id===id);s.label.style.opacity='';managerLabel(id,s);continue;}
   const st=game.stations[id],program=id==='office'?game.order(game.office.orderId):null,surgeOffice=id==='office'&&!!game.config.overdrive,ready=id==='receiving'?!!game.receiving:surgeOffice?game.surgeRemaining<=0&&game.surgeCooldown<=0:!!st?.ready,busy=!!st?.part&&!ready||!!program&&game.office.present&&!['ringing','answering','offer'].includes(game.call?.state)||surgeOffice&&game.surgeRemaining>0;
-  for(const name of ['for-sale','installing','down','servicing','move-target','moving'])s.label.classList.remove(name);
+  for(const name of ['for-sale','installing','down','servicing','move-target','moving','setup-change','redline-hot','match-ok','match-warn'])s.label.classList.remove(name);
   const more=s.label.querySelector('.label-more');if(more)more.hidden=true;
   const locked=id==='receiving'?!game.config.sourcing:id==='office'?!game.config.programming&&!game.config.overdrive:id.startsWith('material-')?!game.config.stock.includes(id.slice(9)):!!opOf(id)&&id!=='ship'&&!game.config.unlocks.includes(id);
   s.label.hidden=!mapHas(s.def,activeMapId())||(id==='receiving'?locked:!menuMode&&locked);s.label.classList.toggle('ready',ready);s.label.classList.toggle('busy',busy);s.label.classList.toggle('target',!menuMode&&(target===id||nearby?.def.id===id));s.label.classList.toggle('nearby',!menuMode&&nearby?.def.id===id);s.label.classList.toggle('locked',!menuMode&&locked);
   s.label.querySelector('.station-name').textContent=surgeOffice&&!menuMode?'SURGE CONSOLE':s.def.name;
   s.label.querySelector('.station-time').textContent=menuMode?'':id==='office'&&game.call?.state==='ringing'?'☎ CALL':id==='office'&&onPhone()?'☎ ON CALL':surgeOffice?(game.surgeRemaining>0?`⚡ 2× ${Math.ceil(game.surgeRemaining)}s`:game.surgeCooldown>0?`${Math.ceil(game.surgeCooldown)}s`:'⚡ BOOST 2×'):id==='receiving'?'':program?`${Math.ceil(program.programRemaining)}s`:ready?'✓ READY':busy?Math.ceil(st.remaining)+'s':locked?'OFF':'';
   s.label.querySelector('.station-progress').style.width=program?`${100*(1-program.programRemaining/PROGRAM_DURATION)}%`:surgeOffice&&game.surgeRemaining>0?`${100*(game.surgeRemaining/16)}%`:busy?`${100*(1-st.remaining/(st.duration||opOf(id).duration))}%`:'0';
+  if(redlining()&&!menuMode){
+    if(isCncOp(id)&&st){
+      const code=(st.setup||'alu').toUpperCase(),mult=flowMultiplier(st.streak||1),ms=mult>1?` ${mult.toFixed(1)}×`:'',heldForHere=held&&held.route[held.index]===id;
+      const matchHint=heldForHere&&(!st.part||ready)?(held.alloy===st.setup?' · 0s':' · +6s'):'';
+      if(st.changingOver){s.label.classList.add('setup-change');s.label.querySelector('.station-time').textContent=`SETUP ${code} ${Math.ceil(st.remaining)}s`;}
+      else if(ready){s.label.querySelector('.station-time').textContent=`✓ READY · ${code}${matchHint}`;}
+      else if(busy){if(mult>=1.8)s.label.classList.add('redline-hot');s.label.querySelector('.station-time').textContent=`${code}${ms} · ${Math.ceil(st.remaining)}s`;}
+      else{if(mult>=1.8)s.label.classList.add('redline-hot');s.label.querySelector('.station-time').textContent=`${code}${ms}${st.warmRemaining>0?` (${Math.ceil(st.warmRemaining)}s)`:''}${matchHint}`;if(st.warmRemaining>0)s.label.querySelector('.station-progress').style.width=`${100*(st.warmRemaining/WARM_HOLD_SECONDS)}%`;}
+      if(heldForHere&&(!st.part||ready))s.label.classList.add(held.alloy===st.setup?'match-ok':'match-warn');
+    }else if(id==='ship'){
+      s.label.querySelector('.station-time').textContent=held?.route[held.index]==='ship'?`FIT #${held.id}`:`${game.shipped} / ${game.config.maxOrders} ON CAR`;
+    }
+  }
   if(beaconing()&&id==='ship'&&!menuMode){const w=crossingWindow(game.elapsed);s.label.querySelector('.station-time').textContent=game.tender.phase==='docked'?`${w.open?'CLEAR':'SWELL'} ${Math.ceil(w.remaining)}s`:game.tender.phase==='outbound'?'CROSSING':'RETURNING';}
   if(orbiting()){const time=s.label.querySelector('.station-time');if(id==='ship')time.textContent=`${FLOWN_SEGMENTS+game.installed.length} / ${FLOWN_SEGMENTS+MIRROR_SLOTS}`;else if(game.rings[id]!=null)time.textContent+=' +1';else if(game.inbound(id))time.textContent+=' ◌';}
   if(id==='assemble'&&!menuMode&&!busy&&!ready){const kitted=game.orders.filter(o=>o.parentId&&o.location==='kit').length;if(kitted)s.label.querySelector('.station-time').textContent=`${kitted} IN KIT`;}s.label.style.opacity=menuMode?'.72':'';
@@ -1173,7 +1199,7 @@ function frame(now){
   if(game.mode!=='playing'||planning||++shadowTick%2)renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,camera);
 }
-const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5','last-light':'Created with Codex + GPT-6.1 Sol','first-light':'Created with Claude Code + Fable 5.2','bellweather':'Created with Codex + GPT-6.2 Astra'};
+const SHIFT_CREDIT={'first-shift':'Created with Codex + GPT 6 - Astra','mixed-orders':'Created with Codex + GPT 6 - Astra','rush-hour':'Created with Codex + GPT 6 - Astra','night-shift':'Created with Cursor + Sonnet 5.5','dawn-shift':'Created with Cursor + Gemini 4','launch-window':'Created with Claude Code + Opus 5.5','last-light':'Created with Codex + GPT-6.1 Sol','first-light':'Created with Claude Code + Fable 5.2','bellweather':'Created with Codex + GPT-6.2 Astra','redline':'Created with Antigravity + Gemini 4 Neon'};
 function buildShiftPicker(){
   const holder=$('shift-picker');holder.replaceChildren();
   SHIFTS.forEach((s,i)=>{
@@ -1182,6 +1208,7 @@ function buildShiftPicker(){
     const tool=s.harness.replace(' Cloud Agent','');const creditHtml=`<small class="shift-credit"><b>${s.author}</b><span>${tool}</span></small>`;
     b.innerHTML=`<span><b>${s.name}</b>${creditHtml}</span><span class="pick-mark">${i===0?'Intro':grades[i]?'★'.repeat(grades[i]):s.engine==='bells'?'100 s':Math.round(s.duration/60*10)/10+' min'}</span>`;
     b.onclick=()=>{selectedShift=i;buildShiftPicker();showHomeView('challenges');};holder.appendChild(b);
+    if(selectedShift===i)b.scrollIntoView?.({block:'nearest'});
   });
   const records=[bests[selectedShift]?`${bests[selectedShift].toLocaleString()} pts`:'',speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id]?`Clear ${runTime(speedRecords[SHIFTS[selectedShift].recordId??SHIFTS[selectedShift].id])}`:''].filter(Boolean);
   $('selection-record').textContent=records.join(' · ');$('selection-record').hidden=!records.length;
@@ -1234,7 +1261,7 @@ function leaveTurning(){
   latheConsole.el.hidden=true;document.body.classList.remove('turning-mode');
   $('scene').setAttribute('aria-label',desktopSceneLabel);syncInterface();
 }
-function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}if(SHIFTS[index].engine==='bells'){startTurning(index);return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
+function startShift(index){if(!isPlayableShift(index))return;beaconFinaleTime=0;endBeaconEnding();if(typeof endRedlineEnding==='function'){redlineFinaleTime=0;endRedlineEnding();}endFirstLight();firstLightTime=0;flightOrigins.clear();partTags.clear();orbitCall=0;orbitCoach=0;if(phonePortrait()){syncPhoneOrientation();return;}if(SHIFTS[index].engine==='bells'){startTurning(index);return;}audio.init();game=SHIFTS[index].engine==='launch'?launchGame:SHIFTS[index].engine==='beacon'?beaconGame:SHIFTS[index].engine==='orbit'?orbitGame:SHIFTS[index].engine==='redline'?redlineGame:classicGame;closePopover();resetBays();game.reset(index);social.start(index,shiftRuleset(index));selectedShift=index;enterFloor();$('shift-number').textContent=`SHIFT ${String(SHIFTS.slice(0,index+1).filter(shift=>!shift.retired).length).padStart(2,'0')} / ${SHIFTS[index].engine==='orbit'?'SET':SHIFTS[index].engine==='redline'?'FIT':'SHIP'} ${SHIFTS[index].passTarget} TO CLEAR`;$('shift-name').textContent=SHIFTS[index].name;resetPad();processEvents();updateUI(true);$('scene').focus();}
 // Open for Business is its own mode: always available, outside the shift unlock chain.
 function startManager(){if(phonePortrait()){syncPhoneOrientation();return;}audio.init();
   game=managerGame;for(const view of staffViews.values()){view.mesh.removeFromParent();view.tag.remove();}staffViews.clear();
@@ -1283,7 +1310,7 @@ function closeHelp(){
   $('overlay').hidden=!previous.panel;$('overlay').classList.toggle('centered',previous.centered);if(previous.panel)$(previous.panel).hidden=false;if(previous.panel==='welcome')$('home-leaders').hidden=false;
   document.body.classList.toggle('paused',game.mode==='paused');syncPhoneOrientation();last=performance.now();
 }
-function showMenu(refreshBoard=true){leaveTurning();if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();endFirstLight();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode','orbit-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
+function showMenu(refreshBoard=true){leaveTurning();if(pocketRoute())setPocketMode(false);pocketQueue.clear();clearTimeout(pocketFinaleTimer);$('pocket-hud').hidden=true;$('pocket-band').hidden=true;endBeaconEnding();endRedlineEnding();endFirstLight();if(game.manager)saveRun();endTerminalCount();challengeRun=false;closeStore();closePopover();cancelMove();$('zoom-controls').hidden=true;$('overlay').classList.remove('evening');managerGame.mode='menu';game=classicGame;resetBays();document.body.classList.remove('manager-mode','launch-mode','orbit-mode');selectedShift=isPlayableShift(selectedShift)?selectedShift:0;game.mode='menu';updateMusic();menuMode=true;applyMap();clearMovement();hidePanels();$('welcome').hidden=false;$('home-leaders').hidden=false;$('overlay').hidden=false;$('overlay').classList.remove('centered');$('live-hud').hidden=true;$('shop-sidebar').hidden=true;$('game-footer').hidden=true;$('pause-button').hidden=true;document.querySelector('.shift-heading').hidden=true;document.body.classList.remove('playing','paused','has-office');buildShiftPicker();buildModeCard();showHomeView(homeView);syncPocketMarkers();if(refreshBoard)social.refreshBoard();}
 function showModelCredit(credit){
   const el=$('briefing-credit');
   el.replaceChildren();
@@ -1299,8 +1326,8 @@ function showBriefing(index){
   briefingManager=false;selectedShift=index;const cfg=SHIFTS[index];hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('briefing-panel').hidden=false;
   $('briefing-lengths').hidden=true;$('briefing-continue').hidden=true;$('briefing-replace').hidden=true;$('briefing-start').classList.remove('secondary');$('briefing-start').innerHTML='CLOCK IN <span>↗</span>';
   $('briefing-back').textContent='Back to challenges';$('briefing-targets').setAttribute('aria-label','Shipment targets');$('briefing-role').textContent=cfg.name;showModelCredit(SHIFT_CREDIT[cfg.id]);$('briefing-goal').textContent=cfg.goal?cfg.terminalCount?`${cfg.goal} The count starts at T−${clock(cfg.duration+cfg.terminalCount)}.`:cfg.goal:`Ship ${cfg.passTarget} orders in ${cfg.duration/60} minutes.`;
-  $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>${cfg.engine==='orbit'?'segments':'shipped'}</small></strong></div>`).join('');
-  $('briefing-touch').textContent=cfg.engine==='bells'?'Tap A, B or C to select a section. Hold Cut to remove metal. Tap Feed for a lighter finish, then Inspect.':'Tap a station to walk over and use it. Tap Dash while walking to move faster.';
+  $('briefing-targets').innerHTML=cfg.stars.map((target,i)=>`<div><span aria-label="${i+1} star${i?'s':''}">${'★'.repeat(i+1)}</span><strong>${target} <small>${cfg.engine==='orbit'?'segments':cfg.engine==='redline'?'fitted':'shipped'}</small></strong></div>`).join('');
+  $('briefing-touch').textContent=cfg.engine==='bells'?'Tap A, B or C to select a section. Hold Cut to remove metal. Tap Feed for a lighter finish, then Inspect.':cfg.engine==='redline'?'Tap a ticket to prioritize it, tap ALU or TI stock to collect, match machine alloy collars for 0s setup & 1.82× flow, and tap READY machines to swap in one beat.':'Tap a station to walk over and use it. Tap Dash while walking to move faster.';
   $('briefing-text').textContent=cfg.brief;$('briefing-tip').textContent=cfg.tip;$('briefing-panel').scrollTop=0;$('briefing-start').focus({preventScroll:true});
 }
 let briefingManager=false;
@@ -1320,7 +1347,7 @@ function buildModeCard(){
   $('manager-summary').textContent=run?`Day ${run.day} · ${money(run.cash)}`:best?`Endless · Best ${money(best)}`:'Endless';
 }
 function showResults(){
-  if(resultShown)return;if(game===pocketGame)return showPocketResults();if(game.manager)return showManagerResults();resultShown=true;audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)));
+  if(resultShown)return;if(game===pocketGame)return showPocketResults();if(game.manager)return showManagerResults();resultShown=true;resultShownAt=performance.now();audio.update(false);clearMovement();const passed=game.passed();if(passed&&!challengeRun)unlocked=Math.max(unlocked,Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)));
   // Finishing a First Shift run, pass or fail, opens every shift. Friend challenges unlock nothing.
   const opensAll=!challengeRun&&game.shiftIndex===0&&unlocked<SHIFTS.length-1;if(!challengeRun&&game.shiftIndex===0)unlocked=SHIFTS.length-1;
   const previous=bests[game.shiftIndex]||0;bests[game.shiftIndex]=Math.max(previous,game.score);grades[game.shiftIndex]=Math.max(grades[game.shiftIndex]||0,game.stars());save();hidePanels();$('overlay').hidden=false;$('overlay').classList.add('centered');$('results-panel').hidden=false;$('office-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.remove('playing');
@@ -1346,7 +1373,7 @@ function showResults(){
     $('result-message').textContent=`${mirror} of ${whole} segments in the mirror${game.shield?', behind Covari’s sunshield':''}. ${shiftMastery?'The sharpest picture this telescope can take, and the shop made the glass.':passed?'Enough to see by. Every further segment sharpens the picture.':game.config.retryTip}`;
     $('result-progress').textContent=nextStar<0?'All twelve segments set. A full mirror.':`${game.config.stars[nextStar]-game.shipped} more segment${game.config.stars[nextStar]-game.shipped===1?'':'s'} for ${nextStar+1} star${nextStar?'s':''} (${game.config.stars[nextStar]} total).`;}
   if(beaconing()){$('result-shipped-label').textContent='INSTALLED';$('result-message').textContent=`${game.shipped} lantern parts delivered in ${game.tender.trips} crossing${game.tender.trips===1?'':'s'}. ${passed?'The fishing boats have a light to follow.':game.config.retryTip}`;}
-  const labels={precision:'Fit',base:'Parts',program:'CAD',speed:bellPlaying()?'Time bonus':'Early shipping',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
+  const labels={precision:'Fit',base:'Parts',program:'CAD',speed:bellPlaying()?'Time bonus':'Early shipping',batch:'Batch flow',hot:'Hot jobs',streak:'Streak',rush:'Rush',rushPenalty:'Missed rushes',calls:'Calls',sourcing:'Covari'};
   $('result-breakdown').textContent=Object.entries(game.scoreDetails).filter(([,v])=>v!==0).map(([k,v])=>`${labels[k]} ${v.toLocaleString()}`).join(' · ')||'Ship a part to start earning points.';
   $('result-best').textContent=`${game.score>previous?'NEW PERSONAL BEST · ':''}BEST ${bests[game.shiftIndex].toLocaleString()} · STARS AT ${game.config.stars.join(' / ')} ${orbiting()?'SEGMENTS':'SHIPPED'}`;
   $('result-covari-message').textContent='More work than your shop can handle? Outsource with Covari. Keep the customer. Keep earning.';
@@ -1361,6 +1388,14 @@ function showResults(){
     $('result-missed-label').textContent='UNFILLED';
     $('result-covari-message').textContent='This turning room sends its laser engraving to Covari. Your shop can also source work it cannot do in-house.';
     $('next-button').textContent='RUN ANOTHER BATCH  ↻';
+  }
+  if(redlining()){
+    $('result-kicker').textContent=`REDLINE · ${shiftMastery?'FULL GRAND PRIX SPEC':passed?'LIGHTS OUT':'MISSED THE GRID'}`;
+    $('result-title').textContent=shiftMastery?'Pole position build.':passed?'Car made the grid.':'Still on the jacks.';
+    $('result-shipped-label').textContent='FITTED';
+    $('result-message').textContent=`${game.shipped} of ${game.config.maxOrders} car parts fitted${game.covariFitted?' + Covari aero fin':''} · ${game.stats.batchHits} zero-setup batch hits · ${game.stats.changeovers} alloy changeovers · Peak ${game.stats.peakFlow.toFixed(2)}× flow.`;
+    $('result-covari-message').textContent='Keep your own spindles hot in alloy batch flow and outsource carbon autoclaving, wire EDM, or FIA laser marking through Covari.';
+    $('next-button').textContent='RUN ANOTHER SESSION  ↻';
   }
   social.finish({role:game.shiftIndex,score:game.score,shipped:game.shipped,missed:game.missed,sourced:game.sourced,calls:game.callsAnswered,elapsed:game.elapsed,clearElapsed:game.clearElapsed,finishReason:game.finishReason,spawned:game.spawnIndex});
 }
@@ -2099,7 +2134,7 @@ function updateKitTickets(force){
 
 function bindControls(){
   $('firstlight-skip').onclick=()=>{endFirstLight();showResults();};
-  $('tender-send').onclick=()=>goToStation('ship');$('beacon-results').onclick=()=>{endBeaconEnding();showResults();};
+  $('tender-send').onclick=()=>goToStation('ship');$('beacon-results').onclick=()=>{if(redlineEnding){endRedlineEnding();}else{endBeaconEnding();}showResults();};
   syncPhoneOrientation();
   addEventListener('pointerdown',unlockHomeMusic);
   addEventListener('keydown',unlockHomeMusic);
@@ -2109,7 +2144,7 @@ function bindControls(){
   $('briefing-start').onclick=()=>briefingManager?startManager():startShift(selectedShift);$('briefing-continue').onclick=resumeManager;$('mode-manager').onclick=(event)=>{if(event.target.closest('a')){window.open(event.target.closest('a').href,'_blank','noopener,noreferrer');event.preventDefault();return;}navigateHome('open-for-business');};$('briefing-back').onclick=()=>navigateHome(briefingManager?'':'challenges');
   $('office-go').onclick=()=>{if(game.call?.state==='ringing')goToStation('office');};
   for(const [id,accept] of [['call-accept',true],['call-decline',false]])$(id).onclick=()=>{game.setOfficePresence(atOffice());const rushId=game.call?.orderId;const replied=game.respondCall(accept);if(replied&&accept)game.select(rushId);processEvents();updateUI(true);$('scene').focus();};
-  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.config?.engine==='bells'?restartRun():game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
+  $('mode-challenges').onclick=()=>navigateHome('challenges');$('about-selection').onclick=()=>homeView==='business'?showManagerBriefing():showBriefing(selectedShift);$('new-shop').onclick=showManagerBriefing;addEventListener('hashchange',applyHomeRoute);$('start-button').onclick=playSelection;$('resume-button').onclick=resume;$('restart-button').onclick=restartRun;$('menu-button').onclick=()=>navigateHome();$('results-menu').onclick=()=>navigateHome(game.manager?'':'challenges');$('next-button').onclick=()=>game.config?.engine==='bells'||game.config?.engine==='redline'?restartRun():game.manager?showManagerBriefing():showBriefing(game.passed()&&!challengeRun?Math.max(game.shiftIndex,nextShiftIndex(game.shiftIndex)):game.shiftIndex);$('replay-button').onclick=restartRun;$('help-button').onclick=showHelp;$('help-close').onclick=closeHelp;$('pause-button').onclick=pause;
   $('result-covari-link').onclick=()=>social.track('covari_clicked');$('pocket-play').onclick=startPocket;$('pocket-home').onclick=()=>{if(phoneDevice)setPocketOptOut(localStorage,true);navigateHome();};$('rotate-pocket').onclick=()=>{setPocketOptOut(localStorage,false);navigateHome();};$('launch-skip').onclick=skipTerminalCount;
   $('orders').addEventListener('click',e=>{if(!game.manager)return;if(e.target.closest('[data-sales-toggle]'))return toggleSalesStrip();const policy=e.target.closest('button[data-policy]');if(policy)return policyAction(policy);const b=e.target.closest('button[data-act]');if(b)quoteAction(b.dataset.act,Number(b.dataset.id));});
   $('floor-popover').addEventListener('click',popoverAction);$('wing-sign').onclick=()=>openPopover('wing');
@@ -2119,6 +2154,7 @@ function bindControls(){
   $('evening-open').onclick=openNextDay;$('evening-retire').onclick=()=>{if(game.manager&&game.retire())processEvents();};$('evening-leave').onclick=showMenu;
   addEventListener('keydown',e=>{
     if($('leaderboard-dialog').open||e.target.closest?.('input,textarea,select,[contenteditable]'))return;
+    if(game.mode==='results'&&e.code==='Space'&&performance.now()-resultShownAt<700){e.preventDefault();return;}
     if(bellPlaying()){
       if(e.code==='KeyR'&&['playing','results','paused'].includes(game.mode)){e.preventDefault();if(!e.repeat)restartRun();return;}
       if(game.mode==='playing'&&['Digit1','Digit2','Digit3','KeyA','ArrowLeft','KeyD','ArrowRight','Space','KeyF','KeyE','KeyC'].includes(e.code)){
@@ -2134,6 +2170,12 @@ function bindControls(){
         return;
       }
     }
+    if(redlining()&&game.mode==='playing'&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&['Digit1','Digit2','Digit3','Digit4'].includes(e.code)){
+      e.preventDefault();if(e.repeat)return;
+      const o=game.orders[Number(e.code.slice(5))-1];
+      if(o){game.selectOrder(o.id);processEvents();updateUI(true);}
+      return;
+    }
     if(['Space','Enter'].includes(e.code)&&e.target.closest?.('button'))return;
     const controls=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyE','ShiftLeft','ShiftRight',...(orbiting()?['KeyF']:[])];
     if(game.mode==='playing'&&!onPhone()&&controls.includes(e.code))e.preventDefault();if(e.repeat)return;
@@ -2144,6 +2186,7 @@ function bindControls(){
     if(managingView()&&['Equal','NumpadAdd','Minus','NumpadSubtract','Digit0','Numpad0'].includes(e.code)){e.preventDefault();if(e.code.endsWith('0'))resetView();else zoomView(/Equal|Add/.test(e.code)?1.4:1/1.4);return;}
     if(firstLight&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();endFirstLight();showResults();return;}
     if(beaconEnding&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();endBeaconEnding();showResults();return;}
+    if(redlineEnding&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();endRedlineEnding();showResults();return;}
     if(pad.cinematic&&['Escape','Space','Enter','KeyE'].includes(e.code)){e.preventDefault();skipTerminalCount();return;}
     if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();if(!$('help-panel').hidden)closeHelp();else if(game.mode==='playing')pause();else if(game.mode==='paused')resume();return;}
     if(game.mode!=='playing'||onPhone())return;keys.add(e.code);
@@ -2175,7 +2218,8 @@ function bindControls(){
     if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>7)drag.moved=true;
     if(drag.moved)panView(e.clientX-last.x,e.clientY-last.y);
   });
-  const release=e=>{if(!pointers.has(e.pointerId))return;pointers.delete(e.pointerId);
+  const release=e=>{
+    if(!pointers.has(e.pointerId))return;pointers.delete(e.pointerId);
     if(e.type==='pointerup'&&drag?.id===e.pointerId&&!drag.moved)floorClick(e);
     if(drag?.id===e.pointerId)drag=null;if(pointers.size<2)pinch=null;};
   canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);
@@ -2209,6 +2253,34 @@ function startBeaconEnding(){
   $('tender-panel').hidden=true;$('pause-button').hidden=true;document.body.classList.add('beacon-finale');
 }
 function endBeaconEnding(){if(beaconEnding&&game===beaconGame&&game.mode==='terminal')game.mode='results';beaconEnding=null;$('beacon-finale').hidden=true;$('tender-panel').hidden=true;document.body.classList.remove('beacon-finale');}
+function startRedlineEnding(){
+  clearMovement();game.mode='terminal';const passed=game.passed();
+  redlineEnding={t:0,passed,lights:0,launched:false};redlineFinaleTime=0;
+  const finale=$('beacon-finale');finale.hidden=false;
+  const small=finale.querySelector('small');if(small)small.textContent=passed?'REDLINE · LIGHTS OUT':'REDLINE · GRID CLOSED';
+  $('beacon-finale-title').textContent=game.shipped===game.config.maxOrders?'Full Grand Prix spec.':passed?'Rolling to the grid.':'Still on the jacks.';
+  $('beacon-finale-copy').textContent=passed?`${game.shipped} machined components bolted on${game.covariFitted?' with Covari aero':''}. Five red lights — lights out!`:`Fit ${game.config.passTarget} components to mount the slicks and make the grid.`;
+  $('pause-button').hidden=true;document.body.classList.add('beacon-finale');
+}
+function endRedlineEnding(){
+  if(redlineEnding&&game===redlineGame&&game.mode==='terminal')game.mode='results';
+  redlineEnding=null;$('beacon-finale').hidden=true;document.body.classList.remove('beacon-finale');
+  const small=$('beacon-finale').querySelector('small');if(small)small.textContent='LAST LIGHT';
+}
+function updatePaddock(dt){
+  if(!paddock?.visible)return;
+  if(redlineEnding){
+    redlineEnding.t+=phonePortrait()?0:dt;redlineFinaleTime=redlineEnding.t;
+    if(redlineEnding.passed){
+      const nextLight=Math.min(5,Math.floor(redlineEnding.t/.38)+1);
+      if(nextLight>redlineEnding.lights&&redlineEnding.t<2.0){redlineEnding.lights=nextLight;audio.event('redlineLight');}
+      if(!redlineEnding.launched&&redlineEnding.t>=2.0){redlineEnding.launched=true;audio.event('redlineLaunch');shake=.75;}
+    }
+    if(redlineEnding.t>=(redlineEnding.passed?5.4:3.6)){endRedlineEnding();showResults();}
+  }
+  const finalePose=redlineEnding||(game===redlineGame&&game.mode==='results'?{t:redlineFinaleTime||5.4,passed:game.passed()}:null);
+  paddock.userData.update(redlineGame,dt,clockTime,reduced,finalePose);
+}
 function updateHarbor(dt){
   if(!harbor?.visible)return;
   if(beaconEnding){beaconEnding.t+=phonePortrait()?0:dt;beaconFinaleTime=beaconEnding.t;if(beaconEnding.t>=10){endBeaconEnding();showResults();}}

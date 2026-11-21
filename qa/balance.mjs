@@ -199,6 +199,7 @@ export class Driver {
   run() {
     let guard=0;
     while(this.game.mode==='playing'&&guard++<20000) {
+      if(this.game.config.engine==='redline'){this.tick(.2);continue;}
       if(this.calls()) continue;
       // Last Light delivers only after an explicit empty-handed quay visit.
       if(this.game.tender?.phase==='docked'&&this.game.quay.length&&(this.game.quay.length>=2||crossingWindow(this.game.elapsed).remaining<=this.distanceTo('ship')/4.4+this.actionDelay+2.5)&&!this.game.hand&&crossingWindow(this.game.elapsed).open){this.interact('ship');continue;}
@@ -287,9 +288,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   // First Light's normal action is the toss, which this driver does not know.
   // Its own driver plays it: serial carries by hand, flow tosses.
   const turning=await import('./bellweather-balance.mjs');
+  const redline=await import('./redline-balance.mjs');
   const orbit=SHIFTS.some(level=>level.engine==='orbit')?await import('./first-light-balance.mjs'):null;
   for(let shift=0;shift<SHIFTS.length;shift++)for(const strategy of ['serial','flow']){
     if(SHIFTS[shift].engine==='bells'){const {game,...row}=turning.simulateTurning({strategy:strategy==='serial'?'fine':'fast'});rows.push({...row,strategy,phone:'decline',rush:false,reaction,movement:'lathe controls',elapsed:+row.elapsed.toFixed(2),log:[]});continue;}
+    if(SHIFTS[shift].engine==='redline'){const redlineReaction=strategy==='serial'?0.6:0.25;const row=redline.simulateRedline({strategy:strategy==='serial'?'serial':'master',reaction:redlineReaction,dash:strategy!=='serial'});rows.push({role:SHIFTS[shift].name,strategy,phone:'decline',rush:false,reaction:redlineReaction,movement:strategy==='serial'?'click route + walk':'click route + batch + dash',spawned:row.spawned,shipped:row.shipped,pass:row.pass,stars:row.stars,score:row.score,missed:row.missed,unfinished:row.unfinished,elapsed:+row.elapsed.toFixed(2),log:[]});continue;}
     if(SHIFTS[shift].engine!=='orbit'){rows.push(simulateShift(shift,{strategy,reaction}));continue;}
     const row=orbit.simulateOrbit({strategy:strategy==='serial'?'carry':'toss',reaction});
     rows.push({role:row.role,strategy,phone:'decline',rush:false,reaction,movement:`click route + walk${strategy==='flow'?' + toss':''}`,spawned:row.spawned,shipped:row.shipped,pass:row.pass,stars:row.stars,score:row.score,missed:row.missed,unfinished:row.unfinished,elapsed:+row.elapsed.toFixed(2),log:row.log});

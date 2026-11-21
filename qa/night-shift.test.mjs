@@ -372,7 +372,7 @@ test('a stalled shift still ends at the clock without extra income', () => {
 
 test('shipment points stay under the shared per-shipment score ceiling for every level', () => {
   for (const shift of SHIFTS) {
-    if (shift.engine === 'bells') continue; // Turning scoring has its own engine and tests.
+    if (shift.engine === 'bells' || shift.engine === 'redline') continue; // Turning and Redline scoring have their own engines and tests.
     // Launch Window orders are kits; their value sits on the kit, not a recipe.
     const richest = Math.max(...(shift.kits ? shift.kits.map(index => KITS[index].value) : shift.recipes.map(index => (shift.engine==='beacon'?BEACON_RECIPES:RECIPES)[index].value)));
     const best = scoreShipment({ value: richest, remaining: shift.deadline + 14 }, 5, { programming: shift.programming, rushBonus: shift.calls ? 100 : 0 });

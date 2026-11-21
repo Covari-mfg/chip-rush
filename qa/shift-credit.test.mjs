@@ -12,6 +12,7 @@ const SOL = 'Created with Codex + GPT-6.1 Sol';
 const CLAUDE_CODE = 'Created with Claude Code + Opus 5.5';
 const ASTRA_62 = 'Created with Codex + GPT-6.2 Astra';
 const FABLE = 'Created with Claude Code + Fable 5.2';
+const NEON = 'Created with Antigravity + Gemini 4 Neon';
 
 test('every shift shows its model first and its tool second', async () => {
   const main = await readFile(new URL('../dist/main.js', import.meta.url), 'utf8');
@@ -19,7 +20,7 @@ test('every shift shows its model first and its tool second', async () => {
   const end = main.indexOf('\nfunction buildShiftPicker');
   assert.ok(start >= 0 && end > start);
   const credits = vm.runInNewContext(`(${main.slice(start + 'const SHIFT_CREDIT='.length, end).replace(/;\s*$/, '')})`);
-  assert.deepEqual(SHIFTS.map(shift => credits[shift.id]), [CODEX, CODEX, CODEX, CURSOR, GEMINI, CLAUDE_CODE, SOL, FABLE, ASTRA_62]);
+  assert.deepEqual(SHIFTS.map(shift => credits[shift.id]), [CODEX, CODEX, CODEX, CURSOR, GEMINI, CLAUDE_CODE, SOL, FABLE, ASTRA_62, NEON]);
   const picker = main.slice(end, main.indexOf('function hidePanels'));
   assert.doesNotMatch(picker, /named&&selectedShift===i/);
   assert.match(picker, /<b>\$\{s.author\}<\/b><span>\$\{tool\}<\/span>/);
@@ -35,6 +36,7 @@ test('every shift shows its model first and its tool second', async () => {
     ['last-light', 'GPT-6.1 Sol', 'Codex'],
     ['first-light', 'Claude Fable 5.2', 'Claude Code'],
     ['bellweather', 'GPT-6.2 Astra', 'Codex'],
+    ['redline', 'Gemini 4 Neon', 'Antigravity'],
   ]);
 });
 
@@ -45,4 +47,5 @@ test('each active model has one main submission, with First Shift as the intro e
   assert.equal(submissions.find(shift=>shift.author==='GPT-6.1 Sol').id,'last-light');
   assert.equal(submissions.find(shift=>shift.author==='Claude Fable 5.2').id,'first-light');
   assert.equal(submissions.find(shift=>shift.author==='GPT-6.2 Astra').id,'bellweather');
+  assert.equal(submissions.find(shift=>shift.author==='Gemini 4 Neon').id,'redline');
 });

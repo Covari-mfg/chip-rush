@@ -23,6 +23,7 @@ export function validateResult(value,run,now=Date.now()){
   if(value.finishReason!==undefined&&!['work-complete','time-up'].includes(value.finishReason))return 'Finish this shift before posting.';
   if(value.elapsed!==undefined&&(!Number.isFinite(value.elapsed)||value.elapsed<0||value.elapsed>config.duration+.1||wallSeconds<value.elapsed-5))return 'That finish time does not match this run.';
   const turning=config.ruleset==='bellweather-v3-turning';
+  const redline=config.ruleset==='redline-v1-paddock';
   // Even an ideal cut must remove material from all three lands. Use the
   // easiest drawing as a conservative bound; scraps can be immediate.
   const minimumCut=turning?Math.min(...DRAWINGS.map(d=>d.targets.reduce((sum,target)=>sum+Math.max(0,d.stock-target-d.tolerance),0)/FEED_ROUGH)):0;
@@ -31,8 +32,9 @@ export function validateResult(value,run,now=Date.now()){
   if(turning){
     if(!['work-complete','time-up'].includes(value.finishReason)||!Number.isFinite(value.elapsed)||value.spawned!==config.maxOrders||value.shipped+value.missed!==config.maxOrders||value.elapsed<value.shipped*minimumCut-.1||(value.finishReason==='time-up'&&value.elapsed<config.duration-.1))return 'Finish and resolve every blank before posting.';
   }else if(value.finishReason==='work-complete'){
-    if(!Number.isFinite(value.elapsed)||!Number.isInteger(value.spawned)||value.spawned<1||value.spawned>(config.maxOrders??8)||value.spawned!==value.shipped+value.missed)return 'Finish every outstanding order before posting.';
-    const lastArrival=value.spawned<2?0:config.firstArrival+(value.spawned-2)*config.interval;
+    const openingOrders=redline?3:1;
+    if(!Number.isFinite(value.elapsed)||!Number.isInteger(value.spawned)||value.spawned<openingOrders||value.spawned>(config.maxOrders??8)||value.spawned!==value.shipped+value.missed)return 'Finish every outstanding order before posting.';
+    const lastArrival=value.spawned<=openingOrders?0:config.firstArrival+(value.spawned-openingOrders-1)*config.interval;
     if(value.elapsed<lastArrival)return 'Those orders have not all arrived yet.';
     // Conservative eligibility check, not an authoritative replay. Give the
     // next arrival its longest possible gap; even then it must be ineligible.
@@ -43,7 +45,7 @@ export function validateResult(value,run,now=Date.now()){
     // Before four arrivals the queue cannot have been full. Those scheduled
     // arrivals cannot be omitted; allow the engine's 0.1s tick rounding per gap.
     if(value.spawned<Math.min(4,config.maxOrders??Infinity)){
-      const nextScheduled=config.firstArrival+(value.spawned-1)*config.interval+.1*(value.spawned+1);
+      const nextScheduled=config.firstArrival+(value.spawned-openingOrders)*config.interval+.1*(value.spawned+1);
       if(nextScheduled<=value.elapsed&&probe.spawnRecipe(config.duration-nextScheduled))return 'Those scheduled orders are missing from this result.';
     }
     probe.nextArrival=value.elapsed+Math.max(config.firstArrival,config.interval,2);
@@ -54,6 +56,7 @@ export function validateResult(value,run,now=Date.now()){
     // Older clients may omit completion metadata; they still need the full clock.
     if(wallSeconds<config.duration-5)return 'Finish the full shift before posting.';
     if(value.elapsed!==undefined&&value.elapsed<config.duration-.1)return 'Finish the full shift before posting.';
+    if(redline&&value.spawned!==undefined&&(!Number.isInteger(value.spawned)||value.spawned<3))return 'Finish every outstanding order before posting.';
   }
   if(value.sourced&&value.shipped<2)return 'That score does not match the completed work.';
   const support=value.sourced*300+value.calls*25;
@@ -110,7 +113,7 @@ export default {
       if(url.pathname==='/api/leaderboard'&&request.method==='GET'){
         // Operator's workload and scoring are unchanged from v5. Preserve those
         // comparable scores without mixing older Manager and Owner runs.
-        const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?,?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6),shiftRuleset(8),'bellweather-v2-downhill').all();
+        const data=await env.DB.prepare('SELECT name,role,ruleset AS edition,score AS rawScore,points AS score,shipped,missed,sourced,calls,elapsed_ms,clear_time_ms,created_at FROM scores WHERE ruleset IN (?,?,?,?,?) ORDER BY points DESC,shipped DESC,created_at ASC LIMIT 30').bind(RULESET,shiftRuleset(6),shiftRuleset(8),shiftRuleset(9),'bellweather-v2-downhill').all();
         return json({ruleset:RULESET,entries:(data.results||[]).filter(({role})=>SHIFTS[role]).map(({role,edition,elapsed_ms,clear_time_ms,...row})=>({...row,shiftId:SHIFTS[role].id,shiftName:(role===8&&edition==='bellweather-v2-downhill'?'Downhill Express':role===8&&edition!==shiftRuleset(8)?'Bellweather':SHIFTS[role].name)+(SHIFTS[role].retired?' (retired)':(role===6||role===8)&&edition!==shiftRuleset(role)&&edition!=='bellweather-v2-downhill'?' (first edition)':''),elapsed:elapsed_ms===null?null:elapsed_ms/1000,clearTime:clear_time_ms===null?null:clear_time_ms/1000,stars:((role===6||role===8)&&edition!==shiftRuleset(role)?[4,6,8]:SHIFTS[role].stars).filter(n=>row.shipped>=n).length}))});
       }
       if(url.pathname==='/api/runs'&&request.method==='POST'){
