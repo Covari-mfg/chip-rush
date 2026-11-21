@@ -182,6 +182,25 @@ export const SHIFTS = [
     sourceJobs:[{name:'Engraved maker’s plate',capability:'Laser marking',technology:'lm',gap:'No laser engraver in the turning room'}],
     calls:false,callTimes:[],passTarget:4,stars:[4,6,8],
   },
+  // Redline runs on RedlineGame (dist/redline.js): sunlit Grand Prix paddock
+  // machine shop with ALU/TI alloy setup collars, 6.0s changeovers, up to 1.82x
+  // warm-spindle flow, 1-beat ready-swaps, a 10-part Formula car build, and
+  // Covari capability-gap outsourcing.
+  {
+    id:'redline',mapId:'paddock-garage',engine:'redline',ruleset:'redline-v1-paddock',recordId:'redline-v1-paddock',name:'Redline',author:'Gemini 4 Neon',harness:'Antigravity',musicTrack:'redline',
+    subtitle:'Paddock Works · Batch the alloys',
+    goal:'Fit 6 car components before grid close. All 10 complete the Grand Prix car for three stars.',
+    brief:'Run a trackside Grand Prix machine shop. Lathe and Mill each hold an active alloy setup (ALU mint or TI gold). Matching a machine’s alloy skips setup, builds up to 1.82× Redline speed, and earns +75 Batch Flow — switching alloys costs a 6s tool changeover. Click a ticket (or 1–4) to choose which part to pull, swap directly into READY machines, and fit every piece onto the Formula car outside.',
+    tip:'Keep ALU on the Lathe and TI on the Mill until you finish a wave. Hot spindles stay warm for 12s while empty — use Hold Bench and 1-beat Ready-Swaps to stay at 1.82×.',
+    retryTip:'Batch same-alloy parts before flipping a machine’s setup, and swap directly into READY machines with E.',
+    duration:160,firstArrival:9,interval:11,deadline:92,maxOrders:10,recipes:[0],unlocks:['lathe','mill','deburr','inspect'],stock:['round','block'],programming:false,sourcing:true,
+    sourceJobs:[
+      {name:'Carbon-Ti wing endplates',capability:'Carbon fiber layup',technology:'cf',gap:'No carbon autoclave on this floor'},
+      {name:'Wire-EDM dog-ring gear',capability:'Wire EDM',technology:'edm',gap:'No wire EDM on this floor'},
+      {name:'FIA chassis plaque',capability:'Laser marking',technology:'lm',gap:'No laser marker on this floor'},
+    ],
+    calls:false,callTimes:[],passTarget:6,stars:[6,9,10],
+  },
 ];
 
 // Retired slots remain in the catalog for historical saves and scores. Entry

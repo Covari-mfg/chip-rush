@@ -4,6 +4,7 @@ const MUSIC_URL='./assets/music/country-bluegrass-104.mp3';
 const MUSIC_LOOP_SECONDS=1628308/44100;
 const STORM_LOOP_SECONDS=32*60/128; // 15.0s seamless 8-bar 128 BPM synthwave loop
 const HARBOR_BPM=92,HARBOR_LOOP_SECONDS=32*60/HARBOR_BPM;
+const REDLINE_BPM=120,REDLINE_LOOP_SECONDS=32*60/REDLINE_BPM; // seamless 8-bar 120 BPM E-Dorian paddock groove
 const MUSIC_LEVEL=.65; // With the .24 master: about 16 dB below the audition.
 function buildStormBuffer(ctx){
   if(typeof ctx.createBuffer!=='function')return null;
@@ -106,6 +107,89 @@ function buildHarborBuffer(ctx){
   for(let i=0;i<len;i++){L[i]*=gain;R[i]*=gain;}
   return buffer;
 }
+// Redline: an original eight-bar E-Dorian paddock groove at 120 BPM.
+// Warm Rhodes chords, elastic bass pulse, precision marimba ticks and brushed
+// hats wrap seamlessly across bar 1; zero external samples.
+function buildRedlineBuffer(ctx){
+  if(typeof ctx.createBuffer!=='function')return null;
+  const rate=ctx.sampleRate||44100,len=Math.round(rate*REDLINE_LOOP_SECONDS),beat=60/REDLINE_BPM;
+  const buffer=ctx.createBuffer(2,len,rate),L=buffer.getChannelData(0),R=buffer.getChannelData(1);
+  const voice=(at,beats,freq,vol,pan,kind)=>{
+    const start=Math.round(at*beat*rate),dur=beats*beat,count=Math.ceil(dur*rate);
+    const left=Math.sqrt((1-pan)/2),right=Math.sqrt((1+pan)/2),echo=Math.round(beat*.75*rate);
+    for(let j=0;j<count;j++){
+      const t=j/rate,u=t/dur,ph=Math.PI*2*freq*t;
+      let s=0;
+      if(kind==='rhodes'){
+        const env=(1-Math.exp(-t*110))*Math.exp(-t*1.35)*Math.pow(1-u,1.2);
+        s=(Math.sin(ph)+.28*Math.sin(ph*2)*Math.exp(-t*4.5)+.12*Math.sin(ph*3.005)*Math.exp(-t*14))*env;
+      }else if(kind==='bass'){
+        const env=(1-Math.exp(-t*180))*Math.exp(-t*4.8)*Math.pow(1-u,1.4);
+        s=(Math.sin(ph)+.35*Math.sin(ph*2)*Math.exp(-t*8)+.10*Math.sin(ph*3)*Math.exp(-t*12))*env;
+      }else if(kind==='marimba'){
+        const env=(1-Math.exp(-t*260))*Math.exp(-t*9.5)*Math.pow(1-u,2);
+        s=(Math.sin(ph)+.24*Math.sin(ph*4)*Math.exp(-t*22))*env;
+      }else if(kind==='kick'){
+        const env=(1-Math.exp(-t*420))*Math.exp(-t*16)*Math.pow(1-u,1.5);
+        s=Math.sin(Math.PI*2*(46+92*Math.exp(-t*32))*t)*env;
+      }
+      s*=vol;
+      const i=(start+j)%len;
+      L[i]+=s*left;R[i]+=s*right;
+      if(kind==='marimba'||kind==='rhodes'){
+        const a=(i+echo)%len;
+        L[a]+=s*right*.18;R[a]+=s*left*.18;
+      }
+    }
+  };
+  // Em9, A13, Cmaj9, Bm7 (two bars each across 8 bars = 32 beats)
+  const chords=[
+    [164.814,195.998,246.942,293.665,369.994],
+    [146.832,207.652,220.000,277.183,329.628],
+    [130.813,195.998,246.942,293.665,329.628],
+    [123.471,184.997,220.000,293.665,369.994],
+  ];
+  const bassLine=[
+    [0,82.407],[1.5,82.407],[2.5,97.999],[3.5,110.000],[4,82.407],[5.5,123.471],[6.5,110.000],[7.5,97.999],
+    [8,110.000],[9.5,110.000],[10.5,138.591],[11.5,146.832],[12,110.000],[13.5,164.814],[14.5,146.832],[15.5,138.591],
+    [16,65.406],[17.5,65.406],[18.5,82.407],[19.5,97.999],[20,65.406],[21.5,97.999],[22.5,110.000],[23.5,97.999],
+    [24,61.735],[25.5,61.735],[26.5,73.416],[27.5,82.407],[28,61.735],[29.5,92.499],[30.5,82.407],[31.5,73.416],
+  ];
+  const riff=[
+    [.5,659.255],[1.25,739.989],[2,987.767],[3.25,880],[4.5,659.255],[5.75,587.330],[6.5,739.989],
+    [8.5,659.255],[9.25,880],[10,1108.731],[11.25,987.767],[12.5,880],[13.75,739.989],[14.5,659.255],
+    [16.5,587.330],[17.25,659.255],[18,987.767],[19.25,783.991],[20.5,659.255],[21.75,587.330],[22.5,739.989],
+    [24.5,587.330],[25.25,739.989],[26,880],[27.25,739.989],[28.5,659.255],[29.75,587.330],[31,493.883],
+  ];
+  for(let c=0;c<4;c++){
+    chords[c].forEach((f,i)=>voice(c*8,4.2,f,.042,[-.45,.42,-.22,.28,0][i],'rhodes'));
+    chords[c].forEach((f,i)=>voice(c*8+4.5,3.2,f,.030,[.38,-.36,.18,-.24,0][i],'rhodes'));
+  }
+  for(const [at,f] of bassLine)voice(at,.85,f,.17,0,'bass');
+  riff.forEach(([at,f],i)=>voice(at,.7,f,.11,i%2?.34:-.34,'marimba'));
+  for(let b=0;b<32;b+=2)voice(b,.35,55,.16,0,'kick');
+  // Subtle crisp deterministic metallic hat tick on off-beat eighths
+  let seed=20261119;
+  for(let step=0;step<64;step++){
+    const start=Math.round(step*.5*beat*rate),dur=Math.round(.042*rate);
+    const amp=step%2===1?.026:.011,pan=step%4<2?-.22:.22;
+    const left=Math.sqrt((1-pan)/2),right=Math.sqrt((1+pan)/2);
+    let prev=0;
+    for(let j=0;j<dur;j++){
+      seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+      const w=seed/2147483648-1;
+      const hp=w-prev*.88;prev=w;
+      const s=hp*Math.exp(-(j/rate)*68)*amp;
+      const i=(start+j)%len;
+      L[i]+=s*left;R[i]+=s*right;
+    }
+  }
+  let energy=0,peak=0;
+  for(let i=0;i<len;i++){energy+=L[i]*L[i]+R[i]*R[i];peak=Math.max(peak,Math.abs(L[i]),Math.abs(R[i]));}
+  const gain=Math.min(.092/Math.sqrt(energy/(len*2)),.65/peak);
+  for(let i=0;i<len;i++){L[i]*=gain;R[i]*=gain;}
+  return buffer;
+}
 // Launch Window's original 120 BPM countdown score: three synchronised stems
 // (scripts/music/generate_launch_music.py). The count decides how many play.
 const LAUNCH_STEMS=['./assets/music/launch-base-120.mp3','./assets/music/launch-drive-120.mp3','./assets/music/launch-climax-120.mp3'];
@@ -178,14 +262,14 @@ function buildOrbitStems(ctx){
 export class ShopAudio {
   constructor(){
     this.ctx=null;this.active=false;this.ducked=false;this.track='country';
-    this.musicBuffer=null;this.stormBuffer=null;this.harborBuffer=null;this.musicSource=null;this.musicOffset=0;this.musicLoad=null;
+    this.musicBuffer=null;this.stormBuffer=null;this.harborBuffer=null;this.redlineBuffer=null;this.musicSource=null;this.musicOffset=0;this.musicLoad=null;
     this.stemBuffers=null;this.stemLoad=null;this.stemSources=null;this.stemOffset=0;this.intensity=0;this.orbitStems=null;
   }
   // 'country' is the shop's loop, 'storm' Blackout Shift's synthesized loop,
   // 'launch' Launch Window's layered countdown stems; 'harbor' Last Light;
-  // 'orbit' First Light's three synthesized stems.
+  // 'orbit' First Light's three synthesized stems; 'redline' Redline's groove.
   setTrack(track='country'){
-    const next=['storm','launch','harbor','orbit','bells'].includes(track)?track:'country';
+    const next=['storm','launch','harbor','orbit','bells','redline'].includes(track)?track:'country';
     if(next===this.track)return;
     this.track=next;this.musicOffset=0;
     if(this.ctx&&this.musicSource){
@@ -226,7 +310,7 @@ export class ShopAudio {
         .then(buffer=>{this.musicBuffer=buffer;this.syncMusic();})
         .catch(()=>{this.musicLoad=null;}); // Cues and gameplay still work; retry on resume.
     }
-    if(this.track==='storm'||this.track==='harbor'||this.track==='orbit')this.syncMusic();
+    if(this.track==='storm'||this.track==='harbor'||this.track==='orbit'||this.track==='redline')this.syncMusic();
   }
   syncMusic(){
     if(!this.ctx)return;
@@ -251,8 +335,9 @@ export class ShopAudio {
     }
     const useStorm=this.track==='storm'&&(this.stormBuffer||(this.stormBuffer=buildStormBuffer(this.ctx)));
     const useHarbor=this.track==='harbor'&&(this.harborBuffer||(this.harborBuffer=buildHarborBuffer(this.ctx)));
-    const buffer=useStorm?this.stormBuffer:useHarbor?this.harborBuffer:this.musicBuffer;
-    const loopCap=useStorm?STORM_LOOP_SECONDS:useHarbor?HARBOR_LOOP_SECONDS:MUSIC_LOOP_SECONDS;
+    const useRedline=this.track==='redline'&&(this.redlineBuffer||(this.redlineBuffer=buildRedlineBuffer(this.ctx)));
+    const buffer=useStorm?this.stormBuffer:useHarbor?this.harborBuffer:useRedline?this.redlineBuffer:this.musicBuffer;
+    const loopCap=useStorm?STORM_LOOP_SECONDS:useHarbor?HARBOR_LOOP_SECONDS:useRedline?REDLINE_LOOP_SECONDS:MUSIC_LOOP_SECONDS;
     if(!single&&this.musicSource){
       const {source,fade,startedAt,offset}=this.musicSource;
       this.musicOffset=(offset+now-startedAt)%source.loopEnd;
@@ -290,7 +375,13 @@ export class ShopAudio {
     case'caught':this.note(1320,.07,'sine',.1);this.note(880,.12,'sine',.07,.05);break;
     case'shieldDeployed':[440,554.365,659.255,830.609,1108.731].forEach((f,i)=>this.note(f,.9,'sine',.1,i*.16));break;
     case'firstLight':[293.665,440,554.365,739.989,830.609,1174.659].forEach((f,i)=>this.note(f,3.2,'sine',.1,i*.09));break;
-    case'outOfFocus':[440,415.305,369.994].forEach((f,i)=>this.note(f,.9,'sine',.09,i*.3));break;}}
+    case'outOfFocus':[440,415.305,369.994].forEach((f,i)=>this.note(f,.9,'sine',.09,i*.3));break;
+    // Redline paddock cues: warm-spindle flow, alloy changeover, gantry lights & launch roar.
+    case'redlineFlow':[523.25,659.25,783.99,1046.5].forEach((f,i)=>this.note(f,.18,'triangle',.16,i*.055));break;
+    case'changeover':this.note(190,.09,'sawtooth',.09,0,120);this.note(260,.11,'triangle',.13,.09,170);this.note(330,.08,'sine',.09,.19);break;
+    case'spindleCooled':this.note(392,.14,'sine',.09,0,262);break;
+    case'redlineLight':this.note(440,.14,'square',.11);break;
+    case'redlineLaunch':this.note(880,.26,'triangle',.22);this.rumble(2.4,.35,280,.18);this.note(130,.55,'sawtooth',.12,.04,360);this.note(220,.75,'sawtooth',.11,.55,540);this.note(340,.9,'sawtooth',.09,1.25,720);break;}}
   // The note for the nth installed segment, a little brighter each time.
   segment(index,delay=0){const freq=SEGMENT_NOTES[Math.max(0,index)%SEGMENT_NOTES.length];this.note(freq,1.1,'sine',.17,delay);this.note(freq*2,.5,'sine',.05,delay+.02);this.note(freq/2,.7,'triangle',.06,delay);}
   // Filtered noise swell for engines; skipped where the context cannot filter.

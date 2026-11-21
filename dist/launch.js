@@ -1,5 +1,6 @@
 import { ShopGame, SHIFTS, OPS, stockType } from './core.js';
 import { BellGame } from './bells.js';
+import { RedlineGame } from './redline.js';
 import { BeaconGame } from './beacon.js';
 import { FirstLightGame } from './orbit.js';
 
@@ -234,7 +235,8 @@ export class LaunchGame extends ShopGame {
 
 // One place to create the rules for a level.
 export function shiftGame(shift) {
-  const game = SHIFTS[shift]?.engine === 'bells' ? new BellGame() : SHIFTS[shift]?.engine === 'launch' ? new LaunchGame() : SHIFTS[shift]?.engine === 'beacon' ? new BeaconGame() : SHIFTS[shift]?.engine === 'orbit' ? new FirstLightGame() : new ShopGame();
+  const engine = SHIFTS[shift]?.engine;
+  const game = engine === 'bells' ? new BellGame() : engine === 'redline' ? new RedlineGame() : engine === 'launch' ? new LaunchGame() : engine === 'beacon' ? new BeaconGame() : engine === 'orbit' ? new FirstLightGame() : new ShopGame();
   game.reset(shift);
   return game;
 }

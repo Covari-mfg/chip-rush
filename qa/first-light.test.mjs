@@ -33,7 +33,7 @@ function finishByHand(game, order) {
 
 test('First Light appends at legacy index 7 with its own engine, map and credit', () => {
   assert.equal(ORBIT_LEVEL, 7);
-  assert.equal(SHIFTS.length, 9);
+  assert.equal(SHIFTS.length, 10);
   assert.deepEqual([level.id, level.engine, level.mapId, level.name], ['first-light', 'orbit', 'orbital-dock', 'First Light']);
   assert.deepEqual([level.author, level.harness], ['Claude Fable 5.2', 'Claude Code']);
   assert.equal(isPlayableShift(ORBIT_LEVEL), true);
